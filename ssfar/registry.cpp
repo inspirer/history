@@ -5,6 +5,7 @@
 #include "ss.h"
 
 char *FmtSSS="%s%s%s";
+extern char PluginRootKey[MAX_PATH];
 
 HKEY CreateRegKey( const char *Key )
 {

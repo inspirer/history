@@ -11,26 +11,30 @@
 
 #import "C:\MSVS\Common\VSS\win32\ssapi.dll" no_namespace
 
-// debug
-#define MSGBOX(msg) g_m[1] = msg;Info.Message( Info.ModuleNumber, 0, NULL, g_m, 4, 1 );
 #define MSG(id) (char *)Info.GetMsg( Info.ModuleNumber, id )
-extern const char *g_m[4];
+
+extern struct PluginStartupInfo Info;
+extern FARSTANDARDFUNCTIONS FSF;
+extern long allocated_blocks;
 
 #define heapNEW GetProcessHeap()
 
 inline void *m_malloc(size_t size) {
+	InterlockedIncrement(&allocated_blocks);
 	return HeapAlloc(heapNEW, HEAP_ZERO_MEMORY, size);
 }
 
 inline char *m_strdup( const char * str ) {
 
 	char *dest = (char *)HeapAlloc(heapNEW, HEAP_ZERO_MEMORY, strlen(str)+1);
+	InterlockedIncrement(&allocated_blocks);
 	strcpy( dest, str );
 	return dest;
 }
 
 
 inline void m_free(void *block) {
+	InterlockedDecrement(&allocated_blocks);
 	HeapFree(heapNEW,0,block);
 }
 
@@ -43,20 +47,38 @@ inline void cdecl operator delete(void *block) {
 }
 
 
-extern struct PluginStartupInfo Info;
-extern FARSTANDARDFUNCTIONS FSF;
-extern void InitDialogItems( const struct InitDialogItem *Init, struct FarDialogItem *Item, int ItemsNumber );
+// Dialog related /////////////////
+
+void MsgBox( char *title, char *message );
 
 struct InitDialogItem {
 	unsigned char Type;
-	unsigned char X1,Y1,X2,Y2;
+	char X1,Y1,X2,Y2;
 	unsigned char Focus;
 	unsigned int Selected;
 	unsigned int Flags;
 	unsigned char DefaultButton;
 	char *Data;
+	int *position;
 };
 
+#define array_size(i) (sizeof(i)/sizeof(i[0]))
+
+struct FarDialog {
+	int X, Y;
+	int itemsNumber;
+	struct FarDialogItem *di;
+};
+
+void create_fdlg( FarDialog *fdlg, int X, int Y, int Title, struct InitDialogItem *Item, int number );
+int process_fdlg( FarDialog *fdlg );
+void destroy_fdlg( FarDialog *fdlg );
+
+
+void InitDialogItems( const struct InitDialogItem *Init, struct FarDialogItem *Item, int ItemsNumber );
+
+
+// //////////////
 
 struct list_of_id {
 	struct list_of_id *next;
@@ -68,20 +90,6 @@ struct list_of_id {
 class SS {
 private:
 	IVSSDatabase *db;
-	int db_counter;
-
-	#ifdef MAKE_LOG
-	HANDLE log;
-	char log_buffer[1024];
-	unsigned long log_written;
-	#define write_log FSF.sprintf 
-	#define flush_log() WriteFile( log, log_buffer, strlen(log_buffer), &log_written, NULL )
-	#else
-	//#define flush_log() ;
-	//#define write_log(...) ;
-	#endif
-
-	CRITICAL_SECTION db_own;
 
 	char cdir[MAX_PATH];
 	char cpath[MAX_PATH], cdbname[MAX_PATH], ssini[MAX_PATH]; // filled by split_cdir
@@ -93,8 +101,8 @@ private:
 	struct KeyBarTitles kb;
 
 public:
-	struct list_of_id *db_found;
-	int db_count;
+	struct list_of_id *db_found;	//
+	int db_count;					//   by GetFindData
 
 private:
 	int db_connect();
@@ -115,10 +123,9 @@ public:
 	int PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, int OpMode );
 	int FileOp( int type, char *file, char *dest, char *comment, int flags );
 	int ProcessKey(int Key,unsigned int ControlState);
+	int DeleteFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int OpMode );
 
 };
-
-extern char PluginRootKey[MAX_PATH];
 
 void SetRegKey( const char *Key, const char *ValueName, char *ValueData );
 void SetRegKey( const char *Key, const char *ValueName, DWORD ValueData );
@@ -150,7 +157,30 @@ enum {
 
 	msg_root_title1,
 	msg_root_title2,
-};	
+
+	msg_put_dest,
+	msg_put_comment,
+	msg_put_keepco,
+	msg_put_remloc,
+	msg_put_title,
+	msg_put_to,
+
+	msg_get_clear_ro,
+	msg_get_recurs,
+	msg_get_title1,
+	msg_get_title2,
+	msg_get_action,
+	msg_getco_to,
+
+	msg_co_dontgetloc,
+	msg_co_replwr,
+	msg_co_title1,
+	msg_co_title2,
+	msg_co_action,
+
+	msg_db_name,
+	msg_db_file,
+};
 
 
 #endif

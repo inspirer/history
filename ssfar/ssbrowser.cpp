@@ -2,17 +2,20 @@
 
 #include "ss.h"
 
-struct PluginStartupInfo Info;
-FARSTANDARDFUNCTIONS FSF;
-char PluginRootKey[MAX_PATH];
+// static info
 
-// Message Box (DEBUG-time)
-const char *g_m[4] = { "Title", NULL, "", "OK" };
+struct PluginStartupInfo Info;			// psi
+FARSTANDARDFUNCTIONS FSF;				// Far standart functions
+char PluginRootKey[MAX_PATH];			// REGISTRY root key for plugin
+long allocated_blocks = 0;				// count of allocated memory blocks
+
+
 
 int WINAPI _export GetMinFarVersion( void ) {
 
 	return MAKEFARVERSION(1,70,1282);
 }
+
 
 void WINAPI _export SetStartupInfo(const struct PluginStartupInfo *psi) {
 
@@ -27,18 +30,33 @@ void WINAPI _export SetStartupInfo(const struct PluginStartupInfo *psi) {
 
 void WINAPI _export GetPluginInfo(struct PluginInfo *pi) {
 
-	static const char *DiskMenuStrings[1];
+	static const char *plugin_name_ptr[1];
 
 	pi->StructSize = sizeof( struct PluginInfo );
 
-	DiskMenuStrings[0] = MSG(msg_plugin_name);
-	pi->DiskMenuStrings = DiskMenuStrings;
+	plugin_name_ptr[0] = MSG(msg_plugin_name);
+	pi->DiskMenuStrings = plugin_name_ptr;
 	pi->DiskMenuNumbers = NULL;
 	pi->DiskMenuStringsNumber = 1;
+
+	pi->PluginConfigStrings = plugin_name_ptr;
+	pi->PluginConfigStringsNumber = 1;
+
+	pi->PluginMenuStrings = plugin_name_ptr;
+	pi->PluginMenuStringsNumber = 1;
 
 	pi->CommandPrefix = "ss";
 }
 
+
+int WINAPI _export Configure( int ItemNumber )
+{
+	char s[128];
+
+	FSF.sprintf( s, "%i", allocated_blocks ); 
+	MsgBox( "Configure", s );
+	return TRUE;
+}
 
 int WINAPI _export GetFindData( HANDLE hPlugin, struct PluginPanelItem **pPanelItem, 
 		int *pItemsNumber, int OpMode ) 
@@ -95,7 +113,14 @@ int WINAPI _export ProcessKey( HANDLE hPlugin, int Key, unsigned int ControlStat
 
 void WINAPI _export ClosePlugin(HANDLE hPlugin)
 {
+	//MsgBox( "1", "Delete" );
 	delete (SS *)hPlugin;
+}
+
+int WINAPI _export DeleteFiles( HANDLE hPlugin, struct PluginPanelItem *PanelItem, int ItemsNumber, int OpMode )
+{
+	SS *ss = (SS *)hPlugin;
+	return ss->DeleteFiles( PanelItem, ItemsNumber, OpMode );
 }
 
 HANDLE WINAPI _export OpenPlugin(int OpenFrom,int item) {
@@ -103,40 +128,15 @@ HANDLE WINAPI _export OpenPlugin(int OpenFrom,int item) {
 	int i;
 	SS *ss;
 	
-	//MSGBOX( "open plugin" );
-
 	static int cominit = 0;
 	if( !cominit ) {
 		::CoInitialize(NULL);
 		cominit = 1;
 	}
 
+	//MsgBox( "1", "Allocate" );
 	ss = new SS(OpenFrom,item);
 	return ss ? ss : INVALID_HANDLE_VALUE;
-}
-
-
-void InitDialogItems( const struct InitDialogItem *Init, struct FarDialogItem *Item, int ItemsNumber )
-{
-	int i;
-	struct FarDialogItem *PItem = Item;
-	const struct InitDialogItem *PInit = Init;
-
-	for( i=0; i < ItemsNumber; i++, PItem++, PInit++ ) {
-		PItem->Type=PInit->Type;
-		PItem->X1=PInit->X1;
-		PItem->Y1=PInit->Y1;
-		PItem->X2=PInit->X2;
-		PItem->Y2=PInit->Y2;
-		PItem->Focus=PInit->Focus;
-		PItem->Selected=PInit->Selected;
-		PItem->Flags=PInit->Flags;
-		PItem->DefaultButton=PInit->DefaultButton;
-		if( (unsigned int)PInit->Data < 2000 )
-			strcpy(PItem->Data,MSG((unsigned int)PInit->Data));
-		else
-			strcpy( PItem->Data, PInit->Data );
-	}
 }
 
 

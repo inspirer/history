@@ -12,3 +12,5 @@ EXPORTS
 	ProcessKey
 	GetFiles
 	PutFiles
+	DeleteFiles
+	Configure

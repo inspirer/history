@@ -31,6 +31,21 @@ BSTR char_2_BSTR( char *src ) {
 SS::SS( int of, int item ) 
 {
 	strcpy( cdir, "$\\" );
+	if( of == OPEN_COMMANDLINE ) {
+		if( !strncmp( "$\\", (char*)item, 2 ) ) {
+			strcpy( cdir, (char *) item );
+			split_cdir();
+			try_to_change = 1;
+			BOOL changed = GetFindData( NULL, NULL, 0 );
+			if( !changed ) {
+				MsgBox( "wrong path", (char *)item );
+				strcpy( cdir, "$\\" );
+				split_cdir();
+			}
+
+		} else
+			MsgBox( "wrong path", (char*)item );
+	}
 	split_cdir();
 	try_to_change = 0;
 	db = NULL;
@@ -45,27 +60,25 @@ int SS::db_connect()
 {
 	HRESULT h;
 
-	if( db )
-		db_disconnect();
-
 	if( !*ssini )
 		return FALSE;
 
 	if( FAILED(h=CoCreateInstance(__uuidof(VSSDatabase),0,CLSCTX_ALL,__uuidof(IVSSDatabase),(void**)&db)) ) {
 		char *msg = (char *)m_malloc( 1024 );
-		FSF.sprintf( msg, "COM: VSSDatabase: not created (hres=%08x)", h );
-		MSGBOX( msg );
+		FSF.sprintf( msg, "VSSDatabase not created (hres=%08x)", h );
+		MsgBox( "COM error", msg );
 		m_free( msg );
 		return FALSE;
 	}
 
-	BSTR l,p = NULL,q = NULL;
+	// TODO username, pwd handling
+	BSTR l, p = NULL, q = NULL;
 
 	l = char_2_BSTR( ssini );
-	h = db->raw_Open(l,p,q);
+	h = db->raw_Open( l, p, q );
 	SysFreeString( l );
 	if( FAILED(h) ) {
-		MSGBOX( "Database was not opened" );
+		MsgBox( "IVSSDatabase error", "Open failed" );
 		return FALSE;
 	}
 
@@ -95,7 +108,7 @@ void add_item( char *name, char *val, void *data ) {
 }
 
 
-int SS::GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode)
+int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode )
 {
 	long count = 0;
 	IVSSItem *item = NULL;
@@ -148,7 +161,8 @@ int SS::GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode)
 	h = db->get_VSSItem( l, false, &item );
 	SysFreeString( l );
 	if( FAILED(h) ) {
-		MSGBOX( "item not opened" );
+		db_disconnect();
+		MsgBox( "Item not opened", cpath );
 		return FALSE;
 	}
 
@@ -160,18 +174,26 @@ int SS::GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode)
 
 	h = item->get_Items(false,&items);
 	if( FAILED(h) ) {
-		MSGBOX( "collection not opened" );
+		item->Release();
+		db_disconnect();
+		MsgBox( "IVSSItem error", "items collection was not opened" );
 		return FALSE;
 	}
 
 	h = items->get_Count(&count);
 	if( FAILED(h) ) {
-		MSGBOX( "no count" );
+		items->Release();
+		item->Release();
+		db_disconnect();
+		MsgBox( "IVSSItem error", "impossible to get count" );
 		return FALSE;
 	}
 
 	if( count < 0 ) {
-		MSGBOX( "count < 0" );
+		items->Release();
+		item->Release();
+		db_disconnect();
+		MsgBox( "IVSSItem error", "count < 0" );
 		return FALSE;
 	}
 
@@ -190,12 +212,15 @@ int SS::GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode)
 		h = items->get_Item(v,&item);
 		if( FAILED(h) ) {
 			m_free( NewPanelItem );
-			MSGBOX( "no item" );
+			MsgBox( "IVSSItems error", "impossible to get item" );
+			items->Release();
+			item->Release();
+			db_disconnect();
 			return FALSE;
 		}
 
 		BSTR name,local;
-		int type, co, version;
+		int type, co;
 
 		h = item->get_Type( &type );
 		if( FAILED(h) )
@@ -211,7 +236,8 @@ int SS::GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode)
 
 		BSTR_2_char( name, p->FindData.cFileName, MAX_PATH );
 
-		SysFreeString( name );
+		if( name )
+			SysFreeString( name );
 
 		p->FindData.dwFileAttributes = ( VSSITEM_FILE == type ) ? 0 : FILE_ATTRIBUTE_DIRECTORY;
 
@@ -236,15 +262,22 @@ int SS::GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode)
 			BSTR str;
 
 			h = cot->get_Username( &str );
-			if( FAILED(h) )
+			if( FAILED(h) ) {
+				cot->Release();
+				couts->Release();
 				goto bad_co;
+			}
 
 			BSTR_2_char( str, tmp_dir, MAX_PATH );
-			SysFreeString( str );
+			if( str )
+				SysFreeString( str );
 
 			h = cot->get_LocalSpec( &str );
-			if( FAILED(h) )
+			if( FAILED(h) ) {
+				cot->Release();
+				couts->Release();
 				goto bad_co;
+			}
 
 			BSTR_2_char( str, tmp_dir2, MAX_PATH );
 			SysFreeString( str );
@@ -287,7 +320,8 @@ void SS::FreeFindData( PluginPanelItem *PanelItem, int ItemsNumber )
 		m_free( PanelItem[i].CustomColumnData );
 	}
 
-	m_free( PanelItem );
+	if( ItemsNumber )
+		m_free( PanelItem );
 }
 
 
@@ -299,7 +333,7 @@ void SS::GetOpenPluginInfo( struct OpenPluginInfo *info )
 
 	info->CurDir = cdir;
 
-	info->Format = (char *) "SourceSafe";
+	info->Format = MSG(msg_plugin_name);
 
 	info->PanelTitle = Title;
 	memset( &kb, 0, sizeof( kb ) );
@@ -336,7 +370,7 @@ void SS::GetOpenPluginInfo( struct OpenPluginInfo *info )
 		kb.Titles[6-1] = "ChkOut";
 		kb.Titles[7-1] = "MkProj";
 		kb.Titles[8-1] = "Remove";
-		kb.CtrlTitles[5-1] = "CheckI";
+		kb.CtrlTitles[5-1] = "ChckIn";
 		kb.CtrlTitles[6-1] = "UndoCO";
 		kb.CtrlTitles[7-1] = "Commnt";
 		kb.CtrlTitles[8-1] = "";
@@ -386,19 +420,16 @@ int SS::SetDirectory( const char *Dir, int OpMode )
 
 	if( !strcmp( Dir, ".." ) ) {
 		if( !strcmp( cdir, "$\\" ) ) {
-			//Info.Control( this, FCTL_CLOSEPLUGIN, NULL );
+			// TODO close plugin
 			return FALSE;
 		}
 
-		char *s = cdir + strlen(cdir) - 1;
+		char *s = strrchr( cdir, '\\' );
 
-		while( s > cdir && *s != '\\' ) 
-			s--;
-
-		if( s > cdir + 1 )
+		if( s && s > cdir + 1 )
 			*s = 0;
 		else
-			s[1] = 0;
+			cdir[2] = 0;
 		split_cdir();
 		return TRUE;
 	}
@@ -424,8 +455,8 @@ int SS::SetDirectory( const char *Dir, int OpMode )
 	try_to_change = 1;
 	BOOL changed = GetFindData( NULL, NULL, 0 );
 	if( !changed ) {
-		split_cdir();
 		strcpy( cdir, tmp_dir );
+		split_cdir();
 	}
 	try_to_change = 0;
 
@@ -440,12 +471,12 @@ int SS::ProcessEvent( int Event, void *Param )
 
 enum {
 	GetLatest,
-	CheckOut,
-	CheckIn,
+	CheckOut,			// support comment
+	CheckIn,            //     -- " --
 	UndoCO,
-	AddFile,
 	Remove,
 	ShowComment,
+	AddFile,
 };
 
 
@@ -463,7 +494,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			type = AddFile;
 
 		} else {
-			MSGBOX( "item not opened" );
+			MsgBox( "get_VSSItem failed", file );
 			return FALSE;
 		}
 	}
@@ -475,18 +506,20 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		if( type == GetLatest ) 
 			h = item->raw_Get( &l, flags );
 		else {
-			h = item->raw_Checkout( NULL, l, flags);
+			BSTR w = char_2_BSTR( comment );
+			h = item->raw_Checkout( w, l, flags);
+			SysFreeString( w );
 		}
 		SysFreeString( l );
 		if( FAILED(h) ) {
-			MSGBOX( "Get/CheckOut fails" );
+			MsgBox( "IVSSItem error", type == GetLatest ? "Get failed" : "CheckOut failed" );
 			item->Release();
 			return FALSE;
 		}
 
 	} else if( type == ShowComment ) {
 
-		MSGBOX( "not realized due to BUG in SourceSafe TypeLib" );		
+		MsgBox( "Item's comment", "not realized due to BUG in SourceSafe TypeLib" );
 
 	} else if( type == UndoCO ) {
 
@@ -494,11 +527,13 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		h = item->raw_UndoCheckout( l, flags );
 		SysFreeString( l );
 		if( FAILED(h) ) {
-			MSGBOX( "Undo CheckOut fails" );
+			MsgBox( "UndoCheckOut failed", dest );
 			item->Release();
 			return FALSE;
 		}
+
 	} else if( type == AddFile ) {
+
 		char *name = strrchr( file, '\\' );
 
 		if( name ) {
@@ -510,18 +545,18 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			h = db->get_VSSItem( l, false, &item );
 			SysFreeString( l );
 			if( FAILED(h) ) {
-				MSGBOX( "item not opened" );
+				MsgBox( "Directory for item creation was not opened", file );
 				return FALSE;
 			}
 
 			l = char_2_BSTR( name );
 			cm = char_2_BSTR( comment );
 			h = item->raw_Add( l, cm, VSSFLAG_BINBINARY, &it );
-			SysFreeString( l );
 			SysFreeString( cm );
+			SysFreeString( l );
 			if( FAILED(h) ) {
 				item->Release();
-				MSGBOX( "item not opened" );
+				MsgBox( "IVSSItem.Add failed", name );
 				return FALSE;
 			}
 
@@ -532,7 +567,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 				h = it->raw_Get( &l, VSSFLAG_REPREPLACE|VSSFLAG_TIMEMOD );
 				SysFreeString( l );
 				if( FAILED(h) ) {
-					MSGBOX( "Get failed" );
+					MsgBox( "IVSSItem.Get of just created file failed", dest );
 					it->Release();
 					item->Release();
 					return FALSE;
@@ -545,9 +580,9 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 	} else if( type == Remove ) {
 
-		h = item->put_Deleted(1);
+		h = item->put_Deleted( 1 );
 		if( FAILED(h) ) {
-			MSGBOX( "Destroy failed" );
+			MsgBox( "Remove failed", file );
 			item->Release();
 			return FALSE;
 		}
@@ -558,6 +593,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = item->get_IsCheckedOut( &co );
 		if( FAILED(h) ) {
+			MsgBox( "IVSSItem.IsCheckedOut failed", file );
 		bad_co:
 			item->Release();
 			return FALSE;
@@ -565,10 +601,10 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		if( !co ) {
 
-			const char *items[3] = { "CheckIn", "Not checked out. Do you wish to checkout before", NULL };
+			const char *items[4] = { "CheckIn warning", "Not checked out.","Must be checked out before. CheckOut?", NULL };
 
-			items[2] = file;
-			int res = Info.Message( Info.ModuleNumber, FMSG_MB_YESNO, NULL, items, 3, 0 );
+			items[3] = file;
+			int res = Info.Message( Info.ModuleNumber, FMSG_MB_YESNO, NULL, items, 4, 0 );
 
 			if( res != 0 ) {
 				item->Release();
@@ -579,7 +615,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			h = item->raw_Checkout( NULL, l, VSSFLAG_GETNO );
 			SysFreeString( l );
 			if( FAILED(h) ) {
-				MSGBOX( "CheckOut fails" );
+				MsgBox( "IVSSItem.Checkout failed", dest );
 				item->Release();
 				return FALSE;
 			}
@@ -588,11 +624,11 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		l = char_2_BSTR( dest );
 		cm = char_2_BSTR( comment );
 		h = item->raw_Checkin( cm, l, flags );
-		SysFreeString( l );
 		SysFreeString( cm );
+		SysFreeString( l );
 
 		if( FAILED(h) ) {
-			MSGBOX( "CheckIn fails" );
+			MsgBox( "IVSSItem.Checkin failed", dest );
 			item->Release();
 			return FALSE;
 		}
@@ -604,7 +640,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			h = item->raw_Get( &l, VSSFLAG_REPREPLACE|VSSFLAG_TIMEMOD );
 			SysFreeString( l );
 			if( FAILED(h) ) {
-				MSGBOX( "Get fails" );
+				MsgBox( "IVSSItem.Get of checked in file failed", dest );
 				item->Release();
 				return FALSE;
 			}
@@ -616,114 +652,107 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 	return TRUE;
 }
 
-enum {
-	get_width = 70,
-	get_height = 11,
-};
-
-
-static struct InitDialogItem get_dlg[]={
- { DI_DOUBLEBOX,  3,1,get_width-4,get_height-2, 0,0,0,0,(char *)msg_getss },
- { DI_TEXT,       5,2,0,0,                      0,0,0,0,"Get Latest version:" },
- { DI_EDIT,       5,3,get_width-6,0,            1,(int)"ss_get",DIF_HISTORY,0, "" },
- { DI_TEXT,       5,4,0,0,                      0,0,DIF_SEPARATOR,0,"" },
- { DI_CHECKBOX,   5,5,0,0,                      0,1,0,0,"&Clear Read-Only attribute (only first level files)" },
- { DI_CHECKBOX,   5,6,0,0,                      0,1,0,0,"&Recursive" },
- { DI_TEXT,       5,7,0,0,                      0,0,DIF_SEPARATOR,0,"" },
- { DI_BUTTON,     0,8,0,0,           			0,0,DIF_CENTERGROUP,0,(char*)msg_key_get },
- { DI_BUTTON,     0,8,0,0,           			0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel },
-};
-
-
-enum {
-	gdlg_title = 0,
-	gdlg_Text = 2,
-	gdlg_ro = 4,
-	gdlg_dontgetlocal = 4,
-	gdlg_recurs = 5,
-	gdlg_replace_wr = 5,
-	gdlg_key_accept = 7,
-	gdlg_key_cancel = 8,
-};
-
-/*
- *   Get AND CheckOut. 
- */
 
 int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 					int Move, char *DestPath, int OpMode )
 {
 	int retval = 1, clearro = 1;
 	int flags = VSSFLAG_REPREPLACE|VSSFLAG_TIMEMOD;
-	struct FarDialogItem DialogItems[ sizeof(get_dlg) / sizeof(get_dlg[0]) ];
+	FarDialog dlg;
+
+	/////////////////////// Get Dialog
+	static int id_get_where, id_get_clearro, id_get_rec, id_get_cancel, id_get_to;
+	static struct InitDialogItem get_dlg[] = {
+	 { DI_TEXT,       1,0,0,0,		0,0,0,0,"", &id_get_to },
+	 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_get",DIF_HISTORY,0, "", &id_get_where },
+	 { DI_TEXT,       1,2,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_CHECKBOX,   1,3,0,0,		0,1,0,0,(char *)msg_get_clear_ro, &id_get_clearro },
+	 { DI_CHECKBOX,   1,4,0,0,		0,1,0,0,(char *)msg_get_recurs, &id_get_rec },
+	 { DI_TEXT,       1,5,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_BUTTON,     0,6,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_get },
+	 { DI_BUTTON,     0,6,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_get_cancel },
+	};
+
+	/////////////////////// CheckOut Dialog
+	static int id_co_where, id_co_dontget, id_co_repl, id_co_cancel, id_co_to;
+	static struct InitDialogItem co_dlg[] = {
+	 { DI_TEXT,       1,0,0,0,		0,0,0,0,"", &id_co_to },
+	 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_get",DIF_HISTORY,0, "", &id_co_where },
+	 { DI_TEXT,       1,2,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_CHECKBOX,   1,3,0,0,		0,1,0,0,(char*)msg_co_dontgetloc, &id_co_dontget },
+	 { DI_CHECKBOX,   1,4,0,0,		0,1,0,0,(char*)msg_co_replwr, &id_co_repl },
+	 { DI_TEXT,       1,5,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_BUTTON,     0,6,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_checkout },
+	 { DI_BUTTON,     0,6,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_co_cancel },
+	};
+
+    dlg.di = NULL;
 
 	//
 	//   Get/CheckOut Dialog
 	//
-	if( !((OPM_SILENT|OPM_VIEW|OPM_EDIT|OPM_FIND) & OpMode )  || Move ) {
-
-		InitDialogItems( get_dlg, DialogItems, sizeof(get_dlg) / sizeof(get_dlg[0]) );
-		strcpy( DialogItems[gdlg_Text].Data, DestPath );
+	if( !((OPM_SILENT|OPM_VIEW|OPM_EDIT|OPM_FIND) & OpMode ) || Move ) {
 
 		if( Move ) {
 			//
 			// Checkout
 			//
-			strcpy( DialogItems[gdlg_title].Data, MSG(msg_checkout) );
-			strcpy( DialogItems[gdlg_dontgetlocal].Data, "&Don't get local copy" );
-			GetRegKey( "", "checkout_dontgetlocal", DialogItems[gdlg_dontgetlocal].Selected, 0 );
-			//DialogItems[gdlg_recurs].Flags |= DIF_DISABLE;
-			strcpy( DialogItems[gdlg_replace_wr].Data, "&Replace writable (skip otherwise)" );
-			GetRegKey( "", "checkout_replacewritable", DialogItems[gdlg_replace_wr].Selected, 1 );
-			strcpy( DialogItems[gdlg_key_accept].Data, MSG(msg_key_checkout) );
-			DialogItems[gdlg_key_accept].X1 -= 5;
-		} else {
-		    //
-		    // Get
-		    //
-			GetRegKey( "", "get_recursive", DialogItems[gdlg_recurs].Selected, 0 );
-			GetRegKey( "", "get_clearro", clearro, clearro );
-			DialogItems[gdlg_ro].Selected = clearro;
-		}
+			create_fdlg( &dlg, 70, 11, msg_checkout, co_dlg, array_size( co_dlg ) );
+			if( ItemsNumber == 1 )
+				FSF.sprintf( dlg.di[id_co_to].Data, MSG(msg_co_title1), PanelItem[0].FindData.cFileName );
+			else 
+				FSF.sprintf( dlg.di[id_co_to].Data, MSG(msg_co_title2), ItemsNumber );
+			strcpy( dlg.di[id_co_where].Data, DestPath );
+			GetRegKey( "", "checkout_dontgetlocal", dlg.di[id_co_dontget].Selected, 0 );
+			GetRegKey( "", "checkout_replacewritable", dlg.di[id_co_repl].Selected, 1 );
 
-		if( ItemsNumber == 1 )
-			FSF.sprintf( DialogItems[1].Data, "%s \"%s\" to:", Move ? "CheckOut" : "Get", PanelItem[0].FindData.cFileName );
-		else 
-			FSF.sprintf( DialogItems[1].Data, "%s %i items to:", Move ? "CheckOut" : "Get", ItemsNumber );
+			int ec = process_fdlg( &dlg );
 
-		int ec = Info.Dialog( Info.ModuleNumber, -1, -1, get_width, get_height, NULL, DialogItems, sizeof(DialogItems)/sizeof(DialogItems[0]) );
+			if( ec < 0 || ec == id_co_cancel ) {
+				destroy_fdlg( &dlg );
+				return FALSE;
+			}
 
-		if( ec < 0 || ec == gdlg_key_cancel )
-			return FALSE;
-
-		if( !Move ) {
-		    //
-		    // Get
-		    //
-			if( DialogItems[gdlg_recurs].Selected )
-				flags |= VSSFLAG_RECURSYES|VSSFLAG_FORCEDIRYES;
-
-			SetRegKey( "", "get_recursive", DialogItems[gdlg_recurs].Selected );
-			SetRegKey( "", "get_clearro", DialogItems[gdlg_ro].Selected );
-			clearro = DialogItems[gdlg_ro].Selected;
-
-		} else {
-		    //
-		    // CheckOut
-		    //
-			if( DialogItems[gdlg_dontgetlocal].Selected )
+			if( dlg.di[id_co_dontget].Selected )
 				flags |= VSSFLAG_GETNO;
 
-			if( !DialogItems[gdlg_replace_wr].Selected ) {
+			if( !dlg.di[id_co_repl].Selected ) {
 				flags &= ~VSSFLAG_REPREPLACE;
 				flags |= VSSFLAG_REPSKIP;
 			}
 
-			SetRegKey( "", "checkout_dontgetlocal", DialogItems[gdlg_dontgetlocal].Selected );
-			SetRegKey( "", "checkout_replacewritable", DialogItems[gdlg_replace_wr].Selected );
-		}
+			SetRegKey( "", "checkout_dontgetlocal", dlg.di[id_co_dontget].Selected );
+			SetRegKey( "", "checkout_replacewritable", dlg.di[id_co_repl].Selected );
+			DestPath = dlg.di[id_co_where].Data;
 
-		DestPath = DialogItems[gdlg_Text].Data;
+		} else {
+		    //
+		    // Get
+		    //
+			create_fdlg( &dlg, 70, 11, msg_getss, get_dlg, array_size( get_dlg ) );
+			if( ItemsNumber == 1 )
+				FSF.sprintf( dlg.di[id_get_to].Data, MSG(msg_get_title1), PanelItem[0].FindData.cFileName );
+			else 
+				FSF.sprintf( dlg.di[id_get_to].Data, MSG(msg_get_title2), ItemsNumber );
+			strcpy( dlg.di[id_get_where].Data, DestPath );
+			GetRegKey( "", "get_recursive", dlg.di[id_get_rec].Selected, 0 );
+			GetRegKey( "", "get_clearro", dlg.di[id_get_clearro].Selected, 1 );
+
+			int ec = process_fdlg( &dlg );
+
+			if( ec < 0 || ec == id_get_cancel ) {
+				destroy_fdlg( &dlg );
+				return FALSE;
+			}
+
+			if( dlg.di[id_get_rec].Selected )
+				flags |= VSSFLAG_RECURSYES|VSSFLAG_FORCEDIRNO;
+
+			SetRegKey( "", "get_recursive", dlg.di[id_get_rec].Selected );
+			SetRegKey( "", "get_clearro", dlg.di[id_get_clearro].Selected );
+			clearro = dlg.di[id_get_clearro].Selected;
+			DestPath = dlg.di[id_get_where].Data;
+		}
 	}
 
 	if( !db_connect() )
@@ -732,7 +761,7 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 	for( int i = 0; i < ItemsNumber; i++ ) {
 		char *name = PanelItem[i].FindData.cFileName;
 
-		if( PanelItem[i].FindData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY ) {
+		if( PanelItem[i].FindData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY && Move ) {
 			retval = 0;
 			continue;
 		}
@@ -749,11 +778,8 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 		
 		if( !(OpMode & OPM_SILENT ) ) {
 			sc = Info.SaveScreen(0,0,-1,-1);
-			const char *msg[4] = { "Getting", "", "to", "" };
-			if( Move )
-				msg[0] = "CheckingOut";
-			msg[1] = tmp_dir;
-			msg[3] = tmp_dir2;
+			const char *msg[4] = { MSG(msg_get_action), tmp_dir, MSG(msg_getco_to), tmp_dir2 };
+			if( Move ) msg[0] = MSG(msg_co_action);
 			Info.Message( Info.ModuleNumber, 0, NULL, msg, 4, 0 );
 		}
 
@@ -770,66 +796,54 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 
 	db_disconnect();
 
+	destroy_fdlg( &dlg );
 	return retval;
 }
 
 
-enum {
-	put_width = 70,
-	put_height = 13,
-};
-
-
-static struct InitDialogItem put_dlg[]={
- { DI_DOUBLEBOX,  3,1,put_width-4,put_height-2, 0,0,0,0,(char *)msg_checkin },
- { DI_TEXT,       5,2,0,0,                      0,0,0,0,"To:" },
- { DI_EDIT,       5,3,put_width-6,0,            1,(int)"ss_put",DIF_HISTORY,0, "" },
- { DI_TEXT,       5,4,0,0,                      0,0,0,0,"Comment:" },
- { DI_EDIT,       5,5,put_width-6,0,            0,(int)"ss_comments",DIF_HISTORY,0, "" },
- { DI_TEXT,       5,6,0,0,                      0,0,DIF_SEPARATOR,0,"" },
- { DI_CHECKBOX,   5,7,0,0,                      0,0,0,0,"&Keep checked out" },
- { DI_CHECKBOX,   5,8,0,0,                      0,1,0,0,"&Remove local copy" },
- { DI_TEXT,       5,9,0,0,                      0,0,DIF_SEPARATOR,0,"" },
- { DI_BUTTON,     0,10,0,0,           			0,0,DIF_CENTERGROUP,0,(char*)msg_key_put },
- { DI_BUTTON,     0,10,0,0,           			0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel },
-};
-
-enum {
-	pdlg_from = 2,
-	pdlg_cmnt = 4,
-	pdlg_keepco = 6,
-	pdlg_remlocal = 7,
-	pdlg_count = sizeof(put_dlg) / sizeof(put_dlg[0]),
-	pdlg_cancel = pdlg_count-1,
-};
-
-
 int SS::PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, int OpMode )
 {
-	struct FarDialogItem DialogItems[ pdlg_count ];
+	/////////////////////// Put Dialog
+	static int id_dest, id_cmnt, id_keepco, id_remlocal, id_cancel;
+	static struct InitDialogItem items[] = {
+	 { DI_TEXT,       1,0,0,0,		0,0,0,0,(char *)msg_put_dest },
+	 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_put",DIF_HISTORY,0, "", &id_dest },
+	 { DI_TEXT,       1,2,0,0,		0,0,0,0,(char *)msg_put_comment },
+	 { DI_EDIT,       1,3,-2,0,		0,(int)"ss_comments",DIF_HISTORY,0, "", &id_cmnt },
+	 { DI_TEXT,       1,4,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_CHECKBOX,   1,5,0,0,		0,0,0,0,(char *)msg_put_keepco, &id_keepco },
+	 { DI_CHECKBOX,   1,6,0,0,		0,1,0,0,(char *)msg_put_remloc, &id_remlocal },
+	 { DI_TEXT,       1,7,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_BUTTON,     0,8,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_put },
+	 { DI_BUTTON,     0,8,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_cancel },
+	};
+
 	char *Dest = cpath, *comments = "";
 	int flags = 0;
+	FarDialog dlg;
 
+    dlg.di = NULL;
 	if( !strcmp( cdir, "$\\" ) )
 		return FALSE;
 
 	if( !(OpMode&OPM_SILENT) ) {
 
-		InitDialogItems( put_dlg, DialogItems, pdlg_count );
-		strcpy( DialogItems[pdlg_from].Data, cpath );
-		DialogItems[pdlg_remlocal].Selected = Move;
+		create_fdlg( &dlg, 70, 13, msg_checkin, items, array_size( items ) );
 
-		int ec = Info.Dialog( Info.ModuleNumber, -1, -1, put_width, put_height, NULL, DialogItems, pdlg_count );
+		strcpy( dlg.di[id_dest].Data, cpath );
+		dlg.di[id_remlocal].Selected = Move;
 
-		if( ec < 0 || ec == pdlg_cancel )
+		int ec = process_fdlg( &dlg );
+
+		if( ec < 0 || ec == id_cancel )
 			return FALSE;
 
-		Dest = DialogItems[pdlg_from].Data;
-		comments = DialogItems[pdlg_cmnt].Data;
+		Dest = dlg.di[id_dest].Data;
+		comments = dlg.di[id_cmnt].Data;
 
-		if( DialogItems[pdlg_remlocal].Selected )
+		if( dlg.di[id_remlocal].Selected )
 			flags |= VSSFLAG_DELYES;
-		if( DialogItems[pdlg_keepco].Selected )
+		if( dlg.di[id_keepco].Selected )
 			flags |= VSSFLAG_KEEPYES;
 	}
 
@@ -851,9 +865,7 @@ int SS::PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, 
 		
 		if( !(OpMode & OPM_SILENT ) ) {
 			sc = Info.SaveScreen(0,0,-1,-1);
-			const char *msg[4] = { "CheckingIn", NULL, "to", NULL };
-			msg[1] = tmp_dir2;
-			msg[3] = tmp_dir;
+			const char *msg[4] = { MSG(msg_put_title), tmp_dir2, MSG(msg_put_to), tmp_dir };
 			Info.Message( Info.ModuleNumber, 0, NULL, msg, 4, 0 );
 		}
 
@@ -865,70 +877,61 @@ int SS::PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, 
 	}
 
 	db_disconnect();
+	destroy_fdlg( &dlg );
 
 	return TRUE;
 }
 
 
-enum {
-	cm_width = 70,
-	cm_height = 10,
-};
-
-
-static struct InitDialogItem create_dlg[]={
- { DI_DOUBLEBOX,  3,1,cm_width-4,cm_height-2, 0,0,0,0,(char *)msg_createdb },
- { DI_TEXT,       5,2,0,0,                      0,0,0,0,"Database name:" },
- { DI_EDIT,       5,3,cm_width-6,0,    			1,(int)"ss_dbname",DIF_HISTORY,0, "" },
- { DI_TEXT,       5,4,0,0,                      0,0,0,0,"ssafe.ini (with path):" },
- { DI_EDIT,       5,5,cm_width-6,0,				1,(int)"ss_ini",DIF_HISTORY,0, "" },
- { DI_TEXT,       5,6,0,0,                      0,0,DIF_SEPARATOR,0,"" },
- { DI_BUTTON,     0,7,0,0,           			0,0,DIF_CENTERGROUP,0,(char*)msg_key_create },
- { DI_BUTTON,     0,7,0,0,           			0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel },
-};
-
-enum {
-	cdlg_title = 0,
-	cdlg_name = 2,
-	cdlg_ssini = 4,
-	cdlg_accept = 6,
-};
+int SS::DeleteFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int OpMode )
+{
+	return FALSE;
+}
 
 
 int SS::ProcessKey(int Key,unsigned int ControlState)
 {
 	PanelInfo pi;
-	struct FarDialogItem DialogItems[ sizeof(create_dlg) / sizeof(create_dlg[0]) ];
-
 	Info.Control( this, FCTL_GETPANELINFO, &pi );
 
 	// create/modify
 	if( ControlState == 0 && ( Key == VK_F7 || Key == VK_F4 ) && !strcmp( cdir, "$\\" ) ) {
 
-		InitDialogItems( create_dlg, DialogItems, sizeof(create_dlg) / sizeof(create_dlg[0]) );
+		FarDialog dlg;
+		static int id_name, id_ssini, id_accept, id_cancel;
+		static struct InitDialogItem items[] = {
+		 { DI_TEXT,       1,0,0,0,		0,0,0,0,(char*)msg_db_name },
+		 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_dbname",DIF_HISTORY,0, "", &id_name },
+		 { DI_TEXT,       1,2,0,0,		0,0,0,0,(char*)msg_db_file },
+		 { DI_EDIT,       1,3,-2,0,		1,(int)"ss_ini",DIF_HISTORY,0, "", &id_ssini },
+		 { DI_TEXT,       1,4,0,0,		0,0,DIF_SEPARATOR,0,"" },
+		 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_create, &id_accept },
+		 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_cancel },
+		};
+
+		create_fdlg( &dlg, 70, 10, Key == VK_F7 ? msg_createdb : msg_modifydb, items, array_size( items ) );
 
 		if( Key == VK_F4 ) {
-			strcpy( DialogItems[cdlg_title].Data, MSG(msg_modifydb) );
-			strcpy( DialogItems[cdlg_name].Data, pi.PanelItems[pi.CurrentItem].FindData.cFileName );
-			GetRegKey( "Repositories", DialogItems[cdlg_name].Data, DialogItems[cdlg_ssini].Data, "", 512 );
-			strcpy( DialogItems[cdlg_accept].Data, MSG(msg_key_modify) );
+			strcpy( dlg.di[id_name].Data, pi.PanelItems[pi.CurrentItem].FindData.cFileName );
+			GetRegKey( "Repositories", dlg.di[id_name].Data, dlg.di[id_ssini].Data, "", 512 );
+			strcpy( dlg.di[id_accept].Data, MSG(msg_key_modify) );
 		}
 
-		int ec = Info.Dialog( Info.ModuleNumber, -1, -1, cm_width, cm_height, NULL, DialogItems, sizeof(DialogItems)/sizeof(DialogItems[0]) );
+		int ec = process_fdlg( &dlg );
 
-		if( ec < 0 || ec == (sizeof(create_dlg) / sizeof(create_dlg[0]))-1 )
+		if( ec < 0 || ec == id_cancel ) {
+			destroy_fdlg( &dlg );
 			return TRUE;
+		}
 
 		if( Key == VK_F4 ) {
 
-			if( strcmp( DialogItems[cdlg_name].Data, pi.PanelItems[pi.CurrentItem].FindData.cFileName ) )
+			if( strcmp( dlg.di[id_name].Data, pi.PanelItems[pi.CurrentItem].FindData.cFileName ) )
 				KillRegVal( "Repositories", pi.PanelItems[pi.CurrentItem].FindData.cFileName );
-
-			SetRegKey( "Repositories", DialogItems[cdlg_name].Data, DialogItems[cdlg_ssini].Data );
-
-		} else {
-			SetRegKey( "Repositories", DialogItems[cdlg_name].Data, DialogItems[cdlg_ssini].Data );
 		}
+
+		SetRegKey( "Repositories", dlg.di[id_name].Data, dlg.di[id_ssini].Data );
+		destroy_fdlg( &dlg );
 
 		Info.Control( this, FCTL_UPDATEPANEL, NULL );
 		Info.Control( this, FCTL_REDRAWPANEL, NULL );
@@ -983,7 +986,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 
 	} else if( ControlState == PKF_CONTROL && Key == VK_F6 && strcmp( cdir, "$\\" ) ) {
 		if( !*pi.PanelItems[pi.CurrentItem].CustomColumnData[0] ) {
-			MSGBOX( "File is not checked out" );
+			MsgBox( "Warning", "File is not checked out" );
 			return TRUE;
 		}
 
@@ -1032,7 +1035,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		return TRUE;
 	} else if( ControlState == PKF_CONTROL && Key == VK_F5 && strcmp( cdir, "$\\" ) ) {
 		if( !*pi.PanelItems[pi.CurrentItem].CustomColumnData[0] ) {
-			MSGBOX( "File is not checked out" );
+			MsgBox( "Warning", "File is not checked out" );
 			return TRUE;
 		}
 

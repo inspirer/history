@@ -5,8 +5,8 @@
 "SourceSafe: GetLatest"
 "SourceSafe: Checkout"
 "SourceSafe: CheckIn"
-"Create SourceSafe database entry"
-"Modify SourceSafe database entry"
+"SourceSafe: Create database entry"
+"SourceSafe: Modify database entry"
 
 "&CheckOut"
 "&Create"
@@ -21,3 +21,26 @@
 
 "DB name"
 "Path"
+
+"To:"
+"Comment:"
+"&Keep checked out"
+"&Remove local copy"
+"CheckingIn"
+"to"
+
+"&Clear Read-Only attribute (only first level files)"
+"&Recursive"
+"Get Latest Version of \"%s\" to:"
+"Get Latest Version of %i items to:"
+"Getting"
+"to"
+
+"&Don't get local copy"
+"&Replace writable (skip otherwise)"
+"Checkout \"%s\" to:"
+"Checkout %i items to:"
+"Checking Out"
+
+"Database name:"
+"ssafe.ini (with path):"
