@@ -140,8 +140,7 @@ _temp_data: // 1024 bytes
  db 0,0xEE,0,0
 
  // Int21 : File system functions
- dw int_21,8
- db 0,0xEE,0,0
+ dw [4]
 
  // Int22 : kernel for Driver's
  dw int_22,8

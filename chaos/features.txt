@@ -6,4 +6,23 @@
   - FPU support
  .142
   - get/set priority
+ .143
+  - mini_driver load to 1st Mb
+ .144
+  - NMI enable/disable
+  - exit with string as error
+ .145
+  - mini_drivers loaded to memory and initialized
+  - sstruct maker
+ .146
+  - minidrv.csm
+  - interface for mini drivers
+ .147
+  - mini drivers have DS associated with CS (!! defrag doesn't process it)
+ .148
+  - VM TASK -> minidriver (vmm.sm)
+ .149
+  - HDD driver -> minidriver (vmm.sm)
+ .150
+  - driver loader (driver.ini parser) -> minidriver (drvload.sm)
   

@@ -36,16 +36,16 @@
       mov  ebp,esp
       and  b:[~ebp.12],0xFE
       pop  ebp
-      cmp  ah,0  ; _jz allocate_memory
-      cmp  ah,1  ; _jz free_memory
-      cmp  ah,2  ; _jz resize_memory
-      cmp  ah,5  ; _jz load_ldt
-      cmp  ah,6  ; _jz mem_alloc_global
-      cmp  ah,7  ; _jz mem_resize_global
-      cmp  ah,8  ; _jz mem_free_global
-      cmp  ah,9  ; _jz mem_defrag_global
-      cmp  ah,10 ; _jz mem_get_free_info
-      cmp  ah,11 ; _jz mem_map_global
+      cmp  ah,0x00; _jz allocate_memory
+      cmp  ah,0x01; _jz free_memory
+      cmp  ah,0x02; _jz resize_memory
+      cmp  ah,0x05; _jz load_ldt
+      cmp  ah,0x06; _jz mem_alloc_global
+      cmp  ah,0x07; _jz mem_resize_global
+      cmp  ah,0x08; _jz mem_free_global
+      cmp  ah,0x09; _jz mem_defrag_global
+      cmp  ah,0x0A; _jz mem_get_free_info
+      cmp  ah,0x0B; _jz mem_map_global
       jmp  exc20_r0
    exc20_n0:
       mov  ax,err_no_support

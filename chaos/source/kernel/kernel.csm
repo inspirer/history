@@ -5,20 +5,31 @@
 #org 0
 
    // Initialization (ds=Data,es=IDT/GDT,ss=Data)
-   ax=mem_kernel_data;ds=ax;ss=ax;fs=ax;gs=ax
-   ax=mem_idt_gdt_data;es=ax;sp=stack
+   mov ax,mem_kernel_data
+   mov ds,ax
+   mov ss,ax
+   mov fs,ax
+   mov gs,ax
+   mov ax,mem_idt_gdt_data
+   mov es,ax
+   mov sp,stack
 
    // Create new IDT
-   xor edi,edi;esi=idt_place;ecx=idt_size;rep movsb
-   mov ecx,2048-idt_size;xor eax,eax;rep stosb
+   xor edi,edi
+   mov esi,idt_place
+   mov ecx,idt_size
+   rep movsb
+   mov ecx,2048-idt_size
+   xor eax,eax
+   rep stosb
 
    // Get memory size (in pages)
-   ecx=d:mem_size;ax=mem_all_data;ds=ax;ebx=ecx<<12
+   mov ecx,d:[mem_size];mov ax,mem_all_data;mov ds,ax;ebx=ecx<<12
    while(ebx!=0){
      d:[ebx]=ecx
      ifelse(d:[ebx]!=ecx){ xor ebx,ebx } else { ebx=+4096;ecx=++ }
    }
-   ax=mem_kernel_data;ds=ax;d:mem_size=ecx
+   mov ax,mem_kernel_data;mov ds,ax;mov d:[mem_size],ecx
 
    // Create page catalog (ecx = pages) at 0x121000
    dx=cx&1023    // need increment ?
@@ -62,52 +73,54 @@
    xor ax,ax;lldt ax
 
    // Create kernel TSS
-   ah=6;ebx=1;int 0x20;push ds
-   push eax
+   ah=6;ebx=1;int 0x20
+   { jnc ?v0;ebx=low_mem;jmp _show_kernel_error }
+   push ds;push eax
 
    // Clear it, SAVE: CR3, BASE I/O
-   ds=ax;xor esi,esi;ecx=1024
-   { d:[esi]=0;esi=+4;loop ?^0 }
-   eax=cr3;d:[0x1C]=eax
-   w:[0x66]=104;d:[0x168]=0xFFFFFFFF
+   mov ds,ax;xor esi,esi;mov ecx,1024
+   { mov d:[esi],0;add esi,4;loop ?^0 }
+   mov eax,cr3;mov d:[0x1C],eax
+   mov w:[0x66],104;mov d:[0x168],0xFFFFFFFF
 
    // Set it as Main TSS
-   pop eax;bx=mem_idt_gdt_data;ds=bx;
+   pop eax;mov bx,mem_idt_gdt_data;mov ds,bx
    xor esi,esi;si=ax;esi=+0x805
    b:[esi]=0x89;pop ds;ltr ax
-   w:kernel_PID=ax;w:prev_TID=ax
+   mov w:[kernel_PID],ax;mov w:[prev_TID],ax
 
    // Create memory defragmentation task's TSS
-   ah=6;ebx=1;int 0x20;push ds
-   push eax
+   ah=6;ebx=1;int 0x20
+   { jnc ?v0;ebx=low_mem;jmp _show_kernel_error }
+   push ds;push eax
 
    // Clear it, SAVE: CR3, BASE I/O, SS:ESP, CS:EIP, EFLAGS
-   ds=ax;xor esi,esi;ecx=1024
-   { d:[esi]=0;esi=+4;loop ?^0 }
-   eax=cr3;d:[0x1C]=eax // CR3
+   mov ds,ax;xor esi,esi;mov ecx,1024
+   { mov d:[esi],0;add esi,4;loop ?^0 }
+   mov eax,cr3;mov d:[0x1C],eax // CR3
    w:[0x66]=104;d:[0x168]=0xFFFFFFFF  // IO Table
    mov w:[0x50],mem_kernel_data;mov d:[0x38],dos_func_stack // SS:ESP
    mov w:[0x4C],mem_kernel_code;mov d:[0x20],mem_defragment_process // CS:EIP
    mov d:[0x24],0x46  // EFLAGS
 
    // Set it as TSS
-   pop eax;bx=mem_idt_gdt_data;ds=bx
-   xor esi,esi;si=ax;esi=+0x805
+   pop eax;mov bx,mem_idt_gdt_data;mov ds,bx
+   xor esi,esi;mov si,ax;add esi,0x805
    b:[esi]=0x89;pop ds
-   w:xdefrag_PID=ax
+   mov w:[xdefrag_PID],ax
 
    // Clear process_list
    ecx=max_process
    esi=process_list
-   { d:[esi]=0;esi=+4;loop ?^0 }
+   { mov d:[esi],0;add esi,4;loop ?^0 }
 
-   // VM00 task
-   init_VM_task()
+   // init mini drivers
+   mini_driver_load()
 
    // Enable ints
    enable_int_system()
 
-   // registry
+   // registers
    reg_init()
 
    // drivers + tasks (from "chaos.ini")
@@ -115,8 +128,8 @@
 
    // switch task
    cli
-   w:m_task_en=multitasking
-   ax=mem_kernel_data;ds=ax
+   mov w:[m_task_en],multitasking
+   mov ax,mem_kernel_data;mov ds,ax
 
    // Jmp first task
 load_next_task:
@@ -172,13 +185,9 @@ kill_task   : dw 0
   #include source\kernel\process.csm
   #include source\kernel\message.csm
 
-  // Int 21
-  #include source\kernel\filesyst.csm
-  #include source\kernel\scr_io.csm
-
   #include source\kernel\ints.csm
   #include source\kernel\driver.csm
-  #include source\kernel\vmm.csm
+  #include source\kernel\minidrv.csm
 
    // ------------------------ [ Return to loader ] ------------------------
 exit:
@@ -208,7 +217,10 @@ exit:
 #shortdef dos_vm_call   $+13
   // addr of dos_VM_call <w:cs>:<w:ip>:<w:data>
 
-#shortdef stack     $+19+stacksize
+#shortdef mini_driver $+19
+  // addr of mini_driver <d:offs>:<d:size>
+
+#shortdef stack     mini_driver+8+stacksize
   // Define Stack
 
 #shortdef dos_func_stack stack+dosfstck

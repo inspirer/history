@@ -11,6 +11,8 @@
    //      ecx:edx - hParam,lParam
    // Out: CF (wrong_PID)
    send_message:
+
+   
       iret
 
    // 2. Post message to process
@@ -21,4 +23,3 @@
    // Out: CF (wrong_PID)
    post_message:
       iret
-      

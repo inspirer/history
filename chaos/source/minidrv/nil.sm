@@ -1,0 +1,27 @@
+#include "source\minidrv\mdrv.h"
+
+  db "CD",26               // ID
+  db [13]                  // device name
+  dd 0                     // interface block
+  dd mdata                 // block of data to fill
+  dd init                  // initialization procedure
+  dw 4                     // size of mdriver in pages
+  dw 0                     // (reserved)
+
+#code 32
+#org 0
+
+init:
+  retf
+
+interface:
+  retf
+
+kernel: callf d:cs:[kern];ret
+debug:  jmpf d:cs:[debg]
+
+mdata:
+  _ds:  dw 0
+  kern: dw [3]
+  debg: dw [3]
+  dos_vm_call: dw [3]

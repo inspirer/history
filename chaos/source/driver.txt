@@ -17,3 +17,28 @@
 
   // <ro_data>
 ----------------------------------------
+
+#include "mdrv.h"
+
+  db "CD",26               // ID
+  db [13]                  // device name
+  dd interface             // interface procedure
+  dd data                  // block of data to fill
+  dd init                  // initialization procedure
+  dw 4                     // size of mdriver in pages
+  dw 0                     // (reserved)
+
+#org 0
+
+init:
+  ret
+
+interface:
+  ret
+
+data:
+  dd 0
+  dd [50]
+
+
+----------------------------------------

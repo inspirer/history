@@ -1,119 +1,253 @@
  // ChaOS kernel Loader
-#shortdef debug 1
 #output chaos.com
 #org 0x100
 #code 16
+
   jmp start
     #include source\kernel\crt.ch
   start:
 
-  printf("\nStarting ChaOS/alpha ...\n")
+  mov  sp,kernelloader.new_stack
+  push 0
+  mov  ah,9
+  mov  dx,starting
+  int  0x21
 
-  !kern:db "kernel.bin",0
-  ax=0x3D00;dx=kern;int 0x21;bx=ax     // Open kernel
+  // Open kernel
+  mov  ax,0x3D00
+  mov  dx,kern
+  int  0x21
+  mov  bx,ax
 
-  if (~c){
-    printf("ERROR: kernel file not found\n")
+  {
+    jnc ?v0
+    mov  ah,9
+    mov  dx,kern_not_found
+    int  0x21
     ret
   }
 
-  ah=0x3F;cx=50000;dx=kernel;int 0x21  // Read kernel
-  w:kern_size16=ax
+  // Read kernel
+  mov  ah,0x3F
+  mov  cx,50000
+  mov  dx,kernel
+  int  0x21
+  mov  w:[kern_size16],ax
 
-  if (~c||ax<5000){
-    printf("ERROR: kernel file damaged\n")
+  {
+    {
+      jc  ?v0
+      cmp ax,5000
+      jge ?v1
+    }
+    mov  ah,9
+    mov  dx,kern_damaged
+    int  0x21
     ret
   }
-  ah=0x3E;int 0x21                     // Close
 
-  w:stack=sp
-  ax=cs;w:oldseg=ax;w:[kernelloader.dos_call_addr]=ax
-  movzx eax,ax;eax=<<4
-  d:des_ds+2=|eax;d:des_cs+2=|eax // prepare cs,ds
+  // Close
+  add  ax,kernel
+  push ax
+  mov  ah,0x3E
+  int  0x21
+  pop  ax
 
-  bx=mgdt;movzx ebx,bx;ebx=+eax
-  d:forgdt+2=|ebx                 // Data to load GDT
+  // prepeare : ds,cs,forgdt,k_cs,k_ds
+  mov   w:[stack],sp
+  push  ax
+  mov   ax,cs
+  mov   w:[oldseg],ax
+  mov   w:[kernelloader.dos_call_addr],ax
+  movzx eax,ax
+  shl   eax,4
+  or    d:[des_ds+2],eax
+  or    d:[des_cs+2],eax
+  mov   bx,mgdt
+  movzx ebx,bx
+  add   ebx,eax
+  or    d:[forgdt+2],ebx
+  mov   bx,kernelloader
+  movzx ebx,bx
+  add   ebx,eax
+  or    d:[kerloader_cs+2],ebx
+  or    d:[kerloader_ds+2],ebx
 
-  bx=kernelloader;movzx ebx,bx;ebx=+eax
-  d:kerloader_cs+2=|ebx           // prepare kerloader_cs
-  d:kerloader_ds+2=|ebx           //          kerloader_ds
+  // calculate address for mini_drivers
+  pop   bx
+  movzx ebx,bx
+  add   ebx,eax
+  add   ebx,15
+  and   bx,0xFFF0
+  mov   d:[kernelloader.mini_driver],ebx
+  shr   ebx,4
+
+  // open minidriver
+  mov  ax,0x3D00
+  mov  dx,sstruct
+  int  0x21
+
+  {
+    jnc ?v0
+    mov  ah,9
+    mov  dx,sstruct_not_found
+    int  0x21
+    ret
+  }
+
+  push ds
+  mov  ds,bx
+  mov  bx,ax
+
+
+  // Read minidriver
+  xor edi,edi
+  {
+    mov  ah,0x3F
+    mov  cx,4096
+    xor  dx,dx
+    int  0x21
+    {
+      jnc  ?v0
+      xor  edi,edi
+      jmps ?v1
+    }
+    cmp  ax,0
+    jz   ?v0
+    movzx eax,ax
+    add  edi,eax
+    mov  ax,ds
+    add  ax,0x100
+    mov  ds,ax
+
+    shr  ax,8
+    cmp  ax,0x80
+    jng  ?^0
+    pop  ds
+    mov  ah,9
+    mov  dx,sstruct_big
+    int  0x21
+    ret
+  }
+  pop ds
+  mov  d:[kernelloader.mini_driver.4],edi
+
+  {
+    cmp  edi,50
+    jge  ?v0
+    mov  ah,9
+    mov  dx,sstruct_damaged
+    int  0x21
+    ret
+  }
+
+  // Close sstruct.bin
+  mov  ah,0x3E
+  int  0x21
 
   cli
-  lgdt  [forgdt]                  // Load GDT
+  mov  al,0xAD
+  out  0x70,al
 
-  mov   al,0xD1                   // Open A20
-  out   0x64,al
-  mov   al,0xDF
-  out   0x60,al
+  // Load GDT
+  lgdt [forgdt]
 
-  mov   eax,cr0
-  or    al,1
-  mov   cr0,eax                   // Switch PM
+  // Open A20
+  mov  al,0xD1
+  out  0x64,al
+  mov  al,0xDF
+  out  0x60,al
 
-  jmpf  $+5,0x8
+  // Switch PM
+  mov  eax,cr0
+  or   al,1
+  mov  cr0,eax
 
-  ax=0x10;ds=ax;ss=ax
+  jmpf $+5,0x8
 
-  jmpf  0,0x18
+  mov  ax,0x10
+  mov  ds,ax
+  mov  ss,ax
+
+  jmpf 0,0x18
 
 exit:
 
-  mov eax,cr0
-  and al,0xfe
-  mov cr0,eax                     // Switch to Real
-  db  0xea
-  dw  $+4
+  // Switch to Real
+  mov  eax,cr0
+  and  al,0xfe
+  mov  cr0,eax
+  db   0xea
+  dw   $+4
 oldseg:
-  dw 0                       // real CS
+  dw 0
 
-  sp=cs:w:stack
-  ax=cs;ds=ax;ss=ax;es=ax
-  lidt [foridt]
+  mov  sp,cs:w:[stack]
+  mov  ax,cs
+  mov  ds,ax
+  mov  ss,ax
+  mov  es,ax
+  lidt [foridt16]
 
   // Close A20
-  mov   al,0xD1
-  out   0x64,al
-  mov   al,0xDD
-  out   0x60,al
+  mov  al,0xD1
+  out  0x64,al
+  mov  al,0xDD
+  out  0x60,al
 
-  if (ecx==1){
+  mov  al,0x2D
+  out  0x70,al
+  sti
+
+  {
+    cmp  ecx,1
+    jnz  ?v0
     printf("Exception \H at \H : \H\n",esi,edi,ebp)
   }
+  {
+    cmp  ecx,2
+    jnz  ?v0
+    printf(kernel)
+  }
 
-  printf("ChaOS/alpha finished\n")
+  mov  ah,9
+  mov  dx,chaos_finished
+  int  0x21
 
-  sti
   ret
 
 dos_vm_call:
 
   nop
-  int 0x21
-  int 0xFF
+  int  0x21
+  int  0xFF
 
 mgdt:
-des_null:
-  dd 0,0
-des_cs:
-  dw 0FFFF,0,0x9A00,0
-des_ds:
-  dw 0FFFF,0,0x9200,0
-kerloader_cs:
-  dw 0FFFF,0,0x9A00,0x40
-kerloader_ds:
-  dw 0FFFF,0,0x9200,0        // Data
-kerloader_es:
-  dw 255,0,0x9210,0x80       // Memory (at 1Mb, size: 1Mb)
+des_null:     dd 0,0
+des_cs:       dw 0FFFF,0,0x9A00,0
+des_ds:       dw 0FFFF,0,0x9200,0
+kerloader_cs: dw 0FFFF,0,0x9A00,0x40
+kerloader_ds: dw 0FFFF,0,0x9200,0        // Data
+kerloader_es: dw 255,0,0x9210,0x80       // Memory (at 1Mb, size: 1Mb)
 
 #shortdef gdt_size_16 $-mgdt-1
 
-foridt:
+foridt16:
   dw 4*256-1
   dd 0
 
 stack:
   dw 0
 
+starting:          db 13,10,"Starting ChaOS/alpha ...",13,10,36
+kern:              db "kernel.bin",0
+kern_not_found:    db "ERROR: kernel file not found",13,10,36
+kern_damaged:      db "ERROR: kernel file damaged",13,10,36
+sstruct:           db "sstruct.bin",0
+sstruct_not_found: db "ERROR: sstruct.bin not found",13,10,36
+sstruct_big:       db "ERROR: sstruct.bin file is too big",13,10,36
+sstruct_damaged:   db "ERROR: sstruct.bin file damaged",13,10,36
+chaos_finished:    db "ChaOS/alpha finished",13,10,36
 #data
 
 kernelloader:
@@ -123,52 +257,50 @@ kernelloader:
 #shortdef gdt_place  0x800
 #shortdef kern_place 0x11000 // After IDT & GDT
 
-   ax=0x20;ds=ax
-   ax=0x28;es=ax
-
    // ds - data ; es - memory for kernel ; !!! stack not defined !!!
+   mov  ax,0x20
+   mov  ds,ax
+   mov  ax,0x28
+   mov  es,ax
 
-   xor edi,edi
-   xor eax,eax
-   ecx=0x10800
-   rep stosb         // Clear
+   // Clear IDT/GDT
+   xor  edi,edi
+   xor  eax,eax
+   mov  ecx,0x10800
+   rep stosb
 
-   edi=gdt_place
-   esi=gdtstart
-   ecx=gdt_size
-   rep movsb         // Prepare GDT
+   // copy new GDT
+   mov  edi,gdt_place
+   mov  esi,gdtstart
+   mov  ecx,gdt_size
+   rep movsb
 
-   lidt  [foridt32]  // Load IDT
+   // Load new IDT
+   lidt [foridt32]
 
-   edi=kern_place
-   esi=kernel32
-   ecx=d:kern_size32
-   rep movsb         // Prepare Kernel
-   //xor edx,edx
-   //{ lodsb;xor al,b:[decode.edx];stosb;inc edx;
-   //   if(edx=>decode_size){xor edx,edx};loop ?^0 }
+   // copy Kernel
+   mov  edi,kern_place
+   mov  esi,kernel32
+   mov  ecx,d:[kern_size32]
+   rep movsb
 
-   esi=ret_to_loader
-   ecx=ret_to_loader_size
-   rep movsb         // Prepare return code
+   // append return code to kernel
+   mov  esi,ret_to_loader
+   mov  ecx,ret_to_loader_size
+   rep movsb
 
+   // load new GDT
    lgdt [forgdt32]
+
+   // switch to kernel
    jmpf 0,0x8
 
-   // end
 ret_addr:
-
    jmpf exit,0x8
 
 gdtstart:
-
-#include source\kernel\gdt.csm
-
+  #include source\kernel\gdt.csm
 #shortdef gdt_size $-gdtstart
-
-//decode:
-//  #binary source\kernel\_code_.bin
-//#shortdef decode_size $-decode
 
 ret_to_loader:
   jmpf ret_addr,0x18
@@ -181,6 +313,10 @@ dos_call_addr:
   dw 0
   dw dos_vm_call
   dw kernel
+
+mini_driver:
+  dd 0
+  dd 0
 
 #shortdef forgdt forgdt16+kernelloader
 #shortdef ret_to_loader_size $-ret_to_loader
@@ -197,6 +333,8 @@ kern_size32:
   dd 0
 #shortdef kern_size16 kern_size32+kernelloader
 
+#shortdef new_stack $+400
+
 // Here we load kernel
-#shortdef kernel   kernelloader+$
-#shortdef kernel32 $
+#shortdef kernel32 new_stack+2
+#shortdef kernel   kernelloader+kernel32

@@ -1,0 +1,99 @@
+#include "source\minidrv\mdrv.h"
+
+  db "CD",26               // ID
+  db "driver_loader"       // device name
+  dd 0                     // interface block
+  dd mdata                 // block of data to fill
+  dd init                  // initialization procedure
+  dw 4                     // size of mdriver in pages
+  dw 0                     // (reserved)
+
+#code 32
+#org 0
+
+#define _ini_str_   0      // 255
+#define _ini_data_  256    // 120
+
+init:
+  mov ax,0x100;mov esi,driver_ini;int 0x21
+  {
+    jnc down(00)
+    mov ebx,driver_err;mov ah,1;call kernel
+  }
+  mov bx,ax
+
+  push es;push ds;pop es;mov edi,data._ini_str_
+  {
+    push edi;mov ah,3;mov cx,120;mov edi,data._ini_data_;int 0x21;pop edi
+    { // if(ax>0)
+      cmp ax,0
+      jz  down(00)
+
+      xor ecx,ecx;mov cx,ax;mov esi,data._ini_data_
+      {
+        lodsb
+        { // ifelse (al==10||al==13)
+          cmp al,10
+          jz  __if01
+          cmp al,13
+          jnz __else01
+          __if01:
+
+          xor eax,eax;stosd
+          mov edi,data._ini_str_
+          { // if (b:[edi]!=0)
+             cmp b:[edi],0
+             jz  down(00)
+
+             push esi;mov esi,edi
+
+             // skip spaces
+             { lodsb;cmp al,' ';jz up(00);dec esi }
+
+             // prepare to load ( "," => 0 )
+             push esi;xor eax,eax
+             { lodsb;cmp al,0;jz down(00);
+                cmp al,',';jnz up(00);
+                 mov b:[~esi-1],0;mov eax,esi }
+             dec esi;pop esi
+
+             // DS:ESI = (char *) fname ; DS:EAX = (char *) param (or = NULL)
+
+             call load_driver
+
+             pop esi
+          }
+          {
+            jmps down(00)
+            __else01:
+            stosb
+          }
+        }
+        loop up(00)
+      }
+      jmp up(01)
+    }
+  }
+  pop es
+  mov ah,2
+  int 0x21
+  retf
+
+load_driver:
+
+
+  ret
+
+kernel: callf d:cs:[kern];ret
+debug:  jmpf d:cs:[debg]
+
+mdata:
+  _ds:  dw 0
+  kern: dw [3]
+  debg: dw [3]
+  dos_vm_call: dw [3]
+
+driver_err: db "FATAL: 'driver.ini' not found\\n",0
+driver_ini: db "driver.ini",0
+
+data:

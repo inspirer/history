@@ -5,7 +5,7 @@
 // Processes
 #shortdef max_process 1024      // Number of process
 #shortdef default_prior 3       // Default task priority
-#shortdef ring0stacksize  2     // Kernel's stack (pages)
+#shortdef ring0stacksize  4     // Kernel's stack (pages)
 #shortdef ring1stacksize  4     // Driver's stack (pages)
 
 // Kernel stack (in bytes)

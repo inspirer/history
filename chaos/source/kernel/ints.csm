@@ -43,7 +43,8 @@
  exc_0C: // Stack error
    ebx=0xC;jmp fault
 
- // GPF reserved for VMM
+ exc_0D: // GPF
+   ebx=0xD;jmp fault
 
  exc_0E: // Page fault
    ebx=0xE;jmp fault
@@ -68,11 +69,19 @@
    esp=stack;esi=ebx;edi=eax;ecx=1
    jmp exit
 
+ _show_kernel_error: // DS:EBX = (char *)string
+   mov dx,mem_kernel_data;mov es,dx;mov ss,dx;mov esp,stack
+   xor edi,edi;di=w:cs:dos_vm_call;edi=<<4
+   movzx esi,w:cs:dos_vm_call.4;add edi,esi
+   si=mem_all_data;es=si;mov esi,ebx
+   { lodsb;stosb;cmp al,0;jnz ?^0 }
+   ecx=2;mov ds,dx;mov es,dx
+   jmp exit
+
  // OS startup => sti
 enable_int_system:
 
    // Master ctrl init
-   cli
    mov al,0x11
    out 0x20,al  // ltime = 0 ; SNLG = 0 ; IC4 = 1
    mov al,0x78
@@ -94,11 +103,14 @@ enable_int_system:
 
    // Set timer
    al=0x36;out 0x43,al
-   ax=timer;dx=0x40
-   out dx,al;al=ah;out dx,al
+   mov ax,timer;mov dx,0x40
+   out dx,al;mov al,ah;out dx,al
 
    al=0xFC;out 0x21,al
    al=0xFF;out 0xA1,al
+
+   mov  al,0x2D
+   out  0x70,al
    sti
    ret
 
@@ -106,6 +118,8 @@ enable_int_system:
 disable_int_system:
 
    cli
+   mov  al,0xAD
+   out  0x70,al
 
    // Init master IRQ controller
    mov al,0x11
@@ -129,46 +143,21 @@ disable_int_system:
 
    // Set timer
    al=0x36;out 0x43,al
-   ax=0;dx=0x40
-   out dx,al;al=ah;out dx,al
+   mov ax,0;mov dx,0x40
+   out dx,al;mov al,ah;out dx,al
 
-   al=0
+   mov al,0
    out 0x21,al
    out 0xA1,al
    ret
 
  // int70-75 (reserved)
 
- // HDD1 interrupt
+ // int 76,77
 int_76:
-   test b:[esp.8.2],2
-   jz brd
-
-   push ebp
-   push ebp
-   mov ebp,esp
-   push eax
-   push ebx
-   ax=mem_all_data;fs=ax
-   ebx=0x76
-   jmp emulate_int
-
-brd:
-   d:cs:[0]=0
-
- // HDD2 interrupt
 int_77:
-   test b:[esp.8.2],2
-   jz brd
-
-   push ebp
-   push ebp
-   mov ebp,esp
-   push eax
-   push ebx
-   ax=mem_all_data;fs=ax
-   ebx=0x77
-   jmp emulate_int
+   d:cs:[0]=0
+   iret
 
  // coprocessor int
 exc_07:
@@ -251,3 +240,5 @@ task_no  : dw process_list+4    // Offset of next task
 task_lft : dw default_prior     // Left tics for curr task
 task_PID : dw 0                 // Current task PID
 m_task_en: dw 0                 // OS status: 0-load;1-multitasking;2-closing
+
+low_mem: db "ERROR: not enough memory for kernel\n",0

@@ -1,0 +1,123 @@
+
+   // minidrivers interface
+interface:
+   clc
+   cmp ah,0 ; _jz mdrv00
+   cmp ah,1 ; _jz mdrv01
+   stc
+   retf
+
+   // ~ allocate interrupt
+   // In:  ah=0; al=interrupt; BX:EDX - new handler (al = 0-0x2f,0x70-0x7f)
+   // Out: (CF) BX:EDX - old handler
+ mdrv00:
+   push ds;push eax;push esi;push eax;shr ax,4
+   { cmp al,2;jle ?v0;jz ?v0;cmp al,7;jz ?v0;stc;pop esi;pop eax;pop ds;retf }
+   pop eax;xor esi,esi;si=ax;shl esi,3;ax=mem_idt_gdt_data;ds=ax
+   xchg bx,w:[~esi.2];xchg dx,w:[esi];rol edx,16;xchg dx,w:[~esi.6]
+   ror edx,16;w:[~esi.4]=0xAE00
+   pop esi;pop eax;pop ds
+   retf
+
+   // ~ exit with string as error
+   // In:  ah=1;DS:EBX - string
+ mdrv01:
+   jmp _show_kernel_error
+
+  // load minidrivers from 1st Mb
+ mini_driver_load:
+   push es;push ds
+
+   // allocate memory for minidriver's info
+   ah=6;ebx=1;int 0x20
+   { jnc ?v0;ebx=low_mem;jmp _show_kernel_error }
+   es=ax;w:[mdrv_info_sel]=ax
+
+   // DS:ESI = (void *) sstruct.bin
+   mov ax,mem_all_data;mov ds,ax;mov esi,d:cs:mini_driver
+   mov edi,d:cs:mini_driver.4;add edi,esi
+
+   // check that sstruct.bin was loaded (size,ID,num_of_mdrv)
+   { cmp edi,0x9FFFF;jl ?v0;ebx=ss_size_err;jmp _show_kernel_error }
+   { lodsd;cmp eax,0x3E235353;jz ?v0;ebx=ss_err;jmp _show_kernel_error }
+   { lodsd;shl eax;shr eax;cmp eax,128;jl ?v0;ebx=ss_err;jmp _show_kernel_error }
+   mov ecx,eax;xor edi,edi;push ecx
+
+   // load minidrivers
+   _while(ecx>0){
+     push ecx
+
+     // Check size & ID
+     lodsd;shl eax;shr eax
+     { cmp eax,0x50000;jl ?v0;ebx=md_err;jmp _show_kernel_error }
+     { cmp eax,40;jg ?v0;ebx=md_err;jmp _show_kernel_error }
+     mov ecx,eax;eax=d:[esi];and eax,0xFFFFFF
+     { cmp eax,0x1a4443;jz ?v0;ebx=md_err;jmp _show_kernel_error }
+
+     // get size = max(size,req)
+     mov ebx,ecx;add ebx,4095;shr ebx,12
+     eax=d:[~esi.28];cmp eax,ebx { jng ?v0;ebx=eax }
+
+     // save header in minidriver's info
+     push ecx;ecx=8;rep movsd;pop ecx;sub ecx,32;push edi
+
+     // allocate memory
+     ah=6;int 0x20
+     { jnc ?v0;ebx=low_mem;jmp _show_kernel_error }
+     w:es:[~edi-32]=ax;push es;es=ax;xor edi,edi
+
+     // move data
+     rep movsb
+
+     pop es;pop edi;pop ecx
+     dec ecx
+   }
+   pop ecx;pop ds;w:[mdrv_total]=cx
+
+   // init minidrivers (call them)
+   ax=w:mdrv_info_sel;es=ax;xor esi,esi
+   _while (ecx>0){
+
+     // init call structure
+     eax=d:es:[~esi.24];d:mdrv_call=eax
+     xor eax,eax;ax=w:es:[esi];mov w:[mdrv_call.4],ax
+
+     // create associated data segment
+     push esi;push eax;push ds;add eax,0x800;esi=eax;ax=mem_idt_gdt_data;ds=ax
+     eax=d:[esi];ebx=d:[~esi.4];mov esi,mem_start_desc+0x800;push eax
+     while(esi<0x10800){ lodsd;lodsd;and ah,0x80;cmp ah,0;jz __found_free1 }
+     { jnc ?v0;ebx=no_free_descr;jmp _show_kernel_error }
+     __found_free1: pop eax;sub esi,8;ebp=esi;d:[esi]=eax;bh=0x92;d:[~esi.4]=ebx
+     ebx=esi;add esi,6;or b:[esi],0x10;pop ds;pop eax;sub ebx,0x800;pop esi
+
+     // save DS in MDRV structure
+     w:es:[~esi.28]=bx
+
+     // init minidriver data structure
+     push esi;push ds;esi=d:es:[~esi.20];ds=ax;w:[esi]=bx
+     d:[~esi.8]=debug;w:[~esi.12]=mem_kernel_code
+     d:[~esi.2]=interface;w:[~esi.6]=mem_kernel_code
+     edx=d:cs:dos_vm_call;d:[~esi.14]=edx;dx=w:cs:dos_vm_call.4;w:[~esi.18]=dx
+     pop ds;pop esi
+
+     // set data seg to code (associated)
+     add eax,0x805;push ds;push esi
+     esi=eax;ax=mem_idt_gdt_data;ds=ax
+     b:[esi]=0x9a;inc esi;or b:[esi],0x10;pop esi;pop ds
+
+     // call minidriver
+     push ds;ds=bx;pusha;callf d:cs:[mdrv_call];popa;pop ds
+
+     // next
+     esi=+32;dec ecx
+   }
+   pop es
+   ret
+
+ss_size_err:   db "ERROR: sstruct.bin is too big\n",0
+ss_err:        db "ERROR: sstruct.bin was broken\n",0
+no_free_descr: db "ERROR: no free descriptor\n",0
+md_err:        db "ERROR: minidriver was broken\n",0
+mdrv_info_sel: dw 0
+mdrv_total: dw 0
+mdrv_call: dw 0,0,0
