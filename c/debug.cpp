@@ -22,11 +22,23 @@
 
 #ifdef DEBUG_TREE
 
-void debug_show_sym( Sym *s, int deep )
+void debug_show_sym( PSym s, int deep )
 {
-	char *head;
+	char *head, *stor;
 
 	while( s ) {
+		switch( s->storage ) {
+		    case scs_extern:   stor = "extern"; break;
+		    case scs_static:   stor = "static"; break;
+		    case scs_auto:     stor = "auto"; break;
+		    case scs_register: stor = "register"; break;
+		    case scs_typedef:  stor = "typedef"; break;
+		    case scs_bitfield:  stor = "bit"; break;
+		    case scs_member:  stor = "member"; break;
+		    case scs_imm:  stor = "imm"; break;
+		    case scs_arg:  stor = "arg"; break;
+		    default: stor = "";
+		}
 		switch( s->ns_modifier ) {
  			case 0: 		head = "sym";	break;
 			case t_struct:  head = "struct_tag";break;
@@ -36,7 +48,7 @@ void debug_show_sym( Sym *s, int deep )
 			case t_label: 	head = "label";	break;
 			default:		head = "?????"; break;
 		}
-		printf( "%*s%s(%s) [\n", deep, "", head, s->name ? s->name : "" );
+		printf( "%*s%s<%s>(%s) [\n", deep, "", head, stor, s->name ? s->name : "" );
 		printf( "%*stype (\n", deep+4, "" );
 		debug_show_type( s->type, deep+8 );
 		printf( "%*s)\n", deep+4, "" );
@@ -49,10 +61,10 @@ void debug_show_sym( Sym *s, int deep )
 }
 
 
-void debug_show_type( Type *t, int deep )
+void debug_show_type( PType t, int deep )
 {
-	char *spec, *stor, qual[128] = "";
-	Type *s = t;
+	char *spec, qual[128] = "";
+	PType s = t;
 
 	while( s ) {
 		switch( s->specifier ) {
@@ -87,21 +99,12 @@ void debug_show_type( Type *t, int deep )
 			case t_enum: spec = "enum"; break;
 			default: spec = "?????"; break;
 		}
-		switch( s->storage ) {
-		    case scs_extern:   stor = "extern "; break;
-		    case scs_static:   stor = "static "; break;
-		    case scs_auto:     stor = "auto "; break;
-		    case scs_register: stor = "register "; break;
-		    case scs_typedef:  stor = "typedef "; break;
-		    case scs_imm:  stor = "im "; break;
-		    default: stor = "";
-		}
 		*qual = 0;
 		if( s->qualifier & tq_const ) strcat( qual, "const " );
 		if( s->qualifier & tq_volatile ) strcat( qual, "volatile " );
 		if( s->qualifier & tq_restrict ) strcat( qual, "restrict " );
 
-		printf( "%*s%s%s%s%s\n", deep, "", stor, qual, spec, s->parent ? " =>" : "" );
+		printf( "%*s%s%s%s\n", deep, "", qual, spec, s->parent ? " =>" : "" );
 
 		if( (s->specifier == t_struct || s->specifier == t_union) && s == t && s->params ) {
 			debug_show_sym( s->params, deep + 4 );

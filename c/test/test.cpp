@@ -63,7 +63,8 @@ void main() {
 }
   */
 
-void main() {
+void main( extern int a ) {
 
-   1, 2, 3;
+   struct yo int a;
+   long long long a;
 }

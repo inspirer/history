@@ -21,11 +21,17 @@
 #ifndef types_h_included
 #define types_h_included
 
-//#define DEBUG_TREE
+#define DEBUG_TREE
+
+#define TYPE(tt) ((Type *)(tt))
+typedef const struct Type *PType;
+
+#define SYM(tt) ((Sym *)(tt))
+typedef const struct Sym *PSym;
 
 #define POINTER_SIZE 4
 
-// storage class specifiers
+// Sym: storage class specifiers
 enum {
     scs_none     = 0,
     scs_extern   = 1, 
@@ -33,13 +39,14 @@ enum {
     scs_auto     = 3, 
     scs_register = 4, 
     scs_typedef  = 5,
-    scs_imm      = 6, 
+	// extra
+    scs_global   = 6,
+    scs_imm      = 7, 
+	scs_bitfield = 8,
+	scs_member   = 9,
+	scs_arg      = 10,
+	scs_label	 = 11,
 };
-
-/*
- *    scs_imm means that value of the symbol is known during the compilation
- */
-
 
 // type qualifiers
 enum {
@@ -197,7 +204,9 @@ class Compiler;
 
 /* EG:
 	size member declares the number of bytes needed to hold the variable
-	of such Type in memory. size = 0 for function and void types.
+	of such Type in memory. 
+		size = 0 for function and void types.
+		size = -1 for variable sizes: see var_size
 
 	structure stores its members in 'params' list, but for fast access we
 	use 'members' namespace (each structure has its own namespace).
@@ -208,16 +217,25 @@ class Compiler;
 */
 
 struct Type {
-    int    specifier, storage, qualifier;
+    int    specifier, qualifier;	// see T(), Q()
 	word   size;
+	Expr   *var_size;
 	char   *tagname;				// t_struct, t_union, t_enum
 	union {
-	    Type *parent, *return_value;
+	    PType parent, return_value;
 	};
 
-    union {  // depends on specifier
+    // compiler's stages dependent vars
+	union {
+		struct {					// stage 1 (syntax analysis)
+			int storage;
+		} st1;
+	};
+
+	// specifier dependent vars
+    union {
 		struct {				// t_func, t_struct, t_union
-        	Sym *params;		// for t_struct, t_union NULL means incompleted
+        	PSym params;		// for t_struct, t_union NULL means incompleted
         	union {
 				Node *body;		// for t_func NULL means incompleted
                 Namespace *members; // members structure is fast access to params
@@ -228,28 +246,26 @@ struct Type {
 			int ar_size_val;
 		};
 		Namespace *enum_members; // t_enum
-		struct {				 // INTTYPE
-			int bitsize, bitstart;
-		};
     };
 
 	// toString operator uses two static buffers
-	const char *toString();
+	const char *toString() const;
 
 	// type conversions
-	int can_convert_to( Type *t, Compiler *cc );
-	static Type *compatible( Type *t1, Type *t2, int qualif, Compiler *cc );
-	Type *integer_promotion( Compiler *cc );
+	int can_convert_to( PType t, Compiler *cc ) const;
+	PType integer_promotion( Compiler *cc ) const;
+
+	static PType compatible( PType t1, PType t2, int qualif, Compiler *cc );
 
 	// constructors
-    static Type *create( int ts, Compiler *cc );
-	Type		*clone( Compiler *cc );
-    static Type *create_function( Sym *paramlist, Compiler *cc );
-    static Type *create_struct( char *name, int type, Sym *members, Namespace *mm, Compiler *cc );
-    static Type *create_enum( char *name, Namespace *ns, Compiler *cc );
-    static Type *create_array( int tqualifiers, Expr *expr, Compiler *cc );
-    static Type *get_enum_type( Compiler *cc );
-	static Type *get_basic_type( int spec, Compiler *cc );
+    static Type   *create( int ts, Compiler *cc );
+	Type		  *clone( Compiler *cc ) const;
+    static PType create_function( PSym paramlist, Compiler *cc );
+    static PType create_struct( char *name, int type, Sym *members, Namespace *mm, Compiler *cc );
+    static PType create_enum( char *name, Namespace *ns, Compiler *cc );
+    static PType create_array( int tqualifiers, Expr *expr, Compiler *cc );
+    static PType get_enum_type( Compiler *cc );
+	static PType get_basic_type( int spec, Compiler *cc );
 
     // grammar-based operations
     void add( int ts, Place loc, Compiler *cc );
@@ -309,27 +325,45 @@ extern const struct basic_type_descr tdescr[t_basiccnt];
 
 struct Sym {
     char *name;
-    int  ns_modifier;     // 0 - usual, t_struct, t_union, t_enum, t_typename, t_label, t_bad
-    Type *type, *type_tail;
-    Sym *next, *next_tail, *hashed;
+    int storage, ns_modifier;     // 0 - usual, t_struct, t_union, t_enum, t_typename, t_label, t_bad
+    PType type;
+    PSym next, hashed;
     Init *init;
 
+	// storage dependent vars
     union {
+		char *exportname;	// scs_extern
+    	unsigned lblnum;	// scs_static
+
     	int offset;			// ns_modifier == 0, -1 if not in (structure, union, params)
-    	vlong value;		// ns_modifier == 0, immediate value (type->storage == scs_imm)
-    	Node *label_node;	// ns_modifier == t_label  (TODO)
+    	vlong value;		// scs_imm
+    	Node *label_node;	// scs_label
+
+    	struct {
+			PSym container;		// scs_member, scs_bitfield, scs_arg
+			int bitsize, bitstart;  // INTTYPE
+			int offset;
+		} member;
+    } loc;
+
+    // compiler's stages dependent vars
+    union {
+		struct {
+			PType type_tail;
+			PSym  next_tail;
+		} st1;
     };
 
 	// constructors
     static Sym *create( char *s, Compiler *cc );
 
 	// registers Sym in the outer namespace, returns INIT Nodes
-    Node *register_self( Compiler *cc );
-	void declare_function( Node *statement, Namespace *outer, Compiler *cc );
+    Node *register_self( Place loc, Compiler *cc );
+	void declare_function( Node *statement, Namespace *outer, Place loc, Compiler *cc );
 
     // grammar-based operations
-    void fixtype( Type *t, Compiler *cc );
-    void addtype( Type *t );
+    void fixtype( PType t, Compiler *cc );
+    void addtype( PType t );
     void addnext( Sym *s );
 };
 
@@ -352,8 +386,8 @@ struct Namespace {
 
     Namespace();
     ~Namespace();
-    void add_item( Sym *i );
-    Sym *search_id( const char *name, int modifier, int go_deep );
+    void add_item( PSym i );
+    PSym search_id( const char *name, int modifier, int go_deep );
 
     /*
 		EG: entering to and exiting from namespaces (in slab)
@@ -372,8 +406,8 @@ struct Namespace {
 #ifdef DEBUG_TREE
 
 void debug_show_namespace( Namespace *ns, int deep );
-void debug_show_sym( Sym *s, int deep );
-void debug_show_type( Type *s, int deep );
+void debug_show_sym( PSym s, int deep );
+void debug_show_type( PType s, int deep );
 
 #endif
 

@@ -40,17 +40,17 @@ Compiler::Compiler() :
  */
 char *Compiler::identifier( char *token, int *n, int tnID )
 {
-	char *id = new char[ 1 + sizeof(Type*) + strlen(token)];
+	char *id = new char[ 1 + sizeof(PType) + strlen(token)];
 
-	*(Type **)id = NULL;
-	strcpy( id + sizeof(Type*), token );
+	*(PType *)id = NULL;
+	strcpy( id + sizeof(PType), token );
 
-	if( Sym *s = current->search_id( token, t_typename, 1 ) ) {
-		*(Type **)id = s->type;
+	if( PSym s = current->search_id( token, t_typename, 1 ) ) {
+		*(PType *)id = s->type;
 		*n = tnID;
 	}
 
-	return id + sizeof(Type*);
+	return id + sizeof(PType);
 }
 
 

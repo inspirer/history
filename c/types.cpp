@@ -25,7 +25,7 @@ Type *Type::create( int ts, Compiler *cc )
 {
 	Type *t = (Type *)cc->type_sl.allocate();
 	t->specifier = ts;
-	t->storage = scs_none;
+	t->st1.storage = scs_none;
 	t->qualifier = tq_none;
 	t->parent = NULL;
 	t->size = ts == t_pointer ? POINTER_SIZE : 0;
@@ -36,7 +36,7 @@ Type *Type::create( int ts, Compiler *cc )
 //
 //  clones type structure
 // 
-Type *Type::clone( Compiler *cc )
+Type *Type::clone( Compiler *cc ) const
 {
 	Type *t = (Type *)cc->type_sl.allocate();
 	*t = *this;
@@ -71,10 +71,10 @@ static inline int _insert( char **buffer, int *left, char *str, int pos )
 //
 //  processes one sequence of types, calls itself on function types
 //
-static int toString_helper( Type *root, char **b, int *left, int pos ) {
+static int toString_helper( const PType root, char **b, int *left, int pos ) {
 
 	int size = 0;
-	Type *t = root;
+	PType t = root;
 
 	for( ; t; t = t->parent ) {
 
@@ -104,7 +104,7 @@ static int toString_helper( Type *root, char **b, int *left, int pos ) {
 				AFTER( ")()" );
 			}
 			if( t->params )
-				for( Sym *s = t->params; s; s = s->next ) {
+				for( PSym s = t->params; s; s = s->next ) {
 					size += toString_helper( s->type, b, left, pos + size - 1 );
 					if( s->next )
 						size += _insert( b, left, ", ", pos+size-1 );
@@ -189,7 +189,7 @@ static int toString_helper( Type *root, char **b, int *left, int pos ) {
 //
 //   This function uses two buffers, and is not re-entrant.
 //
-const char *Type::toString()
+const char *Type::toString() const
 {
 	enum { SIZE = 2048 };
 	static int calltimes = 0;
@@ -333,16 +333,8 @@ void Type::add( int ts, Place loc, Compiler *cc )
 		ts = ts_llong;
 
 	if( t_mask & specifier ) {
-		cc->error( LOC "'", loc );
-		switch( t_mask & specifier ) {
-			case t_typename:
-			case t_struct:
-			case t_union:
-			case t_enum:
-				cc->error("type/struct/union/enum");
-		}
-		cc->error( "' followed by '" );
-		print_type( ts, cc );
+		cc->error( LOC "'%s' followed by '", loc, toString() );
+		print_type( (ts==ts_llong)?ts_long:ts, cc );
 		cc->error( "' is illegal\n" );
 		return;
 	}
@@ -351,7 +343,7 @@ void Type::add( int ts, Place loc, Compiler *cc )
 		cc->error( LOC "'", loc );
 		print_type( specifier, cc );
 		cc->error( "' followed by '" );
-		print_type( ts, cc );
+		print_type( (ts==ts_llong)?ts_long:ts, cc );
 		cc->error( "' is illegal\n" );
 		return;
 	}
@@ -364,8 +356,8 @@ void Type::add_modifier( int modifier, Place loc, Compiler *cc )
 {
 	switch( modifier & ~0xff ) {
 		case mod_storage:
-			if( storage == scs_none )
-				storage = modifier & 0xff;
+			if( st1.storage == scs_none )
+				st1.storage = modifier & 0xff;
 			else
 				cc->error( LOC "more than one storage class specified\n", loc );
 			break;
@@ -397,7 +389,7 @@ int Type::addqualifier( int list, int one, Place loc, Compiler *cc )
 }
 
 
-Type *Type::create_function( Sym *paramlist, Compiler *cc )
+PType Type::create_function( PSym paramlist, Compiler *cc )
 {
 	Type *t = create( t_func, cc );
 	t->params = paramlist;
@@ -417,16 +409,16 @@ Type *Type::create_function( Sym *paramlist, Compiler *cc )
    EG: members == NULL means that structure has no definition
 
 */
-Type *Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Compiler *cc )
+PType Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Compiler *cc )
 {
 	Type *t = NULL;
 	Sym  *s = NULL;
 
 	// try to find out current structure declaration
 	if( name ) {
-		s = cc->current->search_id( name, type, 0 );
+		s = SYM(cc->current->search_id( name, type, 0 ));
 		if( s )
-			t = s->type;
+			t = TYPE(s->type);
 	}
 
 	// create if not exist
@@ -456,8 +448,8 @@ Type *Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Co
 
 		word size = 0;
 
-		for( Sym *s = members; s; s = s->next ) {
-			s->offset = type == t_struct ? size : 0;
+		for( PSym s = members; s; s = s->next ) {
+			SYM(s)->loc.offset = type == t_struct ? size : 0;
 			size += s->type->size;
 		}
 
@@ -468,7 +460,7 @@ Type *Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Co
 }
 
 
-Type *Type::create_array( int tqualifier, Expr *expr, Compiler *cc ) 
+PType Type::create_array( int tqualifier, Expr *expr, Compiler *cc ) 
 {
 	Type *t = create( t_array, cc );
 
@@ -488,12 +480,10 @@ Type *Type::create_array( int tqualifier, Expr *expr, Compiler *cc )
 	
 	EG: the type is cached in the Compiler::basic[0] variable
 */
-Type *Type::get_enum_type( Compiler *cc )
+PType Type::get_enum_type( Compiler *cc )
 {
-	if( cc->basic[0] == NULL ) {
+	if( cc->basic[0] == NULL )
 		cc->basic[0] = create( t_uint, cc );
-		cc->basic[0]->storage = scs_imm;
-	}
 
 	return cc->basic[0];
 }
@@ -504,7 +494,7 @@ Type *Type::get_enum_type( Compiler *cc )
 	
 	EG: the type is cached in the Compiler::basic[1..t_basiccnt] variable
 */
-Type *Type::get_basic_type( int spec, Compiler *cc )
+PType Type::get_basic_type( int spec, Compiler *cc )
 {
 	ASSERT( spec > 0 && spec < t_basiccnt );
 
@@ -521,15 +511,15 @@ Type *Type::get_basic_type( int spec, Compiler *cc )
 
    EG: ns == NULL means that enumeration has no definition
 */
-Type *Type::create_enum( char *name, Namespace *ns, Compiler *cc )
+PType Type::create_enum( char *name, Namespace *ns, Compiler *cc )
 {
 	Type *t = NULL;
 	Sym  *s = NULL;
 
 	// try to find out current enum declaration
-	s = cc->current->search_id( name, t_enum, 0 );
+	s = SYM(cc->current->search_id( name, t_enum, 0 ));
 	if( s )
-		t = s->type;
+		t = TYPE(s->type);
 
 	// create if not exist
 	if( !t && ns ) {

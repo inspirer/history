@@ -23,7 +23,7 @@
 /*
 	Main constructor for expressions
 */
-Expr *Expr::create( int type, Type *restype, Compiler *cc )
+Expr *Expr::create( int type, PType restype, Compiler *cc )
 {
 	Expr *e;
 	
@@ -199,7 +199,7 @@ Expr *Expr::create_from_id( const char *id, Place loc, Compiler *cc )
 	// as designating an object (in which case it is an lvalue) or a function 
 	// (in which case it is a function designator).
 
-	Sym  *s = cc->current->search_id( id, 0, 1 /* search outer namespaces */ );
+	PSym s = cc->current->search_id( id, 0, 1 /* search outer namespaces */ );
 
 	if( !s ) {
 		cc->error( LOC "unknown identifier: `%s`\n", loc, id );
@@ -208,9 +208,9 @@ Expr *Expr::create_from_id( const char *id, Place loc, Compiler *cc )
 	
 	Expr *e = NULL;
 
-	if( s->type && s->type->storage == scs_imm ) {
+	if( s->type && s->storage == scs_imm ) {
 		e = create( e_direct, s->type, cc );
-		e->value = s->value;
+		e->value = s->loc.value;
 
 	} else {
 		e = create( e_leaf, s->type, cc );
@@ -268,7 +268,7 @@ Expr *Expr::create_struct_member( Expr *str_or_un, char *membername, Place loc, 
 	if( !str_or_un )
 		return NULL;
 
-	Sym *s = str_or_un->restype->members->search_id( membername, 0, 0 );
+	PSym s = str_or_un->restype->members->search_id( membername, 0, 0 );
 	
 	if( !s ) {
 		cc->error( LOC "'%s' is not a member of struct/union\n", loc, membername );
@@ -312,7 +312,7 @@ Expr *Expr::create_struct_member_ptr( Expr *str_or_un, char *membername, Place l
 	if( !str_or_un )
 		return NULL;
 
-	Sym *s = str_or_un->restype->parent->members->search_id( membername, 0, 0 );
+	PSym s = str_or_un->restype->parent->members->search_id( membername, 0, 0 );
 	
 	if( !s ) {
 		cc->error( LOC "'%s' is not a member of struct/union\n", loc, membername );
@@ -334,7 +334,7 @@ Expr *Expr::create_struct_member_ptr( Expr *str_or_un, char *membername, Place l
 //
 //  The sizeof operator
 //
-Expr *Expr::get_type_size( Type *t, Place loc, Compiler *cc )
+Expr *Expr::get_type_size( PType t, Place loc, Compiler *cc )
 {
 	// 6.5.3.4.1 The sizeof operator shall not be applied to an expression that has
 	//  function type or an incomplete type, to the parenthesized name of such a type,
@@ -365,7 +365,7 @@ Expr *Expr::get_type_size( Type *t, Place loc, Compiler *cc )
 //
 //  Cast operator
 //
-Expr *Expr::cast_to( Expr *e, Type *t, Place loc, Compiler *cc )
+Expr *Expr::cast_to( Expr *e, PType t, Place loc, Compiler *cc )
 {
 	if( !e )
 		return NULL;
@@ -402,7 +402,7 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 	if( !e1 || !e2 )
 		return NULL;
 
-	Type *result;
+	PType result;
 
 	// error checking switch, return NULL on error
 	switch( op ) {
@@ -598,7 +598,7 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 		return NULL;
 	}
 
-	Type *result;
+	PType result;
 
 	// 3. One of the following shall hold for the second and third operands:
 	// - both operands have arithmetic type;
@@ -639,14 +639,14 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 		if( !SUBSET(q2,Q(result->parent)) ) {
 			// process inner level qualification
 			result = result->clone(cc);
-			result->parent = result->parent->clone(cc);
-			Q(result) |= q1;
-			Q(result->parent) |= q2;
+			TYPE(result)->parent = result->parent->clone(cc);
+			Q(TYPE(result)) |= q1;
+			Q(TYPE(result->parent)) |= q2;
 
 		} else if( !SUBSET(q1,Q(result)) ) {
 			// process outer level qualification
 			result = result->clone(cc);
-			Q(result) |= q1;
+			Q(TYPE(result)) |= q1;
 		}
 
 		goto exit;
@@ -669,7 +669,7 @@ exit:
 	e->op[0] = e1;
 	e->op[1] = e2;
 	e->op[2] = e3;
-	#if 0
+	#if 1
 	printf( "tripl: common: %s\n", result->toString() );
 	#endif
 	return e;

@@ -29,6 +29,12 @@
 
    Expressions
 
+= 27 === (09 mar 2004)
+
+	+ improved scs_*, storage is moved to Sym
+    + PSym, PType
+    + reconstruction of Sym, Type, Init
+
 = 26 === (07 mar 2004)
 
     + Expr::create_binary(*/%^|&<<>>&&||) finished

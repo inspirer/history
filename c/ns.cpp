@@ -52,31 +52,21 @@ Namespace::~Namespace()
 }
 
     
-void Namespace::add_item( Sym *i )
+void Namespace::add_item( PSym i )
 {
 	unsigned hs;
-	Type *t = i->type;
 
 	ASSERT( i && i->name );
 	hs = get_hash( i->name );
-	i->hashed = hash[hs];
-    hash[hs] = i;
-
-    if( t ) {
-		while( t->parent )
-			t = t->parent;
-		if( t->storage == scs_typedef ) {
-			i->ns_modifier = t_typename;
-			t->storage = scs_none;
-		}
-	}
+	SYM(i)->hashed = hash[hs];
+    hash[hs] = SYM(i);
 }
 
 
-Sym *Namespace::search_id( const char *name, int modifier, int go_deep )
+PSym Namespace::search_id( const char *name, int modifier, int go_deep )
 {
     int hs;
-	Sym *res;
+	PSym res;
 	Namespace *n;
 
 	ASSERT( name );
@@ -107,7 +97,7 @@ void Namespace::close_ns( Compiler *cc )
 
 void debug_show_namespace( Namespace *ns, int deep )
 {
-	Sym *s;
+	PSym s;
 	int hash_id;
 
 	printf( "%*snamespace [\n", deep, "" );

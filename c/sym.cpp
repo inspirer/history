@@ -26,44 +26,53 @@ Sym *Sym::create( char *s, Compiler *cc )
 	Sym *m = (Sym *)cc->sym_sl.allocate();
 	m->name = s;
 
-	m->offset = -1;
+	m->storage = scs_none;
 	m->ns_modifier = 0;
-	m->type = m->type_tail = NULL;
+	m->type = m->st1.type_tail = NULL;
 	m->next = m->hashed = NULL;
-	m->next_tail = m;
+	m->st1.next_tail = m;
 	m->init = NULL;
 	return m;
 }
 
 
-void Sym::fixtype( Type *t, Compiler *cc )
+void Sym::fixtype( PType t, Compiler *cc )
 {
 	if( type )
-		type_tail->parent = t;
+		TYPE(st1.type_tail)->parent = t;
 	else
 		type = t;
+
+	while( t->parent )
+		t = t->parent;
+	if( t->st1.storage == scs_typedef )
+		ns_modifier = t_typename;
+
+	storage = t->st1.storage;
 }
 
 
-void Sym::addtype( Type *t )
+void Sym::addtype( PType t )
 {
-	if( !type_tail ) {
-		type = type_tail = t;
+	if( !st1.type_tail ) {
+		type = st1.type_tail = t;
 	} else {
-		type_tail->parent = t;
-		type_tail = t;
+		TYPE(st1.type_tail)->parent = t;
+		st1.type_tail = t;
 	}
 
-	while( type_tail->parent )
-		type_tail = type_tail->parent;
+	// TODO optimize st1.type_tail
+
+	while( st1.type_tail->parent )
+		st1.type_tail = st1.type_tail->parent;
 }
 
 
 void Sym::addnext( Sym *s )
 {
 	if( s ) {
-		next_tail->next = s;
-		next_tail = s->next_tail;
+		SYM(st1.next_tail)->next = s;
+		st1.next_tail = s->st1.next_tail;
 	}
 }
 
@@ -72,12 +81,12 @@ void Sym::addnext( Sym *s )
 	registers variable declaration (global, in structure or in function)
 	!: if variable is function declaration, redirect to declare_function
 */
-Node *Sym::register_self( Compiler *cc )
+Node *Sym::register_self( Place loc, Compiler *cc )
 {
 	ASSERT( type );
 
 	if( type->specifier == t_func ) {
-		declare_function( NULL, cc->current, cc );
+		declare_function( NULL, cc->current, loc, cc );
 		return NULL;
 	}
 
@@ -93,7 +102,7 @@ Node *Sym::register_self( Compiler *cc )
 	}
 
 	// TODO check for redefinition
-	Sym *s = cc->current->search_id( name, ns_modifier, 0 );
+	PSym s = cc->current->search_id( name, ns_modifier, 0 );
 
 	cc->current->add_item( this );
 
@@ -106,7 +115,7 @@ Node *Sym::register_self( Compiler *cc )
 	This function is called for each function declarator. On function with
 	body it is called twice, the second one is for statement.
 */
-void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
+void Sym::declare_function( Node *statement, Namespace *outer, Place loc, Compiler *cc )
 {
 	ASSERT( type );
 
@@ -116,7 +125,7 @@ void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
 
 	if( type->specifier != t_func ) {
 
-		cc->error( "only function declarator can have a body\n" );
+		cc->error( LOC "only function declarator can have a body\n", loc );
 		makebad( this );
 		return;
 	}
@@ -130,16 +139,16 @@ void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
 		// 1. A function declarator shall not specify a return type that 
 		//	is a function type or an array type.
 		if( type->return_value->specifier == t_array || type->return_value->specifier == t_func ) {
-			cc->error( "function cannot return function or array type\n" );
+			cc->error( LOC "function cannot return function or array type\n", loc );
 			makebad( this );
 			return;
 		}
 
 		// 2. The only storage-class specifier that shall occur in a 
 		//	parameter declaration is register.
-		for( Sym *param = type->params; param; param = param->next )
-			if( param->type->storage != scs_register && param->type->storage != scs_none ) {
-				cc->error( "parameter `%s' has invalid storage-class specifier\n", param->name );
+		for( PSym param = type->params; param; param = param->next )
+			if( param->storage != scs_register && param->storage != scs_none ) {
+				cc->error( LOC "parameter `%s' has invalid storage-class specifier\n", loc, param->name );
 				makebad( this );
 				return;
 			}
@@ -156,13 +165,13 @@ void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
 		// TODO
 
 		// check for redefinition
-		Sym *s = cc->current->search_id( name, ns_modifier, 0 );
+		PSym s = cc->current->search_id( name, ns_modifier, 0 );
 		outer->add_item( this );
 
 	// add a body
 	} else {
 
 		ASSERT( outer == NULL );
-		type->body = statement;
+		TYPE(type)->body = statement;
 	}
 }

@@ -73,12 +73,12 @@ enum {
 struct Expr {
 
 	int type;
-	Type *restype;			// !! be carefull, it must not be NULL
+	PType restype;			// !! be carefull, it must not be NULL
 	union {
 		Expr  *op[3];		// e_*
 		vlong value;		// e_direct
 		double dvalue;		// e_direct
-		Sym   *base;		// e_leaf, e_member
+		PSym base;		// e_leaf, e_member
 		Expr  *next_free;	// (see comment above about next_free)
 	};
 
@@ -86,22 +86,22 @@ struct Expr {
 	vlong calculate( int dest_type, Compiler *cc );
 
 	// constructors
-	static Expr *create( int type, Type *restype, Compiler *cc );
+	static Expr *create( int type, PType restype, Compiler *cc );
 	static Expr *create_icon_from_string( const char *s, Place loc, Compiler *cc );
 	static Expr *create_ccon_from_string( const char *s, Place loc, Compiler *cc );
 	static Expr *create_from_id( const char *id, Place loc, Compiler *cc );
 	static Expr *create_array_subscripting( Expr *arr, Expr *index, Place loc, Compiler *cc );
 	static Expr *create_struct_member( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
 	static Expr *create_struct_member_ptr( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
-	static Expr *get_type_size( Type *t, Place loc, Compiler *cc );
+	static Expr *get_type_size( PType t, Place loc, Compiler *cc );
 	static Expr *create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc );
 	static Expr *create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc );
 	static Expr *create_constant_expr( Expr *e, Place loc, Compiler *cc );
 	static Expr *create_comma( Expr *e1, Expr *e2, Place loc, Compiler *cc );
 
 	// casting
-	static Expr *cast_to( Expr *e, Type *t, Place loc, Compiler *cc );
-	static Type *usual_conversions( Expr **e1, Expr **t2, int action, Compiler *cc );
+	static Expr *cast_to( Expr *e, PType t, Place loc, Compiler *cc );
+	static PType usual_conversions( Expr **e1, Expr **t2, int action, Compiler *cc );
 
 	// destructors
 	void free( Compiler *cc );
@@ -185,19 +185,17 @@ struct Node {
 
 struct Init {
 
-	enum { init_expr, init_sublist, init_des_array, init_des_member };
-	
-	int type;
+	enum { in_byte, in_word, in_dword, in_long, in_float, in_double, in_ldouble,
+			in_pcname, in_dataname, in_storage, in_label };
+
+	int type, offset;
 	Init *next;
 
 	union {
-		Expr *expr;	 	// init_expr
-		Init *child;		// init_designator, init_sublist
-	};
-	union {
-		char *member;
-		Expr *number;
-	};
+		long l;
+		double d;
+		Sym *s;
+	} val;
 };
 
 #endif

@@ -1,7 +1,7 @@
 // Test of (expr.cpp -> Expr::create_binary)
 // Test of (expr.cpp -> Expr::get_type_size)
 
-void main() {
+void main( register int a) {
 
 	char c;
 	short s;

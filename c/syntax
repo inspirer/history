@@ -158,7 +158,7 @@ new_func -> declaration_list
 # A.2.1  Expressions
 
 # Here Lid and typename are combined. To distinguish them later you
-# can analyze the pointer which is placed just before the string: *(Sym **)(s-4)
+# can analyze the pointer which is placed just before the string: *(PType*)(s-4)
 # if it is zero => Lid, else => typename
 
 ID (char *) ::= Lid | typename ;
@@ -168,7 +168,7 @@ constant (Expr *) ::
   = Licon
   = Lccon
   = Lfcon
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 primary_expression (Expr *) ::
@@ -177,7 +177,7 @@ primary_expression (Expr *) ::
 
   = constant
   = Lscon
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '(' expression ')'
 		$primary_expression = $expression;
@@ -189,10 +189,10 @@ postfix_expression (Expr *) ::
 		$$ = Expr::create_array_subscripting( $postfix_expression#1, $expression, PLACE(@1), this );
 
   = postfix_expression '(' ')'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = postfix_expression '(' argument_expression_list ')'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = postfix_expression '.' ID
 		$$ = Expr::create_struct_member( $postfix_expression#1, $ID, PLACE(@1), this );
@@ -201,39 +201,39 @@ postfix_expression (Expr *) ::
 		$$ = Expr::create_struct_member_ptr( $postfix_expression#1, $ID, PLACE(@1), this );
   
   = postfix_expression '++'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = postfix_expression '--'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '(' type_name ')' '{' initializer_list '}'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '(' type_name ')' '{' initializer_list ',' '}'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 argument_expression_list ::
   = assignment_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = argument_expression_list ',' assignment_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 unary_expression (Expr *) ::
   = postfix_expression
   = '++' unary_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '--' unary_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = unary_operator cast_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lsizeof unary_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lsizeof '(' type_name ')'
 		$$ = Expr::get_type_size( $type_name, PLACE(@0), this );
@@ -324,7 +324,7 @@ conditional_expression (Expr *) ::
 assignment_expression (Expr *) ::
   = conditional_expression
   = unary_expression assignment_operator assignment_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 assignment_operator (int) ::= '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=' ;
@@ -389,11 +389,11 @@ declaration_specifier_notype (int) ::
 init_declarator_list (Node *) ::
   = init_declarator
 		$init_declarator->fixtype( $#, this );
-		$init_declarator_list = $init_declarator->register_self( this );
+		$init_declarator_list = $init_declarator->register_self( PLACE(@0), this );
 
   = init_declarator_list ',' init_declarator
 		$init_declarator->fixtype( $#, this );
-		$init_declarator_list = $init_declarator->register_self( this );
+		$init_declarator_list = $init_declarator->register_self( PLACE(@2), this );
 ;
 
 init_declarator (Sym *) ::
@@ -429,15 +429,15 @@ type_specifier2 (Type *) ::
   = struct_or_union_specifier
   = enum_specifier
   = typename
-		$type_specifier2 = (*(Type **)($typename-sizeof(Type*)))->clone( this );
+		$type_specifier2 = (*(Type **)($typename-sizeof(PType)))->clone( this );
 ;
 
 struct_or_union_specifier (Type *) ::
   = struct_or_union IDopt '{' new_ns struct_declaration_list close_ns '}'
-		$struct_or_union_specifier = Type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, this );
+		$struct_or_union_specifier = (Type *)Type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, this );
 
   = struct_or_union ID
-		$struct_or_union_specifier = Type::create_struct( $ID, $struct_or_union, NULL, NULL, this );
+		$struct_or_union_specifier = (Type *)Type::create_struct( $ID, $struct_or_union, NULL, NULL, this );
 ;
 
 struct_or_union (int) ::
@@ -480,29 +480,29 @@ specifier_qualifier_list1 (Type *) ::
 struct_declarator_list (Sym *) ::
   = struct_declarator
 		$struct_declarator->fixtype( $#, this );
-		$struct_declarator->register_self( this );
+		$struct_declarator->register_self( PLACE(@0), this );
 
   = struct_declarator_list ',' struct_declarator
 		$struct_declarator->fixtype( $#, this );
 		$struct_declarator_list#1->addnext( $struct_declarator );
-		$struct_declarator->register_self( this );
+		$struct_declarator->register_self( PLACE(@2), this );
 ;
 
 struct_declarator (Sym *) ::
   = declarator
   = ':' constant_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = declarator ':' constant_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
-enum_specifier ::
+enum_specifier (PType) ::
   = Lenum '{' enumerator_list ',' '}'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lenum '{' enumerator_list '}'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lenum ID '{' new_ns enumerator_list ','  close_ns '}'
 		$enum_specifier = Type::create_enum( $ID, $new_ns, this );
@@ -518,10 +518,10 @@ enum_specifier ::
 
 enumerator_list (unsigned int) ::
   = { *(int *)&$$ = 0; } enumerator
-		$enumerator_list = $enumerator->value;
+		$enumerator_list = $enumerator->loc.value;
 
   = enumerator_list ',' { *(int *)&$$ = $enumerator_list + 1; } enumerator
-		$enumerator_list = $enumerator->value;
+		$enumerator_list = $enumerator->loc.value;
 ;
 
 # EG: next enumeration value is stored in L-attrib
@@ -530,13 +530,13 @@ enumerator (Sym *) ::
   = ID
 		$enumerator = Sym::create( $ID, this );
 		($enumerator)->type = Type::get_enum_type( this );
-		($enumerator)->value = (int)$#;
+		($enumerator)->loc.value = (int)$#;
 		current->add_item( $enumerator );
 
   = ID '=' constant_expression
 		$enumerator = Sym::create( $ID, this );
 		($enumerator)->type = Type::get_enum_type( this );
-		($enumerator)->value = $constant_expression->calculate(($enumerator)->type->specifier, this);
+		($enumerator)->loc.value = $constant_expression->calculate(($enumerator)->type->specifier, this);
 		current->add_item( $enumerator );
 ;
 
@@ -569,13 +569,13 @@ direct_declarator (Sym *) ::
 		($direct_declarator)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
 
   = direct_declarator '[' Lstatic type_qualifier_listopt assignment_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = direct_declarator '[' type_qualifier_list Lstatic assignment_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = direct_declarator '[' type_qualifier_listopt '*' ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = direct_declarator '(' parameter_type_list ')'
 		($direct_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
@@ -603,13 +603,13 @@ parm_direct_declarator (Sym *) ::
 		($parm_direct_declarator)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
 
   = parm_direct_declarator '[' Lstatic type_qualifier_listopt assignment_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = parm_direct_declarator '[' type_qualifier_list Lstatic assignment_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = parm_direct_declarator '[' type_qualifier_listopt '*' ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = parm_direct_declarator '(' parameter_type_list ')'
 		($parm_direct_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
@@ -640,13 +640,13 @@ parm_direct_declarator_notype (Sym *) ::
 		($parm_direct_declarator_notype)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
 
   = parm_direct_declarator_notype '[' Lstatic type_qualifier_listopt assignment_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = parm_direct_declarator_notype '[' type_qualifier_list Lstatic assignment_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = parm_direct_declarator_notype '[' type_qualifier_listopt '*' ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = parm_direct_declarator_notype '(' parameter_type_list ')'
 		($parm_direct_declarator_notype)->addtype( Type::create_function( $parameter_type_list, this ) );
@@ -720,7 +720,7 @@ parameter_declaration (Sym *) ::
 		($parameter_declaration)->fixtype( $declaration_specifiers, this );
 ;
 
-type_name (Type *) ::
+type_name (PType) ::
   = specifier_qualifier_list
   = specifier_qualifier_list abstract_declarator
 		$abstract_declarator->fixtype( $specifier_qualifier_list, this );
@@ -757,10 +757,10 @@ direct_abstract_declarator (Sym *) ::
 		($direct_abstract_declarator)->addtype( Type::create_array( 0, $assignment_expression, this ) );
 
   = '[' '*' ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = direct_abstract_declarator '[' '*' ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '(' ')'
 		$direct_abstract_declarator = Sym::create( NULL, this );
@@ -779,42 +779,42 @@ direct_abstract_declarator (Sym *) ::
 
 initializer (Init *) ::
   = assignment_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '{' initializer_list '}'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '{' initializer_list ',' '}'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 initializer_list (Init *) ::
   = designationopt initializer
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = initializer_list ',' designationopt initializer
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 designation ::
   = designator_list '='
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 designator_list ::
   = designator
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = designator_list designator
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 designator (Designator) ::
   = '[' constant_expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = '.' ID
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 # A.2.3  Statements (TODO)
@@ -830,13 +830,13 @@ statement (Node *) ::
 
 labeled_statement (Node *) ::
   = ID ':' statement
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lcase constant_expression ':' statement
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Ldefault ':' statement
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 compound_statement (Node *) ::
@@ -866,49 +866,49 @@ expression_statement (Node *) ::
 		$expression_statement = NULL;
 
   = expression ';'
-		//TODO error("not implemented yet at %i\n", __LINE__ );
+		//TODO TODO();
 
   = error ';'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 selection_statement (Node *) ::
   = Lif '(' new_ns expression ')' statement close_ns
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lif '(' new_ns expression ')' statement Lelse statement close_ns
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lswitch '(' new_ns expression ')' statement close_ns
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 iteration_statement (Node *) ::
   = Lwhile '(' new_ns expression ')' statement close_ns
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Ldo new_ns statement Lwhile '(' expression ')' close_ns ';'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lfor '(' new_ns expression_statement expressionopt ';' expressionopt ')' statement close_ns
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lfor '(' new_ns declaration expressionopt ';' expressionopt')' statement close_ns
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 jump_statement (Node *)::
   = Lgoto ID ';'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lcontinue ';'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lbreak ';'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 
   = Lreturn expressionopt ';'
-		error("not implemented yet at %i\n", __LINE__ );
+		TODO();
 ;
 
 # A.2.4  External definitions
@@ -925,17 +925,17 @@ external_declaration ::
 
 function_definition ::
   = new_func compound_statement close_func
-		$new_func->declare_function( $compound_statement, NULL, this );
+		$new_func->declare_function( $compound_statement, NULL, PLACE(@0), this );
 
   = new_func declaration_list compound_statement close_func
-		error("not implemented yet (at %i): old-style function declaration\n", __LINE__ );
+		TODO();
 ;
 
 new_func (Sym *) ::
   = declaration_specifiers declarator new_ns
 		$new_func = $declarator;
 		$declarator->fixtype( $declaration_specifiers, this );
-		$declarator->declare_function( NULL, current->parent, this );
+		$declarator->declare_function( NULL, current->parent, PLACE(@1), this );
 		func = current;
 ;
 

@@ -36,3 +36,6 @@
 	3) Coding style
 
 	tab = 4 spaces
+	
+	st1 means stage one, the syntax analysis
+	st2 means stage two, .......
