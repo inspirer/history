@@ -1,10 +1,24 @@
 
-	MS SourceSafe 6.0 navigator 1.03
+	MS SourceSafe 6.0 navigator 1.04
 
 [!] Important
 [+] New
 [-] Bugs fixed
 [*] Changes
+
+
+Version 1.04, 15 Apr 2004
+
+[+] Meaningful error reporting
+[+] Ctrl-Alt-F6     Rename
+[+] for CO file shows date/time/size
+[+] Ctrl-F7 shows date/time
+
+[*] Ctrl-Alt-Enter  locates checkedout file in another panel (was Enter)
+[*] Ctrl-F4         sets working folder (was Ctrl-F8)
+[*] Ctrl-F5         CheckIn without local file deletion
+[*] Ctrl-F6         CheckIn, file is deleted
+[*] Ctrl-F8         Undo CO (was Ctrl-F6)
 
 Version 1.03, 12 Apr 2004
 
@@ -21,3 +35,12 @@ Version 1.01, 09 Apr 2004
 
 [-] Russian filenames support (thx to Max Belugin)
 [+] Configure dialog contains plugins version number
+
+
+---------------------
+
+TODO 
+
+Ctrl-Alt-F5         Show dates (and maybe sizes) mode on/off
+для CO файла (alt)F4/(alt)F3/(shift)Enter должны работать с локальной
+              копией (опционально, по умолчанию установлено)

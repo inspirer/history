@@ -3,7 +3,7 @@
 #ifndef SS_H_INCLUDED
 #define SS_H_INCLUDED
 
-#define VERSION   "1.02"
+#define VERSION   "1.04"
 
 #include <windows.h>
 #include <string.h>
@@ -225,10 +225,14 @@ enum {
 	msg_kb6,
 	msg_kb7,
 	msg_kb8,
+	msg_kb_c4,
 	msg_kb_c5,
 	msg_kb_c6,
 	msg_kb_c7,
 	msg_kb_c8,
+	msg_kb_a5,
+	msg_kb_a6,
+	msg_kb_ca6,
 
 	msg_config_alloc,
 	msg_config_ok,
@@ -239,6 +243,10 @@ enum {
 	msg_defdir_title,
 	msg_defdir_msg,
 	msg_defdir_to,
+
+	msg_ren_title,
+	msg_ren_msg,
+	msg_ren_ok,
 };
 
 

@@ -102,7 +102,7 @@ restart:
 	if( FAILED(h=CoCreateInstance(__uuidof(VSSDatabase),0,CLSCTX_ALL,__uuidof(IVSSDatabase),(void**)&db)) ) {
 		char *msg = (char *)m_malloc( 1024 );
 		FSF.sprintf( msg, "VSSDatabase not created (hres=%08x)", h );
-		MsgBox( "COM error", msg );
+		comError( msg, h );
 		m_free( msg );
 		return FALSE;
 	}
@@ -114,7 +114,7 @@ restart:
 	h = db->raw_Open( l, p, q );
 	SysFreeString( l );
 	if( FAILED(h) ) {
-		MsgBox( "IVSSDatabase error", "Open failed" );
+		comError( "IVSSDatabase.Open failed", h );
 		return FALSE;
 	}
 
@@ -200,7 +200,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 	SysFreeString( l );
 	if( FAILED(h) ) {
 		db_disconnect();
-		MsgBox( "Item not opened", cpath );
+		comError( "Item not opened", h );
 		return FALSE;
 	}
 
@@ -214,7 +214,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 	if( FAILED(h) ) {
 		item->Release();
 		db_disconnect();
-		MsgBox( "IVSSItem error", "items collection was not opened" );
+		comError( "items collection was not opened", h );
 		return FALSE;
 	}
 
@@ -223,7 +223,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		items->Release();
 		item->Release();
 		db_disconnect();
-		MsgBox( "IVSSItem error", "impossible to get count" );
+		comError( "impossible to get count", h );
 		return FALSE;
 	}
 
@@ -231,7 +231,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		items->Release();
 		item->Release();
 		db_disconnect();
-		MsgBox( "IVSSItem error", "count < 0" );
+		comError( "IVSSItem.count < 0", h );
 		return FALSE;
 	}
 
@@ -250,7 +250,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		h = items->get_Item(v,&item);
 		if( FAILED(h) ) {
 			m_free( NewPanelItem );
-			MsgBox( "IVSSItems error", "impossible to get item" );
+			comError( "impossible to get item", h );
 			items->Release();
 			item->Release();
 			db_disconnect();
@@ -325,6 +325,25 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 
 			p->CustomColumnData[0] = m_strdup( tmp_dir );
 			p->CustomColumnData[1] = m_strdup( tmp_dir2 );
+
+			if( co == VSSFILE_CHECKEDOUT_ME ) {
+
+				strcat( tmp_dir2, "\\" );
+				strcat( tmp_dir2, p->FindData.cFileName );
+
+				WIN32_FIND_DATA fd;
+				HANDLE hf = FindFirstFile( tmp_dir2, &fd );
+				if( hf != INVALID_HANDLE_VALUE ) {
+					p->FindData.ftCreationTime = fd.ftCreationTime;
+					p->FindData.ftLastAccessTime = fd.ftLastAccessTime;
+					p->FindData.ftLastWriteTime = fd.ftLastWriteTime;
+					p->FindData.nFileSizeHigh = fd.nFileSizeHigh;
+					p->FindData.nFileSizeLow = fd.nFileSizeLow;
+					FindClose( hf );
+				}
+
+			}
+
 			goto good_co;
 		bad_co:
 			p->CustomColumnData[0] = m_strdup("bad_checkout");
@@ -408,10 +427,16 @@ void SS::GetOpenPluginInfo( struct OpenPluginInfo *info )
 		kb.Titles[6-1] = MSG(msg_kb6);
 		kb.Titles[7-1] = MSG(msg_kb7);
 		kb.Titles[8-1] = MSG(msg_kb8);
+		kb.CtrlTitles[4-1] = MSG(msg_kb_c4);
 		kb.CtrlTitles[5-1] = MSG(msg_kb_c5);
 		kb.CtrlTitles[6-1] = MSG(msg_kb_c6);
 		kb.CtrlTitles[7-1] = MSG(msg_kb_c7);
 		kb.CtrlTitles[8-1] = MSG(msg_kb_c8);
+
+		kb.AltTitles[5-1] = MSG(msg_kb_a5);
+		kb.AltTitles[6-1] = MSG(msg_kb_a6);
+
+		kb.CtrlAltTitles[6-1] = MSG(msg_kb_ca6);
 
 	} else {
 		info->PanelModesArray = PanelModesArrayRoot;
@@ -518,6 +543,7 @@ enum {
 	AddFile,
 	MakeDir,
 	SetWF,
+	Rename,
 };
 
 
@@ -535,7 +561,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			type = AddFile;
 
 		} else {
-			MsgBox( "get_VSSItem failed", file );
+			comError( "get_VSSItem failed", h );
 			return FALSE;
 		}
 	}
@@ -555,7 +581,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		SetFileApisToOEM();
 		SysFreeString( l );
 		if( FAILED(h) ) {
-			MsgBox( "IVSSItem error", type == GetLatest ? "Get failed" : "CheckOut failed" );
+			comError( type == GetLatest ? "Get failed" : "CheckOut failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -566,7 +592,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = item->get_Versions( 0, &vers );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSItem.get_Versions failed" );
+			comError( "IVSSItem.get_Versions failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -575,7 +601,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = vers->raw__NewEnum( &gv );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSItem.NewEnum failed" );
+			comError( "IVSSItem.NewEnum failed", h );
 		  exit_free_versions:
 			vers->Release();
 			item->Release();
@@ -587,7 +613,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		h = gv->QueryInterface( __uuidof( IEnumVARIANT ), (void **)&ev );
 		gv->Release();
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IUnknown.QueryInterface(IEnumVARIANT) failed" );
+			comError( "IUnknown.QueryInterface(IEnumVARIANT) failed", h );
 			goto exit_free_versions;
 		}
 
@@ -595,7 +621,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		unsigned long fetched;
 		h = ev->Next( 1, &v, &fetched );
 		if( FAILED(h) || !fetched ) {
-			MsgBox( "COM error", "IEnumVARIANT.Next failed" );
+			comError( "IEnumVARIANT.Next failed", h );
 			ev->Release();
 			goto exit_free_versions;
 		}
@@ -606,7 +632,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		v.punkVal->Release();
 
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IUnknown.QueryInterface(IVSSVersion) failed" );
+			comError( "IUnknown.QueryInterface(IVSSVersion) failed", h );
 			ev->Release();
 			goto exit_free_versions;
 		}
@@ -615,39 +641,39 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = ver->get_VersionNumber( &version );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSVersion.get_VersionNumber failed" );
+			comError( "IVSSVersion.get_VersionNumber failed", h );
 		exit_free_all:
 			ver->Release();
 			ev->Release();
 			goto exit_free_versions;
 		}
 
-		/*DATE date;
+		DATE date;
 
 		h = ver->get_Date( &date );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSVersion.get_Date failed" );
+			comError( "IVSSVersion.get_Date failed", h );
 			goto exit_free_all;
-		}*/
+		}
 
 		BSTR comment, action, username, label;
 
 		h = ver->get_Comment( &comment );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSVersion.get_Comment failed" );
+			comError( "IVSSVersion.get_Comment failed", h );
 			goto exit_free_all;
 		}
 
 		h = ver->get_Action( &action );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSVersion.get_Action failed" );
+			comError( "IVSSVersion.get_Action failed", h );
 			SysFreeString( comment );
 			goto exit_free_all;
 		}
 
 		h = ver->get_Username( &username );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSVersion.get_Username failed" );
+			comError( "IVSSVersion.get_Username failed", h );
 			SysFreeString( comment );
 			SysFreeString( action );
 			goto exit_free_all;
@@ -655,7 +681,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = ver->get_Label( &label );
 		if( FAILED(h) ) {
-			MsgBox( "COM error", "IVSSVersion.get_Label failed" );
+			comError( "IVSSVersion.get_Label failed", h );
 			SysFreeString( comment );
 			SysFreeString( action );
 			SysFreeString( username );
@@ -665,10 +691,10 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		int size = 2048 + SysStringLen(comment) + SysStringLen(action) + SysStringLen(username) + SysStringLen(label);
 		char *mem = (char *)m_malloc( size );
 
-		//SYSTEMTIME st;
-		//VariantTimeToSystemTime( date, &st );
+		SYSTEMTIME st;
+		VariantTimeToSystemTime( date, &st );
 
-		FSF.sprintf( mem, "File: %s\nVersion: %i\nUsername: ", file, version );
+		FSF.sprintf( mem, "File: %s\nVersion: %i (%02i:%02i %02i.%02i.%04i)\nUsername: ", file, version, st.wHour, st.wMinute, st.wDay, st.wMonth, st.wYear );
 
 		BSTR_2_char( username, mem + strlen(mem), size - strlen(mem) );
 		SysFreeString( username );
@@ -706,7 +732,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		SetFileApisToOEM();
 		SysFreeString( l );
 		if( FAILED(h) ) {
-			MsgBox( "UndoCheckOut failed", dest );
+			comError( "UndoCheckOut failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -724,7 +750,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			h = db->get_VSSItem( l, false, &item );
 			SysFreeString( l );
 			if( FAILED(h) ) {
-				MsgBox( "Directory for item creation was not opened", file );
+				comError( "Directory for item creation was not opened", h );
 				return FALSE;
 			}
 
@@ -737,7 +763,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			SysFreeString( l );
 			if( FAILED(h) ) {
 				item->Release();
-				MsgBox( "IVSSItem.Add failed", name );
+				comError( "IVSSItem.Add failed", h );
 				return FALSE;
 			}
 
@@ -750,7 +776,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 				SetFileApisToOEM();
 				SysFreeString( l );
 				if( FAILED(h) ) {
-					MsgBox( "IVSSItem.Get of just created file failed", dest );
+					comError( "IVSSItem.Get of just created file failed", h );
 					it->Release();
 					item->Release();
 					return FALSE;
@@ -765,7 +791,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = item->put_Deleted( 1 );
 		if( FAILED(h) ) {
-			MsgBox( "Remove failed", file );
+			comError( "Remove failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -776,7 +802,18 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		h = item->put_LocalSpec( l );
 		SysFreeString( l );
 		if( FAILED(h) ) {
-			MsgBox( "Set localspec failed", file );
+			comError( "Set localspec failed", h );
+			item->Release();
+			return FALSE;
+		}
+
+	} else if( type == Rename ) {
+
+		l = char_2_BSTR( dest ); 
+		h = item->put_Name( l );
+		SysFreeString( l );
+		if( FAILED(h) ) {
+			comError( "rename failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -785,7 +822,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = item->raw_Destroy();
 		if( FAILED(h) ) {
-			MsgBox( "Destroy failed", file );
+			comError( "Destroy failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -800,7 +837,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		SysFreeString( cm );
 		SysFreeString( l );
 		if( FAILED(h) ) {
-			MsgBox( "NewSubproject failed", dest );
+			comError( "NewSubproject failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -813,7 +850,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		h = item->get_IsCheckedOut( &co );
 		if( FAILED(h) ) {
-			MsgBox( "IVSSItem.IsCheckedOut failed", file );
+			comError( "IVSSItem.IsCheckedOut failed", h );
 		bad_co:
 			item->Release();
 			return FALSE;
@@ -837,7 +874,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			SetFileApisToOEM();
 			SysFreeString( l );
 			if( FAILED(h) ) {
-				MsgBox( "IVSSItem.Checkout failed", dest );
+				comError( "IVSSItem.Checkout failed", h );
 				item->Release();
 				return FALSE;
 			}
@@ -866,7 +903,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			SetFileApisToOEM();
 			SysFreeString( l );
 			if( FAILED(h) ) {
-				MsgBox( "IVSSItem.Get of checked in file failed", dest );
+				comError( "IVSSItem.Get of checked in file failed", h );
 				item->Release();
 				return FALSE;
 			}
@@ -1289,7 +1326,10 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 
 		return TRUE;
 
-	} else if( ControlState == PKF_CONTROL && Key == VK_F6 && strcmp( cdir, "$\\" ) ) {
+
+	// in the project
+
+	} else if( ControlState == PKF_CONTROL && Key == VK_F8 && strcmp( cdir, "$\\" ) ) {
 		if( !*pi.PanelItems[pi.CurrentItem].CustomColumnData[0] ) {
 			MsgBox( MSG(msg_undoco_warn_title), MSG(msg_undoco_warn_msg) );
 			return TRUE;
@@ -1338,7 +1378,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		Info.Control( this, FCTL_REDRAWPANEL, NULL );
 
 		return TRUE;
-	} else if( ControlState == PKF_CONTROL && Key == VK_F5 && strcmp( cdir, "$\\" ) ) {
+	} else if( ControlState == PKF_CONTROL && (Key == VK_F5 || Key == VK_F6) && strcmp( cdir, "$\\" ) ) {
 		if( !*pi.PanelItems[pi.CurrentItem].CustomColumnData[0] ) {
 			MsgBox( MSG(msg_undoco_warn_title), MSG(msg_undoco_warn_msg) );
 			return TRUE;
@@ -1363,7 +1403,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		msg[3] = tmp_dir;
 		Info.Message( Info.ModuleNumber, 0, NULL, msg, 4, 0 );
 
-		FileOp( CheckIn, tmp_dir, tmp_dir2, "", VSSFLAG_DELYES );
+		FileOp( CheckIn, tmp_dir, tmp_dir2, "", Key == VK_F5 ? 0 : VSSFLAG_DELYES );
 
 		Info.RestoreScreen( sc );
 
@@ -1389,7 +1429,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 
 		return TRUE;
 
-	} else if( ControlState == PKF_CONTROL && Key == VK_F8 && strcmp( cdir, "$\\" ) ) {
+	} else if( ControlState == PKF_CONTROL && Key == VK_F4 && strcmp( cdir, "$\\" ) ) {
 
 		Info.Control (this, FCTL_GETANOTHERPANELINFO, &pa );
 
@@ -1411,7 +1451,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 
 		return TRUE;
 
-	} else if( ControlState == 0 && Key == VK_RETURN && pi.PanelItems[pi.CurrentItem].CustomColumnNumber == 2 &&
+	} else if( ControlState == (PKF_CONTROL|PKF_ALT) && Key == VK_RETURN && pi.PanelItems[pi.CurrentItem].CustomColumnNumber == 2 &&
 		*pi.PanelItems[pi.CurrentItem].CustomColumnData[1] ) {
 
 		Info.Control( this, FCTL_SETANOTHERPANELDIR, pi.PanelItems[pi.CurrentItem].CustomColumnData[1] );
@@ -1429,6 +1469,48 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 			}
 		if( i == pi.ItemsNumber )
 			Info.Control( this, FCTL_REDRAWANOTHERPANEL, NULL );
+
+		return TRUE;
+
+	} else if( ControlState == (PKF_CONTROL|PKF_ALT) && Key == VK_F6 ) {
+
+		strcpy( tmp_dir, cpath );
+		strcat( tmp_dir, "\\" );
+		strcat( tmp_dir, pi.PanelItems[pi.CurrentItem].FindData.cFileName );
+
+		FarDialog dlg;
+		static int id_name, id_cancel;
+		static struct InitDialogItem items[] = {
+		 { DI_TEXT,       1,0,0,0,		0,0,0,0,(char*)msg_ren_msg },
+		 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_dbname",DIF_HISTORY,0, "", &id_name },
+		 { DI_TEXT,       1,2,0,0,		0,0,DIF_SEPARATOR,0,"" },
+		 { DI_BUTTON,     0,3,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_ren_ok },
+		 { DI_BUTTON,     0,3,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_cancel },
+		};
+
+		create_fdlg( &dlg, 70, 8, msg_ren_title, items, array_size( items ) );
+
+		strcpy( dlg.di[id_name].Data, pi.PanelItems[pi.CurrentItem].FindData.cFileName );
+
+		int ec = process_fdlg( &dlg );
+
+		if( ec < 0 || ec == id_cancel ) {
+			destroy_fdlg( &dlg );
+			return TRUE;
+		}
+
+		strcpy( tmp_dir2, dlg.di[id_name].Data );
+
+		if( !db_connect() )
+			return FALSE;
+
+		FileOp( Rename, tmp_dir, tmp_dir2, NULL, 0 );
+
+		db_disconnect();
+		destroy_fdlg( &dlg );
+		Info.Control( this, FCTL_UPDATEPANEL, NULL );
+		Info.Control( this, FCTL_REDRAWPANEL, NULL );
+		return TRUE;
 
 	} else if( ControlState == PKF_ALT && (Key == VK_F6 || Key == VK_F5) ) {
 
