@@ -2,16 +2,11 @@
 
 #include "ss.h"
 
-enum {
-  Title,
-  Menu1,
-  Menu2,
-};
-
 #define  MITEMS  2
 
 struct PluginStartupInfo Info;
 FARSTANDARDFUNCTIONS FSF;
+char PluginRootKey[MAX_PATH];
 
 // Message Box (DEBUG-time)
 const char *g_m[4] = { "Title", NULL, "", "OK" };
@@ -29,6 +24,7 @@ void WINAPI _export SetStartupInfo(const struct PluginStartupInfo *psi) {
 		::FSF = *psi->FSF;
 		::Info.FSF = &::FSF;
 	}
+	FSF.sprintf( PluginRootKey, "%s\\SourceSafe", Info.RootKey );
 }
 
 
@@ -38,7 +34,7 @@ void WINAPI _export GetPluginInfo(struct PluginInfo *pi) {
 
 	pi->StructSize = sizeof( struct PluginInfo );
 
-	DiskMenuStrings[0] = MSG(Title);
+	DiskMenuStrings[0] = MSG(msg_plugin_name);
 	pi->DiskMenuStrings = DiskMenuStrings;
 	pi->DiskMenuNumbers = NULL;
 	pi->DiskMenuStringsNumber = 1;
@@ -75,7 +71,7 @@ void WINAPI _export GetOpenPluginInfo(HANDLE hPlugin,struct OpenPluginInfo *Info
 int WINAPI _export SetDirectory(HANDLE hPlugin,const char *Dir,int OpMode)
 {
 	SS *ss = (SS *)hPlugin;
-	//MSGBOX("Dir");
+	//MSGBOX( Dir );
 	return ss->SetDirectory( Dir, OpMode );
 }
 
@@ -94,10 +90,23 @@ int WINAPI _export GetFiles( HANDLE hPlugin,struct PluginPanelItem *PanelItem,
   return ss->GetFiles( PanelItem, ItemsNumber, Move, DestPath, OpMode );
 }
 
+int WINAPI _export ProcessKey( HANDLE hPlugin, int Key, unsigned int ControlState )
+{
+	SS *ss = (SS *)hPlugin;
+	return ss->ProcessKey( Key, ControlState );
+}
+
+void WINAPI _export ClosePlugin(HANDLE hPlugin)
+{
+	delete (SS *)hPlugin;
+}
+
 HANDLE WINAPI _export OpenPlugin(int OpenFrom,int item) {
 
 	int i;
-	SS *ss = new SS();
+	SS *ss;
+	
+	//MSGBOX( "open plugin" );
 
 	static int cominit = 0;
 	if( !cominit ) {
@@ -105,6 +114,7 @@ HANDLE WINAPI _export OpenPlugin(int OpenFrom,int item) {
 		cominit = 1;
 	}
 
+	ss = new SS(OpenFrom,item);
 	return ss ? ss : INVALID_HANDLE_VALUE;
 }
 

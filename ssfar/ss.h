@@ -56,23 +56,40 @@ struct InitDialogItem {
 };
 
 
+struct list_of_id {
+	struct list_of_id *next;
+	char name[1];
+};
+
+
 class SS {
 private:
+	IVSSDatabase *db;
+	int db_counter;
+
+	CRITICAL_SECTION db_own;
+
 	char cdir[MAX_PATH];
-	char tmp_dir[MAX_PATH], tmp_dir2[MAX_PATH];
+	char cpath[MAX_PATH], cdbname[MAX_PATH], ssini[MAX_PATH]; // filled by split_cdir
 	int try_to_change;
+	char Title[NM];			// by GetOpenPluginInfo
+
+	// temporary
+	char tmp_dir[MAX_PATH], tmp_dir2[MAX_PATH];
+	struct KeyBarTitles kb;
+
+public:
+	struct list_of_id *db_found;
+	int db_count;
 
 private:
-	IVSSDatabase *db;
-
 	int db_connect();
 	void db_disconnect();
 
-
 public:
-	SS();
-	char ssafe_ini[MAX_PATH];
+	SS( int of, int item );
 
+	void split_cdir( );
 	int GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
 	void FreeFindData(PluginPanelItem *PanelItem,int ItemsNumber);
 	void GetOpenPluginInfo(struct OpenPluginInfo *Info);
@@ -81,7 +98,34 @@ public:
     int GetFiles(struct PluginPanelItem *PanelItem,int ItemsNumber,
                  int Move,char *DestPath,int OpMode);
 	int FileOp( int type, char *file, char *dest, int flags );
+	int ProcessKey(int Key,unsigned int ControlState);
 
 };
+
+extern char PluginRootKey[MAX_PATH];
+
+void SetRegKey( const char *Key, const char *ValueName, char *ValueData );
+void SetRegKey( const char *Key, const char *ValueName, DWORD ValueData );
+int GetRegKey( const char *Key,const char *ValueName,char *ValueData,char *Default,DWORD DataSize);
+int GetRegKey( const char *Key, const char *ValueName, int &ValueData, DWORD Default );
+void KillRegVal( const char *Key, const char *ValueName );
+int EnumRegKey( const char *key, void (*save)( char *name, void *data ), void *data );
+
+
+enum {
+	msg_plugin_name,
+
+	msg_getss,
+	msg_checkout,
+	msg_createdb,
+	msg_modifydb,
+
+	msg_key_checkout,
+	msg_key_create,
+	msg_key_modify,
+	msg_key_get,
+	msg_key_cancel,
+};	
+
 
 #endif

@@ -3,4 +3,12 @@
 "Source Safe"
 
 "SourceSafe: GetLatest"
+"SourceSafe: Checkout"
+"Create SourceSafe database entry"
+"Modify SourceSafe database entry"
 
+"&CheckOut"
+"&Create"
+"&Modify"
+"&Get"
+"&Cancel"

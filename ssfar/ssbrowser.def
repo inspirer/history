@@ -1,6 +1,7 @@
 EXPORTS
     SetStartupInfo
     OpenPlugin
+    ClosePlugin
     GetPluginInfo
 	GetMinFarVersion
 	GetFindData
@@ -8,4 +9,5 @@ EXPORTS
 	GetOpenPluginInfo
 	SetDirectory
 	ProcessEvent
+	ProcessKey
 	GetFiles
