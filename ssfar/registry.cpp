@@ -85,12 +85,12 @@ int GetRegKey( const char *Key, const char *ValueName, int &ValueData, DWORD Def
 }
 
 
-int EnumRegKey( const char *key, void (*save)( char *name, void *data ), void *data )
+int EnumRegKey( const char *key, void (*save)( char *name, char *val, void *data ), void *data )
 {
 
 	HKEY hKey = OpenRegKey( key );
 	int res = ERROR_SUCCESS;
-	char name[MAX_PATH];
+	char name[MAX_PATH], val[MAX_PATH];
 
 	if( !hKey )
 		hKey = CreateRegKey( key );
@@ -100,13 +100,13 @@ int EnumRegKey( const char *key, void (*save)( char *name, void *data ), void *d
 
 	for( int index = 0; res == ERROR_SUCCESS; index++ ) {
 
-		unsigned long sz1, type;
+		unsigned long sz1, sz2, type;
 
-		sz1 = MAX_PATH;
+		sz1 = sz2 = MAX_PATH;
 
-		res = RegEnumValue( hKey, index, name, &sz1, NULL, &type, NULL, NULL );
+		res = RegEnumValue( hKey, index, name, &sz1, NULL, &type, (BYTE*)val, &sz2 );
 		if( res == ERROR_SUCCESS && type == REG_SZ ) {
-			save(name, data);
+			save(name, val, data);
 		}
 	}
 

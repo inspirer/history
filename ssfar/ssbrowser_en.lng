@@ -4,6 +4,7 @@
 
 "SourceSafe: GetLatest"
 "SourceSafe: Checkout"
+"SourceSafe: CheckIn"
 "Create SourceSafe database entry"
 "Modify SourceSafe database entry"
 
@@ -12,3 +13,11 @@
 "&Modify"
 "&Get"
 "&Cancel"
+"&CheckIn"
+
+"Name"
+"User"
+"Folder"
+
+"DB name"
+"Path"

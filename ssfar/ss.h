@@ -7,11 +7,13 @@
 #include <string.h>
 #include "plugin.hpp"
 
+//#define MAKE_LOG
+
 #import "C:\MSVS\Common\VSS\win32\ssapi.dll" no_namespace
 
 // debug
 #define MSGBOX(msg) g_m[1] = msg;Info.Message( Info.ModuleNumber, 0, NULL, g_m, 4, 1 );
-#define MSG(id) Info.GetMsg( Info.ModuleNumber, id )
+#define MSG(id) (char *)Info.GetMsg( Info.ModuleNumber, id )
 extern const char *g_m[4];
 
 #define heapNEW GetProcessHeap()
@@ -58,7 +60,8 @@ struct InitDialogItem {
 
 struct list_of_id {
 	struct list_of_id *next;
-	char name[1];
+	char *val;
+	char name[2];
 };
 
 
@@ -66,6 +69,17 @@ class SS {
 private:
 	IVSSDatabase *db;
 	int db_counter;
+
+	#ifdef MAKE_LOG
+	HANDLE log;
+	char log_buffer[1024];
+	unsigned long log_written;
+	#define write_log FSF.sprintf 
+	#define flush_log() WriteFile( log, log_buffer, strlen(log_buffer), &log_written, NULL )
+	#else
+	//#define flush_log() ;
+	//#define write_log(...) ;
+	#endif
 
 	CRITICAL_SECTION db_own;
 
@@ -88,6 +102,7 @@ private:
 
 public:
 	SS( int of, int item );
+	~SS();
 
 	void split_cdir( );
 	int GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
@@ -97,7 +112,8 @@ public:
 	int ProcessEvent( int Event, void *Param );
     int GetFiles(struct PluginPanelItem *PanelItem,int ItemsNumber,
                  int Move,char *DestPath,int OpMode);
-	int FileOp( int type, char *file, char *dest, int flags );
+	int PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, int OpMode );
+	int FileOp( int type, char *file, char *dest, char *comment, int flags );
 	int ProcessKey(int Key,unsigned int ControlState);
 
 };
@@ -109,7 +125,7 @@ void SetRegKey( const char *Key, const char *ValueName, DWORD ValueData );
 int GetRegKey( const char *Key,const char *ValueName,char *ValueData,char *Default,DWORD DataSize);
 int GetRegKey( const char *Key, const char *ValueName, int &ValueData, DWORD Default );
 void KillRegVal( const char *Key, const char *ValueName );
-int EnumRegKey( const char *key, void (*save)( char *name, void *data ), void *data );
+int EnumRegKey( const char *key, void (*save)( char *name, char *val, void *data ), void *data );
 
 
 enum {
@@ -117,6 +133,7 @@ enum {
 
 	msg_getss,
 	msg_checkout,
+	msg_checkin,
 	msg_createdb,
 	msg_modifydb,
 
@@ -125,6 +142,14 @@ enum {
 	msg_key_modify,
 	msg_key_get,
 	msg_key_cancel,
+	msg_key_put,
+
+	msg_title1,
+	msg_title2,
+	msg_title3,
+
+	msg_root_title1,
+	msg_root_title2,
 };	
 
 

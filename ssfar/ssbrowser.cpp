@@ -2,8 +2,6 @@
 
 #include "ss.h"
 
-#define  MITEMS  2
-
 struct PluginStartupInfo Info;
 FARSTANDARDFUNCTIONS FSF;
 char PluginRootKey[MAX_PATH];
@@ -11,10 +9,9 @@ char PluginRootKey[MAX_PATH];
 // Message Box (DEBUG-time)
 const char *g_m[4] = { "Title", NULL, "", "OK" };
 
-
 int WINAPI _export GetMinFarVersion( void ) {
 
-	return FARMANAGERVERSION;
+	return MAKEFARVERSION(1,70,1282);
 }
 
 void WINAPI _export SetStartupInfo(const struct PluginStartupInfo *psi) {
@@ -118,6 +115,7 @@ HANDLE WINAPI _export OpenPlugin(int OpenFrom,int item) {
 	return ss ? ss : INVALID_HANDLE_VALUE;
 }
 
+
 void InitDialogItems( const struct InitDialogItem *Init, struct FarDialogItem *Item, int ItemsNumber )
 {
 	int i;
@@ -139,4 +137,12 @@ void InitDialogItems( const struct InitDialogItem *Init, struct FarDialogItem *I
 		else
 			strcpy( PItem->Data, PInit->Data );
 	}
+}
+
+
+int WINAPI _export PutFiles( HANDLE hPlugin, struct PluginPanelItem *PanelItem,
+								int ItemsNumber, int Move, int OpMode )
+{
+	SS *ss = (SS *)hPlugin;
+	return ss->PutFiles( PanelItem, ItemsNumber, Move, OpMode );
 }
