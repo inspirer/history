@@ -29,17 +29,19 @@ Type *Type::create( int ts, Compiler *cc )
 	t->qualifier = tq_none;
 	t->parent = NULL;
 	t->size = ts == t_pointer ? POINTER_SIZE : 0;
+	t->cloned = NULL;
 	return t;
 }
 
 
 //
-//  clones type structure
+//  clones type structure, used to modify qualifiers
 // 
 Type *Type::clone( Compiler *cc ) const
 {
 	Type *t = (Type *)cc->type_sl.allocate();
 	*t = *this;
+	TYPE(this)->cloned = t;
 	return t;
 }
 
@@ -437,6 +439,8 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 	Type *t = NULL;
 	Sym  *s = NULL;
 
+	ASSERT( name || members && mm );
+
 	// try to find out current structure declaration
 	// if we search for 'struct ID' => search in the outer
 	if( name ) {
@@ -463,12 +467,10 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 
 	// 6.7.2.3.1 A specific type shall have its content defined at most once.
 	if( t->params && members ) {
-	  	cc->error( LOC "'%s %s' type redefinition\n", loc, agg_type==t_struct?"struct":"union", t->tagname );
+		cc->error( LOC "'%s %s' type redefinition\n", loc, agg_type==t_struct?"struct":"union", t->tagname );
 
 	// add member declarations
 	} else if( members ) {
-		t->params = members;
-		t->members = mm;
 
 		word size = 0;
 
@@ -503,10 +505,17 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 			}
 		}
 
-		t->size = size;
+		// do not register bad types
+		if( T(t) != t_bad )
+			for( Type *cl = t; cl ; cl = TYPE(cl->cloned) ) {
+				cl->params = members;
+				cl->members = mm;
+				cl->size = size;
+			}
 	}
 
-	return t->clone( cc );
+	// do not clone unnamed structures
+	return name ? t->clone( cc ) : t;
 }
 
 /*  
@@ -520,6 +529,8 @@ PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 	Type *t = NULL;
 	Sym  *s = NULL;
 
+	ASSERT( name || ns );
+
 	// try to find out current enum declaration
 	if( name ) {
 		s = SYM(cc->current->search_id( name, t_enum, 0 ));
@@ -528,7 +539,7 @@ PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 	}
 
 	// create if not exist
-	if( !t && ns ) {
+	if( !t && ns && name ) {
 		t = Type::create( t_enum, cc );
 		t->enum_members = ns;
 		t->tagname = name;
@@ -536,7 +547,7 @@ PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 	} else if( t && ns ) {
 		cc->error( LOC "'enum %s' type redifinition\n", loc, name );
 
-	} else if( !t /* && !ns */ ) {
+	} else if( !t /* && name */ ) {
 		// 6.7.2.3.2 A type specifier of the form 'enum identifier' without an enumerator
 		// list shall only appear after the type it specifies is completed.
 		cc->error( LOC "'enum %s': unknown type\n", loc, name );

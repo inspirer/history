@@ -27,7 +27,16 @@
 
 = TODO =====
 
-   Expressions
+	constant-expr
+	arrays-declaration
+	other Expressions
+
+= 29 === (20 mar 2004)
+
+    ! struct a *yo; struct a { ... };
+    + cloned list of Types
+	+ directory il/
+    + code generator will be: lburg or iburg
 
 = 28 === (10 mar 2004)
 

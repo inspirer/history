@@ -1,0 +1,197 @@
+#   intermediate language description
+#   based on lcc
+
+# address of a parameter
+ADDRF(0,V)
+	P(p)
+
+# address of a global
+ADDRG(0,V)
+	P(p)
+
+# address of a local
+ADDRL(0,V)
+	P(p)
+
+# constant
+CNST(0,C)
+	F(fdx)
+	I(csilh)
+	U(csilh)
+	P(p)
+
+# bitwise complement
+BCOM(1,S)
+	I(ilh)
+	U(ilh)
+
+# convert from float
+CVF(1,S)
+	F(fdx)
+	I(ilh)
+
+# convert from signed integer
+CVI(1,S)
+	F(fdx)
+	I(csilh)
+	U(csilhp)
+
+# convert from pointer
+CVP(1,S)
+	U(p)
+
+# convert from unsigned integer
+CVU(1,S)
+	I(csilh)
+	U(csilh)
+	P(p)
+
+# fetch
+INDIR(1)
+	F(fdx)
+	I(csilh)
+	U(csilh)
+	P(p)
+	B()
+
+# negation
+NEG(1)
+	F(fdx)
+	I(ilh)
+
+# addition
+ADD(2)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+	P(p)
+
+# bitwise AND
+BAND(2)
+	I(ilh)
+	U(ilh)
+
+# bitwise inclusive OR
+BOR(2)
+	I(ilh)
+	U(ilh)
+
+# bitwise exclusive OR
+BXOR(2)
+	I(ilh)
+	U(ilh)
+
+# division
+DIV(2)
+	F(fdx)
+	I(ilh)
+	U(ilh)
+
+# left shift
+LSH(2)
+	I(ilh)
+	U(ilh)
+
+# modulus
+MOD(2)
+	I(ilh)
+	U(ilh)
+
+# multiplication
+MUL(2)
+	F(fdx)
+	I(ilh)
+	U(ilh)
+
+# right shift
+RSH(2)
+	I(ilh)
+	U(ilh)
+
+# subtraction
+SUB(2)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+	P(p)
+
+# assignment
+ASGN(2,SS)
+	F(fdx)
+	I(csilh)
+	U(csilh)
+	P(p)
+	B()
+
+# jump if equal
+EQ(2,L)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+
+# jump if greater than or equal
+GE(2,L)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+
+# jump if greater than
+GT(2,L)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+
+# jump if less than or equal
+LE(2,L)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+
+# jump if less than
+LT(2,L)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+
+# jump if not equal
+NE(2,L)
+	F(fdx)
+	I(ilh)
+	U(ilhp)
+
+# argument
+ARG(1,SS)
+	F(fdx)
+	I(ilh)
+	U(ilh)
+	P(p)
+	B()
+
+# function call
+CALL(1,T)
+	F(fdx)
+	I(ilh)
+	U(ilh)
+	P(p)
+	V()
+
+CALL(2,T)
+	B()
+
+# function return
+RET(1)
+	F(fdx)
+	I(ilh)
+	U(ilh)
+	P(p)
+
+RET(0)
+	V()
+
+# unconditional jump
+JUMP(1)
+	V()
+
+# label
+LABEL(0,L)
+	V()

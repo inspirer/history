@@ -208,6 +208,7 @@ struct Type {
 	union {
 		PType parent, return_value;
 	};
+	PType  cloned;
 
     // compiler's stages dependent vars
 	union {
@@ -223,7 +224,7 @@ struct Type {
 			Namespace *members; // members structure is fast access to params
 		};
 		struct {				// t_array (ar_size_val == 0 means incompleted)
-			Expr  *ar_size;		//						== -1 means variable
+			Expr  *ar_size;		//						== -1 means variable, see ar_size
 			int ar_size_val;
 		};
 		Namespace *enum_members; // t_enum
