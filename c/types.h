@@ -131,6 +131,7 @@ enum {
 	((tt)->specifier == t_union || (tt)->specifier == t_struct) && (tt)->params == NULL )
 
 #define T(tt) (tt)->specifier
+#define Q(tt) (tt)->qualifier
 
     /*
 		EG: To simplify the compiler's logic we suppose that 'long _Imaginary' is the

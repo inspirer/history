@@ -513,6 +513,11 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 	return NULL;
 }
 
+
+// 6.6 Constant expressions
+
+// void Expr::create_constant( Expr *e, Compiler *cc ) {
+
 //
 //	DESC: moves the expression to free_expr list
 //

@@ -32,26 +32,67 @@ int Type::can_convert_to( Type *t, Compiler *cc )
 /*
 	6.2.7 Compatible type and composite type
 
-	1. Two types have compatible type if their types are the same. Additional rules for
-	determining whether two types are compatible are described in 6.7.2 for type specifiers,
-	in 6.7.3 for type qualifiers, and in 6.7.5 for declarators.46) Moreover, two structure,
-	union, or enumerated types declared in separate translation units are compatible if their
-	tags and members satisfy the following requirements: If one is declared with a tag, the
-	other shall be declared with the same tag. If both are completed types, then the following
-	additional requirements apply: there shall be a one-to-one correspondence between their
-	members such that each pair of corresponding members are declared with compatible
-	types, and such that if one member of a corresponding pair is declared with a name, the
-	other member is declared with the same name. For two structures, corresponding
-	members shall be declared in the same order. For two structures or unions, corresponding
-	bit-fields shall have the same widths. For two enumerations, corresponding members
-	shall have the same values.
+    two structure, union, or enumerated types declared in separate translation units are 
+    compatible if their tags and members satisfy the following requirements: If one is 
+    declared with a tag, the other shall be declared with the same tag. If both are completed 
+    types, then the following additional requirements apply: there shall be a one-to-one 
+    correspondence between their members such that each pair of corresponding members are 
+    declared with compatible types, and such that if one member of a corresponding pair is 
+    declared with a name, the other member is declared with the same name. For two
+    structures, corresponding members shall be declared in the same order. For two structures 
+    or unions, corresponding bit-fields shall have the same widths. For two enumerations, 
+    corresponding members shall have the same values.
 
+	6.7.5.2.6
+	For two array types to be compatible, both shall have compatible element types, and if
+	both size specifiers are present, and are integer constant expressions, then both size
+	specifiers shall have the same constant value. If the two array types are used in a context
+	which requires them to be compatible, it is undefined behavior if the two size specifiers
+	evaluate to unequal values.
+
+	6.7.5.3.15
+	For two function types to be compatible, both shall specify compatible return types.125)
+	Moreover, the parameter type lists, if both are present, shall agree in the number of
+	parameters and in use of the ellipsis terminator; corresponding parameters shall have
+	compatible types. If one type has a parameter type list and the other type is specified by a
+	function declarator that is not part of a function definition and that contains an empty
+	identifier list, the parameter list shall not have an ellipsis terminator and the type of each
+	parameter shall be compatible with the type that results from the application of the
+	default argument promotions. If one type has a parameter type list and the other type is
+	specified by a function definition that contains a (possibly empty) identifier list, both shall
+	agree in the number of parameters, and the type of each prototype parameter shall be
+	compatible with the type that results from the application of the default argument
+	promotions to the type of the corresponding identifier. (In the determination of type
+	compatibility and of a composite type, each parameter declared with function or array
+	type is taken as having the adjusted type and each parameter declared with qualified type
+	is taken as having the unqualified version of its declared type.)
 */
 
 Type *Type::compatible( Type *t1, Type *t2, Compiler *cc )
 {
-	// TODO
-	return NULL;
+	// 6.7.3.9 For two qualified types to be compatible, both shall have the
+	// identically qualified version of a compatible type; the order of type 
+	// qualifiers within a list of specifiers or qualifiers does not affect the
+	// specified type.
+	if( T(t1) != T(t2) || Q(t1) != Q(t2) )
+		return NULL;
+
+	Type *result = t1;
+
+	switch( T(t1) ) {
+
+	// 6.7.5.1.2 For two pointer types to be compatible, both shall be identically
+	//  qualified and both shall be pointers to compatible types.
+	case t_pointer:
+		break;
+		
+
+
+
+
+	}
+
+	return result;
 }
 
 
