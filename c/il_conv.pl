@@ -60,7 +60,7 @@ close( IN );
 
 $HEADER = <<END;
  *   C Compiler project (cc)
- *   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov@front.ru)
+ *   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov\@front.ru)
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -115,7 +115,7 @@ $HEADER */
 END
 
 print OUT "static const char *opnames[] = {\n";
-print OUT "\t\"$_\",\n" for( @names );
+for( @names ) { print OUT "\t\"$_\",\n"; }
 print OUT "};\n";
 
 $SUFFIXES .= "?" while length($SUFFIXES) < 15;
@@ -140,7 +140,7 @@ static const struct {
 } valid_ops[] = {
 END
 
-print OUT "\t{ $_ },\n" for( @valid );
+for( @valid ) { print OUT "\t{ $_ },\n"; }
 
 print OUT "\t{ 0, 0 }\n};\n\n";
 

@@ -1,7 +1,7 @@
 /*   il.c
  *
  *   C Compiler project (cc)
- *   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov.ru)
+ *   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov@front.ru)
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by

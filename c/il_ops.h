@@ -1,7 +1,7 @@
 /*   il_ops.h
  *
  *   C Compiler project (cc)
- *   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov.ru)
+ *   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov@front.ru)
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -22,39 +22,39 @@
 #define il_ops_h_included
 
 enum {
-	INDIR = 10<<4,
-	BCOM = 5<<4,
-	GT = 25<<4,
 	LABEL = 33<<4,
-	RSH = 20<<4,
+	LT = 27<<4,
 	MOD = 18<<4,
-	BAND = 13<<4,
-	ARG = 29<<4,
+	BCOM = 5<<4,
 	ADDRF = 1<<4,
-	ADDRG = 2<<4,
-	CNST = 4<<4,
-	JUMP = 32<<4,
-	CALL = 30<<4,
-	DIV = 16<<4,
-	ADDRL = 3<<4,
-	BOR = 14<<4,
-	CVF = 6<<4,
-	NEG = 11<<4,
-	LE = 26<<4,
-	ASGN = 22<<4,
-	MUL = 19<<4,
 	CVI = 7<<4,
-	NE = 28<<4,
-	BXOR = 15<<4,
+	ADDRG = 2<<4,
+	DIV = 16<<4,
+	BOR = 14<<4,
+	LSH = 17<<4,
+	ADDRL = 3<<4,
+	ASGN = 22<<4,
+	ADD = 12<<4,
 	CVP = 8<<4,
 	SUB = 21<<4,
-	CVU = 9<<4,
-	LT = 27<<4,
-	ADD = 12<<4,
-	GE = 24<<4,
-	LSH = 17<<4,
 	RET = 31<<4,
+	GE = 24<<4,
+	RSH = 20<<4,
+	MUL = 19<<4,
+	CVU = 9<<4,
+	LE = 26<<4,
+	NE = 28<<4,
+	BAND = 13<<4,
 	EQ = 23<<4,
+	INDIR = 10<<4,
+	CNST = 4<<4,
+	ARG = 29<<4,
+	NEG = 11<<4,
+	GT = 25<<4,
+	BXOR = 15<<4,
+	JUMP = 32<<4,
+	CALL = 30<<4,
+	CVF = 6<<4,
 	CMDMAX = 33<<4
 };
 
