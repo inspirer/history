@@ -1,0 +1,11 @@
+EXPORTS
+    SetStartupInfo
+    OpenPlugin
+    GetPluginInfo
+	GetMinFarVersion
+	GetFindData
+	FreeFindData
+	GetOpenPluginInfo
+	SetDirectory
+	ProcessEvent
+	GetFiles
