@@ -1,23 +1,21 @@
  // ChaOS kernel v0.99
-#output .bin
+#output bin\kernel.bin
 #include kern_def.csm
 #code 32
 #org 0
 
    // Initialization (ds=Data,es=IDT/GDT,ss=Data)
-   ax=xend
    ax=mem_kernel_data;ds=ax;ss=ax;fs=ax;gs=ax
-   ax=mem_idt_gdt_data;es=ax
-   sp=stack
+   ax=mem_idt_gdt_data;es=ax;sp=stack
 
    // Create new IDT
    xor edi,edi
    esi=idt_place
    ecx=idt_size
    rep movsb
-
-   // Save dos memory pointer
-   d:dos_mem=ebx
+   mov ecx,2048-idt_size
+   xor eax,eax
+   rep stosb
 
    // Get memory size (in pages)
    ecx=d:mem_size;ax=mem_all_data;ds=ax;ebx=ecx<<12
@@ -37,7 +35,7 @@
 
    // Fill tables
    esi=1024-ebx  // other we'll fill with nulls
-   ax=0x18;es=ax;xor edi,edi
+   ax=mem_page_catalog;es=ax;xor edi,edi
    eax=0x122007  // pointer to first "table of pages"(R/W,Present,User)
    while(ebx>0){ stosd;eax=+0x1000;ebx=-- }
    xor eax,eax;while(esi>0){ stosd;esi=-- }
@@ -47,9 +45,20 @@
    ebx=ecx;{ stosd;eax=+0x1000;loop ?^0 }
    cx=(1024-dx)&1023;xor eax,eax
    while(ecx>0){ stosd;ecx=-- }
-   ax=0x10;es=ax
 
-   // install PAGES
+   // Set kernel pages as System
+   push ds;ax=mem_page_catalog;ds=ax
+   edi=cs:d:mem_base<<2+0x1000 // <- end of system pages
+   esi=0x1400                  // <- start of system pages
+   while(esi<edi){
+       lodsd
+       and eax,0xFFFFF000
+       add eax,busy_page+fixed_page+3 //(R/W, SuperVis, Present, fixed, busy)
+       d:[~esi-4]=eax
+   }
+   pop ds;ax=mem_idt_gdt_data;es=ax
+
+   // install PAGES system
    eax=0x121000;cr3=eax
    eax=cr0
    eax=|0x80000000
@@ -87,47 +96,50 @@
    init_VM_task()
 
    // Enable ints
+   enable_int_system()
 
    // drivers
    init_drivers()
 
-   // Load task
-   esi=xtask_name
-   loadtask()
+   // Load main task
+   esi=xtask_name;loadtask()
    w:[xtask_PID]=ax
-   //ecx=10{push ecx;esi=xtask_name;loadtask();pop ecx;loop ?^0}
 
-   // Enable ints
-   enable_int_system()
-
-   // Call first task
+   // Switch first task
+   cli
+   w:m_task_en=multitasking
    callf d:[xtask]
-   //ecx=2000 0000;loop $
+   w:m_task_en=2
 
    // Show debug
    #ifdef show_debug_info
      #include debug.csm
    #endif
 
-   // Exit to DOS
+   // Exit to DOS (no errors)
+   xor ecx,ecx
    jmp exit
 
 xtask_name  : db "startup.bin",0
-xtask       : dd 0
+#shortdef xtask $-4
 xtask_PID   : dw 0
 
 #shortdef kernel_switch $-4
 kernel_PID  : dw 0
 
-   // ----------------------------[ Drivers ]--------------------------------
+   // ------------------------[ built-in Drivers ]---------------------------
 
-  #include dos_func.csm
+  // Int 20
   #include memory.csm
   #include process.csm
+  #include regman.csm
+
+  // Int 21
   #include filesyst.csm
+  #include scr_io.csm
+
   #include ints.csm
   #include driver.csm
-  #include regman.csm
   #include vmm.csm
 
    // ------------------------------ [ Data ] ------------------------------
@@ -139,9 +151,6 @@ kernel_PID  : dw 0
 
    // ------------------------ [ Return to loader ] ------------------------
 exit:
-   xor ebx,ebx
-
-dcall:
 
    // Disable ints
    disable_int_system()

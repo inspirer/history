@@ -1,9 +1,18 @@
  // File system routines
 
-  exc_21:
-    cmp ah,0 ; jz  CreateFile
-    cmp ah,1 ; jz  OpenFile
-    jmp _fs01
+  int_21:
+    clc;push ebp
+    mov ebp,esp
+    and b:[~ebp+12],0xFE
+    pop ebp
+
+    // check ????
+    //check_first_ring()
+    //if (~c){ ax=err_access_denied;jmp set_cf }
+
+    cmp ah,0x0 ; jz  CreateFile
+    cmp ah,0x1 ; jz  OpenFile
+    jmp int21_f0
 
     // 1. Create file
     //   In:  ah  = 0 ; cx  = File attribute
@@ -38,7 +47,7 @@
     { lodsb;stosb;cmp al,0;jnz ?^0 }
 
     // Call it
-    call_VM_task()
+    call_VM_task();
 
     if (ebx!=0){
       pop esi;pop ebx;pop es;pop edi
@@ -49,9 +58,9 @@
     pop esi;pop ebx;pop es;pop edi
     iret
 
-_fs01:
-    cmp ah,2 ; jz  CloseFile
-    jmp _fs02
+int21_f0:
+    cmp ah,0x2 ; jz  CloseFile
+    jmp int21_f1
 
     // 3. Close file
     //   In:  ah  = 2 ; bx  = file handle
@@ -122,11 +131,10 @@ _fs01:
     pop ebx;pop ds;pop edi;pop esi
     iret
 
-  _fs02: // Continue check
-    cmp ah,3  ; jz  ReadFile
-    cmp ah,4  ; jz  WriteFile
-    cmp ah,14 ; jz  GetCurDir
-    jmp _fs03
+  int21_f1: // Continue check
+    cmp ah,0x3 ; jz  ReadFile
+    cmp ah,0x4 ; jz  WriteFile
+    jmp int21_f2
 
     // 5. Write file
     //   In:  ah  = 4 ;  bx  = file handle
@@ -137,23 +145,5 @@ _fs01:
   WriteFile:
     iret
 
-    // 15. Get current directory
-    //   In:  ah  = 14 ; dl  = drive number
-    //        es:edi - place for it
-    //   Out: CF set on error (ax = dos error code)
-  GetCurDir:
-    iret
-
-_fs03:
-    cmp ah,187 ; jz display_char
-    xor eax,eax
-    iret
-
-  // al = char to display
-  display_char:
-
-    push ds;push eax
-    write_char()
-    pop eax;pop ds
-
-    iret
+int21_f2:
+    jmp int21_s0

@@ -1,0 +1,140 @@
+ // VGA Display driver
+#code 32
+#output bin\display.bin
+
+  db "CHAOS",26    // sign [6]
+  db "DISPLAY",0   // Driver name [8]
+  dw 0x2           // Size in pages [2]
+
+// Driver exit code
+#shortdef drv_ld_ok 0
+#shortdef drv_ld_error 1
+#shortdef drv_ld_irq_abs 2
+#shortdef drv_ld_int_abs 3
+#shortdef drv_ld_dev_abs 4
+#shortdef drv_ld_port_confl 5
+
+// Local
+#shortdef total   0
+#shortdef console 4
+
+#shortdef _screen 0      // w:screen [4000]
+#shortdef _ID     4000   // w:ID: 0000-FFFF
+#shortdef _task   4002   // w:3..15 - task ID ; 0bit - set if curr for task
+#shortdef _cursor 4004   // w:cursor pos (0..80*25)
+#shortdef _color  4006   // w:low byte : 0..3 - color ; 4..7 - background
+#shortdef _size   4008
+
+#org 0
+
+  // Show cpr
+  push cs;pop ds;esi=cpr;ah=0x31;int 0x21
+
+  // Allocate screen (at 0xB8000)
+  ah=6;ebx=1;int 0x20
+  bx=ax;edi=scr;ah=3;int 0x22
+
+  // Allocate console buffer
+  ah=6;ebx=1;int 0x20
+  bx=ax;edi=mem;ah=3;int 0x22
+
+  // Allocate int23
+  ax=0x123;edx=int23;int 0x22
+  iret
+
+// First call => init driver
+init_driver:
+  push ds;push es;push esi;push edi;push edx;push ecx;push ebx;push eax
+
+  // Map memory to 0xB8000
+  edx=d:cs:scr;ebx=0xB8000;ah=0xB;int 0x20;ds=dx
+
+  // Copy base screen from 0xB8000 to mem
+  eax=d:cs:mem;es=ax;xor esi,esi;xor edi,edi;ecx=1000;rep movsd
+  ax=0;stosw;stosw;ax=1600;stosw;al=7;stosw
+
+  // Save at int23 for "nop"
+  ah=0x3;ebx=0x90909090;edi=int23;int 0x22
+
+  pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
+  jmps _end_init_driver
+
+int23:
+
+  // 4 byte construction ; 1st call => init
+  //jmps init_driver;nop;nop
+
+ _end_init_driver:
+
+  // Clear CF
+  clc;push ebp
+  mov ebp,esp
+  and b:[~ebp+12],0xFE
+  pop ebp
+  //cmp ah,0x0 ; jz allocate_screen
+  cmp ah,0x3 ; jz refresh_console
+  cmp ah,0x4 ; jz write_char
+  jmp exc20_d0
+
+// Refresh console
+refresh_console:
+  push ds;push es;push eax;push esi;push edi;push ecx
+
+  // Refresh screen
+  eax=d:cs:scr;ebx=d:cs:mem;es=ax;ds=bx;xor esi,esi
+  xor edi,edi;ecx=1000;rep movsd
+
+  // Refresh cursor
+  push edx;cx=w:_cursor;cx=>>1;mov dx,0x3D4;mov al,0xE;out dx,al;inc dx;mov al,ch;out dx,al
+  mov dx,0x3D4;mov al,0xF;out dx,al;inc dx;mov al,cl;out dx,al;pop edx
+
+  pop ecx;pop edi;pop esi;pop eax;pop es;pop ds
+  iret
+
+// Write character
+write_char:
+  push ds;push eax;push esi
+
+  // Save character at cursor with needed attr
+  esi=cs:d:mem;ds=si
+  xor esi,esi;si=w:_cursor
+  b:[~_screen.esi]=al
+  al=b:[_color]
+  b:[~_screen.esi.1]=al
+  w:_cursor=+2
+
+  // cursor < 4000 => eat line
+  while (w:_cursor=>4000){
+    push es;push edi;push ds;pop es;push ecx
+    xor edi,edi;esi=160;ecx=960;rep movsd
+    al=b:[_color];ah=0;ecx=80;rep movsw
+    pop ecx;pop edi;pop es
+    w:_cursor=-160
+  }
+
+  // Update screen
+  ah=3;int 0x23
+
+  pop esi;pop eax;pop ds
+  iret
+
+// Write string
+write_asciiz:
+  push eax;push esi
+  {
+    lodsb
+    cmp al,0
+    jz ?v0
+    ah=4;int 0x23
+    jmps ?^0
+  }
+  pop esi;pop eax
+  iret
+
+exc20_d0:
+  cmp ah,0xC ; jz write_asciiz
+  iret
+
+cpr: db "DISPL: ChaOS display/console driver v0.99/alpha",13,10,0
+scr: dd 0
+mem: dd 0

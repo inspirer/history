@@ -1,6 +1,6 @@
  // Task sample
 #code 32
-#output .bin
+#output bin\startup.bin
 
   db "CE",26       // sign       [3]
   db "STARTUP",[2] // task name  [9]
@@ -9,14 +9,19 @@
 
 #org 0
 
-  // Writes 20 characters, then exit
-  //dh=20{ecx=200 0000;loop $;dh=++;ah=187;al=dh;int 0x21;if (dh!=40){jmp ?^1}}
-
-  edi=str
-  while(b:cs:[edi]!=0){
-    ah=187;al=b:cs:[edi];int 0x21
-    edi=++
+  ah=0;ebx=2;int 0x20;es=ax;ds=ax;ebx=0
+  {
+    ebx=++
+    push ebx
+    ah=0x46;xor edi,edi;int 0x20
+    if (~c){ jmp ?v1}
+    ah=0x31;xor esi,esi;int 0x21
+    ax=0x300D;int 0x21;ax=0x300A;int 0x21;
+    pop ebx
+    jmp ?^0
   }
+  pop ebx
   iret
 
-str: db "This just a sample task",13,10,0
+str: db "Sample TASk",13,10,0
+str2: db "stem",0

@@ -11,9 +11,9 @@
 
 #org 0
 
-  // <init_proc>
+  // init_proc
 
   // <functions>
 
-  // <data>
+  // <ro_data>
 ----------------------------------------

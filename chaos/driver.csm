@@ -1,17 +1,138 @@
  // Int 0x22 handler : kernel functions for drivers
 
-exc_22:
+// Driver exit code
+#shortdef drv_ld_ok 0
+#shortdef drv_ld_error 1
+#shortdef drv_ld_irq_abs 2
+#shortdef drv_ld_int_abs 3
+#shortdef drv_ld_dev_abs 4
+#shortdef drv_ld_port_confl 5
 
+int_22:
+   clc;push ebp
+   mov ebp,esp
+   and b:[~ebp+12],0xFE
+   pop ebp
+
+   cmp ah,0x0 ; jz set_return_code
+   cmp ah,0x1 ; jz allocate_soft_int
+   jmp int22_d0
+
+   // 1. Set driver return code
+   // In: ah  =  0x0
+   //     al  =  ret_code
+ set_return_code:
+   push ds;push ebx
+   bx=mem_kernel_data;ds=bx
+   b:[drv_signal]=al
+   pop ebx;pop ds
    iret
 
+   // 2. Allocate soft int
+   // In: ah  =  0x1
+   //     al  =  intnum
+   //     CS:EDX = ptr to handler
+ allocate_soft_int:
+   if (al<0x20||(al=>0x70&&al<=0x7F)){ ax=err_wrong_info;jmp set_cf }
+
+   // not loading => exit
+   if(w:cs:m_task_en!=0){ ax=err_access_denied;jmp set_cf }
+
+   // set DS:ESI
+   push ebp;mov ebp,esp;push ds;push esi;push eax
+   si=mem_idt_gdt_data;ds=si
+   xor esi,esi;ah=0;si=ax;shl esi,3
+   if (b:[~esi+5]!=0){
+     pop esi;pop ds;pop ebp
+     ax=err_already_used
+     jmp set_cf
+   }
+
+   // install handler
+   eax=edx<<16;ax=w:[~ebp.8];rol eax,16
+   d:[esi]=eax;esi=+4
+   xor eax,eax;ah=0xEF
+   d:[esi]=eax
+
+   pop eax;pop esi;pop ds;pop ebp
+   iret
+
+   // 3. Allocate hard int
+   // In: ah  =  0x2
+   //     al  =  IRQ (0-15)
+   //     CS:EDX = ptr to handler
+ allocate_hrdw_irq:
+
+   // not loading => exit
+   if(w:cs:m_task_en!=0){ ax=err_access_denied;jmp set_cf }
+
+   push ebp;mov ebp,esp;push eax;push esi;push ds
+
+   // Get real int
+   and ax,0xF;xor esi,esi;si=ax;esi=+xtable;al=b:cs:[esi]
+
+   // set DS:ESI
+   si=mem_idt_gdt_data;ds=si
+   xor esi,esi;si=ax;shl esi,3
+   if (b:[~esi+5]!=0){
+     pop ds;pop esi;pop eax;pop ebp
+     ax=err_already_used
+     jmp set_cf
+   }
+
+   // install handler
+   eax=edx<<16;ax=w:[~ebp.8];rol eax,16
+   d:[esi]=eax;esi=+4
+   xor eax,eax;ah=0xEE
+   d:[esi]=eax
+
+   pop ds;pop esi;pop eax;pop ebp
+   iret
+
+ int22_d0:
+   cmp ah,0x2 ; jz allocate_hrdw_irq
+   cmp ah,0x3 ; jz write_code_seg
+   iret
+
+   // 4. Write to code segment
+   // In: ah  =  0x3
+   //     write EBX as dword at CS:EDI
+ write_code_seg:
+   push ebp;mov ebp,esp;push eax;push esi;push ds;push ecx
+
+   // Set DS:ESI to CS in GDT
+   ax=mem_idt_gdt_data;ds=ax
+   ax=w:[~ebp.8];and ax,0xF8
+   xor esi,esi;si=ax;esi=+0x805
+
+   // EDI < limit
+   // ????
+
+   // write data
+   cl=b:[esi];b:[esi]=0x92
+   push ds;ds=ax;d:[edi]=ebx;pop ds
+   b:[esi]=cl
+
+   pop ecx;pop ds;pop esi;pop eax;pop ebp
+   iret
+
+
+xtable:
+   db 0x78,0x79,0x7A,0x7B,0x7C,0x7D,0x7E,0x7F // master
+   db 0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77 // slave
+
+ // LOAD driver function
 #shortdef driver_sign 0x0
 #shortdef driver_name 0x6
 #shortdef driver_size 0xE
+drv_head: db [16]
+drv_signal: db 0
 
 load_driver:
+   push ebx;push ecx;push edx;push esi;push edi;push ds;push es
 
    // Load driver from .bin file
-   ax=0x100;int 0x21
+   push esi;clc;ax=0x100;int 0x21
 
    // File opened
    _if(~nc){
@@ -19,10 +140,10 @@ load_driver:
      bx=ax;edi=drv_head;ax=mem_kernel_data;es=ax
      ah=3;mov cx,16;int 0x21
 
-     ifelse (d:[drv_head.driver_sign]=='CHAO'){
+     ifelse (d:[drv_head.driver_sign]=='CHAO'&&ax==16){
 
        // if driver isn't too big => load it
-       ifelse (w:[drv_head.driver_size]<=max_driver_size){
+       ifelse (w:[drv_head.driver_size]<=max_driver_size&&w:[drv_head.driver_size]>0){
 
          // Allocate memory for driver
          push ebx;ah=6;xor ebx,ebx;bx=w:drv_head.driver_size;int 0x20;pop ebx
@@ -34,25 +155,73 @@ load_driver:
          pop eax
 
          // set data to code
-         push ds;bx=mem_idt_gdt_data;ds=bx;esi=eax+0x805
-         b:[esi]=0xBA;pop ds
+         bx=mem_idt_gdt_data;ds=bx;esi=eax+0x805
+         b:[esi]=0xBA
 
-       } else { stc }
+       } else { stc;ax=0xFE }
 
-     } else { stc }
+     } else { stc;ax=0xFF }
+
+   } pop esi
+
+   // If driver loaded => init it
+   _ifelse (~nc){
+
+      // set driver as handler for int80
+      push eax
+      cx=mem_idt_gdt_data;ds=cx
+      xor ebx,ebx;bx=ax;ebx=<<16
+      d:[0x400]=ebx;xor ebx,ebx
+      bh=0xEF;d:[0x404]=ebx
+
+      // create task to call int80
+      ah=3;int 0x20;lldt ax;ebx=1;ax=0;int 0x20
+      push ds;ds=ax;d:[0]=0xCF80CD;pop ds
+      dx=ax;ah=0x27;int 0x20
+      ah=0x20;xor edi,edi;ecx=1;int 0x20
+      xor bx,bx;lldt bx
+
+      // Call task
+      push ds;bx=mem_kernel_data;ds=bx
+      b:drv_signal=0;w:drv_init_task_PID=ax;pop ds
+      #shortdef drv_init_task_PID $+5
+      callf 0,0x78CD
+
+      // kill task
+      bx=ax;ah=0x22;int 0x20
+
+      // Free int80
+      xor eax,eax;d:[0x400]=eax;d:[0x404]=eax
+      pop eax
+
+   } else {
+
+      // 0xFE/0xFF - driver header error ; 0x0-0xFD - file errors
+      push cs;pop ds;push eax;ah=0x31;int 0x21;pop eax
+
+      // Show error
+      esi=driver_err_un;if (ax==0xFF){ esi=driver_err_FF }
+      if (ax==0xFE){esi=driver_err_FE};if (ax==0x02){esi=driver_err_02}
+      ah=0x31;int 0x21;ax=0x300D;int 0x21;ax=0x300A;int 0x21
 
    }
 
+   pop es;pop ds;pop edi;pop esi;pop edx;pop ecx;pop ebx
    ret
+
+driver_err_FF: db ": driver has errors in header",0
+driver_err_FE: db ": driver is too big",0
+driver_err_02: db ": file not found",0
+driver_err_un: db ": unknown file error",0
 
   // Initialize drivers
 init_drivers:
 
-   //esi=drv1_name;load_driver()
-
-   //if (~c){ ebp=0xDAE0;jmp debug }
+   // Load drivers
+   esi=drv1_name;load_driver()
+   esi=drv2_name;load_driver()
 
    ret
 
-drv1_name : db "sysdev.bin",0
-drv_head: db [16]
+drv1_name : db "display.bin",0
+drv2_name : db "keyb.bin",0

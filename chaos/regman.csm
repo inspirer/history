@@ -1,19 +1,539 @@
  // ChaOS registry menager
 
+#shortdef x_nsize   0  // w
+#shortdef x_id      2  // d
+#shortdef x_next    6  // d
+#shortdef x_sub     10 // d
+#shortdef x_attr    14 // w
+  #shortdef x_attr_access 3  // AccessPrivelegeLevel
+  #shortdef x_attr_last 4    // set => next ID is busy
+  #shortdef x_attr_type 8    // 0 - dw ; 1 - data
+  #shortdef x_attr_busy 16   // accessing now
+#shortdef x_up      16 // d
+#shortdef x_dw      20 // d
+#shortdef x_name    24 // s
+#shortdef x_size    24 // s
+
+#shortdef x_data_start 4
+
 exc20_r0:
-    //cmp ah,0x40 ; jz create_reg_key
-    jmp exc20_p0
+    cmp ah,0x40 ; jz create_reg_key
+    jmp exc20_r1
 
   // 1. Create reg_key
+  // In:  ah = 0x40 ; al=rights
+  //      ebx = base_ID
+  //      ds:esi <- keyname
+  create_reg_key:
+
+     push eax;push ebx;push ecx;push esi;push ds;push eax
+     ax=w:cs:reg_sel;ds=ax;ecx=d:[0];esi=x_data_start
+
+     // Search for ID==ebx (ecx=total_num_of_entries ; ds:esi ptr to start)
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+          else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // ID not found
+     if (ebx==0xFFFFFFFF){
+        pop eax;pop ds;pop esi;pop ecx;pop ebx;pop eax
+        ax=err_wrong_id
+        jmp set_cf
+     }
+
+     // Check rights
+     push ebp;mov ebp,esp;ax=w:[~ebp.32];ebx=eax;and ax,3;pop ebp
+     ah=al;al=b:[~esi.x_attr]&x_attr_access
+     if(al<ah){
+        pop eax;pop ds;pop esi;pop ecx;pop ebx;pop eax
+        ax=err_access_denied
+        jmp set_cf
+     }
+
+     // Check for duplicate
+     // ????
+
+     // Search for free ID : return in EBX
+     push ebx;push esi;esi=x_data_start;ecx=d:[0]
+     {
+       ax=w:[~esi.x_attr]&x_attr_last;
+       if (ax==0){ ebx=d:[~esi.x_id];ebx=++;w:[~esi.x_attr]=|x_attr_last;jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size}
+        else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw]}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     } pop esi
+
+     // no free ID
+     if (ebx==0xFFFFFFFF){
+        esp=+8;pop ds;pop esi;pop ecx;pop ebx;pop eax
+        ax=err_wrong_info
+        jmp set_cf
+     }
+
+     // Save ID in TREE
+     eax=d:[~esi.x_sub]
+     d:[~esi.x_sub]=ebx
+     push eax
+
+     // Set ESI to end of structure
+     esi=x_data_start;ecx=d:[0];
+     {ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+        else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}esi=+eax;loop ?^0}
+     pop ecx;pop eax
+
+     // Save new structure
+     d:[~esi.x_up]=eax
+     d:[~esi.x_id]=ebx
+     d:[~esi.x_next]=ecx
+     xor eax,eax
+     d:[~esi.x_dw]=eax
+     dec eax
+     d:[~esi.x_sub]=eax
+
+     // Save rights
+     push ebp;mov ebp,esp;ax=w:[~ebp.32];and ax,3;pop ebp;pop ebx;and bx,3
+     if (bl>al){ al=bl }
+     w:[~esi.x_attr]=ax
+
+     // Save name
+     ax=ds;ecx=esi; pop ds;pop esi;push ds;push esi
+     push eax;push ecx;push edi;push es
+     edi=ecx+x_name;xor cx,cx;es=ax
+     { lodsb;stosb;inc cx;cmp al,0;jnz ?^0 }
+
+     // Save name length & new num of register entries
+     pop es;pop edi;pop esi;pop ds;w:[~esi.x_nsize]=cx
+     inc d:[0]
+
+     // Fix
+     push ebx;ebx=++;esi=x_data_start;ecx=d:[0]
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+         else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // ID found => set x_attr_last
+     if (ebx!=0xFFFFFFFF){
+       w:[~esi.x_attr]=|x_attr_last
+     }
+
+     pop eax;pop esi;pop ds;pop ecx;pop ebx;esp=+4
+     iret
+
+exc20_r1:
+     cmp ah,0x41 ; jz remove_reg_key
+     jmp exc20_r2
+
   // 2. Remove reg_key
+  // In:  ah = 0x41
+  //      ebx = key_id
+  remove_reg_key:
+     push eax;push ebx;push ecx;push edx;push esi;push ds
+     ax=w:cs:reg_sel;ds=ax
+
+     // Search for ID
+     esi=x_data_start;ecx=d:[0]
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+        else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // no ID to free
+     if (ebx==0xFFFFFFFF){
+        pop ds;pop esi;pop edx;pop ecx;pop ebx;pop eax
+        ax=err_wrong_info
+        jmp set_cf
+     }
+
+     // Check rights
+     push ebp;mov ebp,esp;ax=w:[~ebp.32];ebx=eax;and ax,3;pop ebp
+     ah=al;al=b:[~esi.x_attr]&x_attr_access
+     if(al<ah){
+        pop ds;pop esi;pop ecx;pop ebx;pop eax
+        ax=err_access_denied
+        jmp set_cf
+     }
+
+     // Key has sub_keys
+     if (d:[~esi.x_sub]!=0xFFFFFFFF){
+        pop ds;pop esi;pop edx;pop ecx;pop ebx;pop eax
+        ax=err_reg_key_has_sub
+        jmp set_cf
+     }
+
+     // Remove from tree
+     push esi;edx=d:[~esi.x_next];esi=x_data_start;ecx=d:[0]
+     {
+       if (ebx==d:[~esi.x_next]){ d:[~esi.x_next]=edx }
+       if (ebx==d:[~esi.x_sub]){ d:[~esi.x_sub]=edx }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+        else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+     } pop esi
+
+     // get it's size & size of all
+     push edi;push es;ax=ds;es=ax
+     cx=w:[~esi.x_attr]&x_attr_type;ifelse (cl==0){xor ecx,ecx;cx=w:[~esi.x_nsize]+x_size;}
+       else {xor ecx,ecx;cx=w:[~esi.x_nsize]+x_size;ecx=+d:[~esi.x_dw];} edi=esi
+
+     // Set ESI to end of structure
+     push ecx;esi=x_data_start;ecx=d:[0];
+     {ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+        else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}esi=+eax;loop ?^0}
+     pop ecx
+
+     // Destroy reg entry
+     esi=-edi-ecx;xchg ecx,esi;esi=+edi;rep movsb
+
+     // Decrement num
+     dec d:[0]
+
+     pop es;pop edi;pop ds;pop esi;pop edx;pop ecx;pop ebx;pop eax
+     iret
+
+exc20_r2:
+     cmp ah,0x42 ; jz get_reg_key
+     jmp exc20_r3
+
   // 3. Get reg_key
+  // In:  ah = 0x42
+  //      es:edi <- keyname
+  // Out: ebx=ID
+  get_reg_key:
+
+     if (b:es:[edi]!='/'){
+       ax=err_wrong_regname
+       jmp set_cf
+     }
+
+     push eax;push ebx;push ecx;push edi;push esi;push ds
+     ax=w:cs:reg_sel;ds=ax;ebx=d:[x_data_start.x_sub];edi=++
+
+     {
+       esi=x_data_start;ecx=d:[0]
+       {
+         if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+         ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+           else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+         esi=+eax;loop ?^0
+         xor ebx,ebx;dec ebx
+       }
+
+       // ID not found
+       if (ebx==0xFFFFFFFF){
+          pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
+          ax=err_sys_integrity
+          jmp set_cf
+       }
+
+       // Found => check name
+       push edi;push esi
+       esi=+x_name
+       {
+         if (b:[esi]==0){
+           ifelse (b:es:[edi]=='/'||b:es:[edi]==0){
+
+             ifelse (b:es:[edi]==0){
+               pop esi;pop edi
+               ebx=d:[~esi.x_id]
+               jmp ?v4
+
+             } else {
+               pop esi;esp=+4
+               ebx=d:[~esi.x_sub]
+               if (ebx==0xFFFFFFFF){
+                  pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
+                  ax=err_wrong_regname;jmp set_cf
+               }
+               edi=++
+               jmp ?^4
+
+             }
+
+           } else {
+             pop esi;pop edi
+             ebx=d:[~esi.x_next]
+             if (ebx==0xFFFFFFFF){
+                pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
+                ax=err_wrong_regname;jmp set_cf
+             }
+             jmp ?^3
+           }
+         }
+         cmpsb
+         jz ?^0
+         pop esi;pop edi
+         ebx=d:[~esi.x_next]
+         if (ebx==0xFFFFFFFF){
+            pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
+            ax=err_wrong_regname;jmp set_cf
+         }
+         jmp ?^1
+       }
+     }
+
+     pop ds;pop esi;pop edi;pop ecx;esp=+4;pop eax
+     iret
+
+exc20_r3:
+     cmp ah,0x43 ; jz get_reg_key_data
+     jmp exc20_r4
+
   // 4. Get reg_key data
+  // In:  ah = 0x43
+  //      ebx = ID
+  // Out:  0 : EAx = dword
+  //       1 : ES:EDI <- buffer, eax = size
+  get_reg_key_data:
+     push eax;push ebx;push ecx;push edi;push esi;push ds
+     ax=w:cs:reg_sel;ds=ax;esi=x_data_start;ecx=d:[0]
+
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+         else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // ID not found
+     if (ebx==0xFFFFFFFF){
+        pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
+        ax=err_sys_integrity
+        jmp set_cf
+     }
+
+     // Get data type
+     ax=w:[~esi.x_attr]&x_attr_type;
+     if(ax!=0){
+
+        // Save data block
+        push esi
+        ecx=d:[~esi.x_dw];
+        xor eax,eax;ax=w:[~esi.x_nsize]+x_size;
+        esi=+eax
+        rep movsb
+        pop esi
+
+     }
+
+     eax=d:[~esi.x_dw]
+     pop ds;pop esi;pop edi;pop ecx;pop ebx;esp=+4
+     iret
+
+exc20_r4:
+    cmp ah,0x44 ; jz set_reg_key_data
+    jmp exc20_r5
+
   // 5. Set reg_key data
-  // 6. Get Next reg_key
-  // 7. Get Sub reg_key
-  // 8. Get Root reg_key
+  // In:  ah = 0x44
+  //      al = 0(dw) or 1(dat)
+  //      ebx = ID
+  //      0 : EDI <- dword
+  //      1 : DS:ESI <- buffer, cx = size
+  set_reg_key_data:
+     push eax;push ebx;push ecx;push edi;push es;push esi;push ds;push eax;push ecx
+     ax=w:cs:reg_sel;ds=ax;esi=x_data_start;ecx=d:[0]
+
+     // Search for ID==ebx (ecx=total_num_of_entries ; ds:esi ptr to start)
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+          else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // ID not found
+     if (ebx==0xFFFFFFFF){
+        pop ecx;pop eax;pop ds;pop esi;pop es;pop edi;pop ecx;pop ebx;pop eax
+        ax=err_wrong_id
+        jmp set_cf
+     }
+
+     // Check rights
+     push ebp;mov ebp,esp;ax=w:[~ebp.44];ebx=eax;and ax,3;pop ebp
+     ah=al;al=b:[~esi.x_attr]&x_attr_access
+     if(al<ah){
+        pop ds;pop esi;pop ecx;pop ebx;pop eax
+        ax=err_access_denied
+        jmp set_cf
+     }
+
+     // Delete OLD data if present
+     ax=w:[~esi.x_attr]&x_attr_type;
+     if (ax!=0&&d:[~esi.x_dw]!=0){
+
+        // Set EDI to end of structure
+        push edi;push esi;esi=x_data_start;ecx=d:[0]
+        {ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+          else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}esi=+eax;loop ?^0}
+        edi=esi;pop esi
+
+        // prepeare to transmit data
+        push esi;push es;ax=ds;es=ax;xor eax,eax
+        ax=w:[~esi.x_nsize]+x_size;ecx=d:[~esi.x_dw];esi=+eax
+        xchg esi,edi;eax=ecx;ecx=esi-edi-eax;esi=edi+eax
+
+        // DEBUG: eax=edi;ebx=esi;ebp=ecx;jmp debug
+
+        rep movsb
+        pop es;pop esi;pop edi
+     }
+
+     // Save data
+     pop ecx;pop eax
+     ifelse (al==0){
+
+        // Just DWORD => save it
+        d:[~esi.x_dw]=edi
+        and w:[~esi.x_attr],0xFFFF-x_attr_type
+
+     } else {
+
+        // String or DATA => Allocate space for new data (ecx=size)
+        push ecx;push esi;push ecx;ax=ds;es=ax;xor edi,edi;
+        di=w:[~esi.x_nsize]+x_name;edi=+esi;
+
+        // Set ESI to end of structure
+        esi=x_data_start;ecx=d:[0]
+        {ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+          else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}esi=+eax;loop ?^0}
+
+        // Prepeare to move structure
+        pop ecx;eax=esi-edi;edi=esi+ecx;ecx=eax;edi=--;esi=--;std
+
+        rep movsb
+        pop esi;pop ecx
+
+        // Save attr type
+        and w:[~esi.x_attr],0xFFFF-x_attr_type
+        w:[~esi.x_attr]=|x_attr_type
+
+        // Save it's size, pos ES:EDI to mem
+        d:[~esi.x_dw]=ecx;xor edi,edi;di=w:[~esi.x_nsize]+x_name;edi=+esi
+
+        // Move DATA
+        pop ds;pop esi;push esi;push ds
+        cld;rep movsb
+     }
+
+     pop ds;pop esi;pop es;pop edi;pop ecx;pop ebx;pop eax
+     iret
+
+exc20_r5:
+    cmp ah,0x45 ; jz get_next_reg_key
+    jmp exc20_r6
+
+  // 6. Get next/sub/up reg_key
+  //  In:  ah  = 0x45
+  //       al  = +1(next),+2(sub),+4(up)
+  //       ebx = ID
+  //  Out: eax = Next, edx = sub, edi = up
+  get_next_reg_key:
+     push ebx;push ecx;push esi;push ds;push eax
+     ax=w:cs:reg_sel;ds=ax;ecx=d:[0];esi=x_data_start
+
+     // Search for ID==ebx (ecx=total_num_of_entries ; ds:esi ptr to start)
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+          else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // ID not found
+     if (ebx==0xFFFFFFFF){
+        pop eax;pop ds;pop esi;pop ecx;pop ebx
+        ax=err_wrong_id
+        jmp set_cf
+     }
+
+     pop eax
+     cx=ax;and ax,4
+     if (ax!=0){ edi=d:[~esi.x_up] }
+     ax=cx;and ax,2
+     if (ax!=0){ edx=d:[~esi.x_sub] }
+     ax=cx;and ax,1
+     if (ax!=0){ eax=d:[~esi.x_next] }
+
+     pop ds;pop esi;pop ecx;pop ebx
+     iret
+
+exc20_r6:
+    cmp ah,0x46 ; jz get_reg_name
+    jmp exc20_p0
+
+  // 7. Get register key name
+  //  In:  ah  = 0x46
+  //       ebx = ID
+  //  Out: ES:EDI <- buffer, eax = size
+  get_reg_name:
+     push eax;push ebx;push ecx;push edi;push esi;push ds
+     ax=w:cs:reg_sel;ds=ax;esi=x_data_start;ecx=d:[0]
+
+     {
+       if (ebx==d:[~esi.x_id]){ jmp ?v1 }
+       ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
+         else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}
+       esi=+eax;loop ?^0
+       xor ebx,ebx;dec ebx
+     }
+
+     // ID not found
+     if (ebx==0xFFFFFFFF){
+        pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
+        ax=err_sys_integrity
+        jmp set_cf
+     }
+
+     // Save name of register block
+     push esi
+     xor ecx,ecx;cx=w:[~esi.x_nsize];esi=+x_size
+     rep movsb
+     pop esi
+
+     xor eax,eax;ax=w:[~esi.x_nsize]
+     pop ds;pop esi;pop edi;pop ecx;pop ebx;esp=+4
+     iret
+
+reg_sel: dw 0
 
  // Registry initialization part
 reg_init:
 
+   push es
+   ah=6;ebx=1;int 0x20
+   es=ax;w:[reg_sel]=ax;xor edi,edi
+
+   // Create ROOT (FLAG=1 ; ID=0 ; NEXT=-1 ; SUB =-1; UP=-1)
+   eax=1;stosd;ax=5;stosw;xor eax,eax;stosd
+   dec eax;stosd;stosd;xor eax,eax;inc eax;stosw;dec eax;dec eax;
+   stosd;inc eax;stosd;eax='root';stosd;xor eax,eax;stosd
+   pop es
+
+   // Create basic registers
+   ax=mem_kernel_data;ds=ax
+   xor ebx,ebx;ax=0x4001;esi=breg1;int 0x20
+   xor ebx,ebx;ax=0x4000;esi=breg2;int 0x20
+   xor ebx,ebx;ax=0x4001;esi=breg3;int 0x20
+   xor ebx,ebx;ax=0x4003;esi=breg4;int 0x20
+
    ret
+
+breg1: db "Device",0  // Driver info
+breg2: db "System",0  // Kernel info
+breg3: db "Process",0 // Process info
+breg4: db "Software",0 // Software

@@ -1,32 +1,27 @@
  // ChaOS kernel Loader
-#shortdef debug_ 1
-#output .com
+#shortdef debug 1
+#output bin\chaos.com
 #org 0x100
 #code 16
-  #ifdef debug
-     jmp start
-     #include $crt.ch
-     start:
-  #endif
+  jmp start
+    #include crt.ch
+  start:
 
-  !cpr:db 13,10,"Starting ChaOS/alpha ...",13,10,36
-  ah=9;dx=cpr;int 0x21                 // Show copyright
+  printf("\nStarting ChaOS/alpha ...\n")
 
   !kern:db "kernel.bin",0
   ax=0x3D00;dx=kern;int 0x21;bx=ax     // Open kernel
 
   if (~c){
-    !error:db "ERROR: kernel file not found",13,10,36
-    ah=9;dx=error;int 0x21
+    printf("ERROR: kernel file not found\n")
     ret
   }
 
   ah=0x3F;cx=50000;dx=kernel;int 0x21  // Read kernel
   w:kern_size16=ax
 
-  if (~c||ax<5){
-    !error2:db "ERROR: kernel file damaged",13,10,36
-    ah=9;dx=error2;int 0x21
+  if (~c||ax<5000){
+    printf("ERROR: kernel file damaged\n")
     ret
   }
   ah=0x3E;int 0x21                     // Close
@@ -42,8 +37,6 @@
   bx=kernelloader;movzx ebx,bx;ebx=+eax
   d:kerloader_cs+2=|ebx           // Prepeare kerloader_cs
   d:kerloader_ds+2=|ebx           //          kerloader_ds
-
-  ebx=kernel;movzx ebx,bx;ebx=+eax
 
   cli
   lgdt  [forgdt]                  // Load GDT
@@ -77,69 +70,20 @@ oldseg:
   ax=cs;ds=ax;ss=ax;es=ax
   lidt [foridt]
 
-  // Dos call?
-  cmp bx,0
-  jnz dos_call
-
   // Close A20
   mov   al,0xD1
   out   0x64,al
   mov   al,0xDD
   out   0x60,al
 
-  !cpr2:db "ChaOS/alpha finished",13,10,36
-  ah=9;dx=cpr2;int 0x21
+  if (ecx==1){
+    printf("Exeption \H at \H : \H\n",esi,edi,ebp)
+  }
+
+  printf("ChaOS/alpha finished\n")
 
   sti
   ret
-
-dos_call:
-
-  sti
-
-  // Save ret addr
-  w:dos_ret_addr=bx
-
-  // Prepeare (dx,si - 1 ; di - 2 ; ax,bx,cx - init)
-  dx=dos_mem;si=dx;di=dos_mem2
-  ax=w:dos_ax;bx=w:dos_bx;cx=w:dos_cx
-  if (w:dos_dx!=0xFFFF){dx=w:dos_dx}
-  clc
-
-  #ifdef debug
-    jnc _notcarry1
-    write("C: ")
-  _notcarry1:
-    pushf
-    printf("REG: \h \h \h \h \h \h SEG: \h \h FL: \h \n",ax,bx,cx,dx,si,di,ds,es)
-  #endif
-
-  // Dos call
-  int 0x21
-
-  #ifdef debug
-    jnc _notcarry2
-    write("C: ")
-  _notcarry2:
-    pushf
-    printf("OUT: \h \h \h \h \h \h SEG: \h \h FL: \h \n",ax,bx,cx,dx,si,di,ds,es)
-  #endif
-
-  // Save ax & flags
-  w:dos_ax=ax;
-  xor ax,ax;if (~c){ dec ax }
-  w:dos_bx=ax
-
-  cli
-
-  // Prepeare and Return
-  lidt [foridt32+kernelloader]
-  lgdt [forgdt32+kernelloader]
-  eax=0x121000;cr3=eax
-
-  eax=cr0;or eax,0x80000001;cr0=eax
-#shortdef dos_ret_addr $+1
-  jmpf  0,0x8
 
 dos_vm_call:
 
@@ -160,8 +104,6 @@ kerloader_ds:
   dw 0FFFF,0,0x9200,0        // Data
 kerloader_es:
   dw 255,0,0x9210,0x80       // Memory (at 1Mb, size: 1Mb)
- //kerloader_sc:
- //  dw 4095,0x8000,0x920B,0    // Screen
 
 #shortdef gdt_size_16 $-mgdt-1
 
@@ -251,13 +193,3 @@ kern_size32:
 // Here we load kernel
 #shortdef kernel   kernelloader+$
 #shortdef kernel32 $
-
-// Dos Call
-#shortdef dos_ax   kernel
-#shortdef dos_bx   kernel+2
-#shortdef dos_cx   kernel+4
-#shortdef dos_dx   kernel+6
-#shortdef dos_si   kernel+8
-#shortdef dos_di   kernel+10
-#shortdef dos_mem  kernel+12
-#shortdef dos_mem2 dos_mem+128

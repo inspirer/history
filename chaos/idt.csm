@@ -1,35 +1,35 @@
  // Interrupt descriptor table for ChaOS kernel
 
  // Exc00 : Division by zero
- dw oth_exc,8
+ dw exc_00,8
  db 0,0xEE,0,0
 
  // Exc01 : Debug exeption
- dw oth_exc,8
+ dw exc_01,8
  db 0,0xEE,0,0
 
  // Exc02 : NMI
- dw oth_exc,8
+ dw exc_02,8
  db 0,0xEE,0,0
 
  // Exc03 : Break point
- dw oth_exc,8
+ dw exc_03,8
  db 0,0xEE,0,0
 
  // Exc04 : Overflow
- dw oth_exc,8
+ dw exc_04,8
  db 0,0xEE,0,0
 
  // Exc05 : BOUND error
- dw oth_exc,8
+ dw exc_05,8
  db 0,0xEE,0,0
 
  // Exc06 : Invalide opcode
- dw oth_exc,8
+ dw exc_06,8
  db 0,0xEE,0,0
 
  // Exc07 : Device not ready
- dw oth_exc,8
+ dw exc_07,8
  db 0,0xEE,0,0
 
  // Exc08 : Double fault
@@ -37,7 +37,7 @@
  db 0,0xEE,0,0
 
  // Exc09 : ??? (reserved by intel)
- dw oth_exc,8
+ dw exc_09,8
  db 0,0xEE,0,0
 
  // Exc0A : Wrong TSS
@@ -61,15 +61,15 @@
  db 0,0xEE,0,0
 
  // Exc0F : ??? (reserved by intel)
- dw oth_exc,8
+ dw exc_0F,8
  db 0,0xEE,0,0
 
  // Exc10 : FPU error
- dw oth_exc,8
+ dw exc_10,8
  db 0,0xEE,0,0
 
  // Exc11 : BOUND
- dw oth_exc,8
+ dw exc_11,8
  db 0,0xEE,0,0
 
  // Exc12 : ??? (reserved by intel)
@@ -129,61 +129,34 @@
  db 0,0xEE,0,0
 
  // Int20 : kernel functions
- dw exc_20,8
+ dw int_20,8
  db 0,0xEE,0,0
 
  // Int21 : File system functions
- dw exc_21,8
+ dw int_21,8
  db 0,0xEE,0,0
 
  // Int22 : kernel for Driver's
- dw exc_22,8
+ dw int_22,8
  db 0,0xEE,0,0
 
  // Int23-Int6F
  dd [154]
 
- // Int70 : RTC
- dw rtc,8
+ // Int70-Int75
+ dd [12]
+
+ // Int76 : HDD1
+ dw int_76,8
  db 0,0xEE,0,0
 
- // Int71-Int75
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
+ // Int77 : HDD2
+ dw int_77,8
  db 0,0xEE,0,0
 
- // Exc76 : HDD1
- dw int76,8
+ // Int78 : Timer interrupt
+ dw int_78,8
  db 0,0xEE,0,0
 
- // Exc77 : HDD2
- dw oth_exc,8
- db 0,0xEE,0,0
-
- // Exc78 : Timer interrupt
- dw timer_int,8
- db 0,0xEE,0,0
-
- // Exc79 : Keyboard interrupt
- dw keyb_int,8
- db 0,0xEE,0,0
-
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
- dw oth_exc,8
- db 0,0xEE,0,0
+ // Int79-Int7F
+ dd [14]

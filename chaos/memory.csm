@@ -13,23 +13,28 @@
 #shortdef fixed_page 1024
 
  // ErrorCodes
-#shortdef err_no_free_desc 1
-#shortdef err_no_free_memory 2
-#shortdef err_no_support 3
+#shortdef err_no_free_desc     1
+#shortdef err_no_free_memory   2
+#shortdef err_no_support       3
 #shortdef err_no_free_LDT_desc 4
-#shortdef err_wrong_info 5
-#shortdef err_access_denied 6
-#shortdef err_too_much_tasks 7
+#shortdef err_wrong_info       5
+#shortdef err_access_denied    6
+#shortdef err_too_much_tasks   7
+#shortdef err_not_killed       8
+#shortdef err_already_used     9
+#shortdef err_wrong_id         10
+#shortdef err_sys_integrity    11
+#shortdef err_wrong_regname    12
+#shortdef err_reg_key_has_sub  13
 
-   exc_20:
+   int_20:
 
       // Clear CF
       clc;push ebp
       mov ebp,esp
       and b:[~ebp+12],0xFE
       pop ebp
-      cmp ah,0
-      jz allocate_memory
+      cmp ah,0 ; jz allocate_memory
       jmp exc20_r0
 
    //   1. Allocate memory
@@ -39,6 +44,10 @@
    //     Out: CF set on error (not enough memory, free desc. absent)
    //          ax  = SEG of block
    allocate_memory:
+
+      // ring3 can allocate only for ring3
+      check_first_ring()
+      if (~c){ al=0;clc }
 
       // Allocate Zero memory => error
       if (ebx==0){
@@ -66,9 +75,9 @@
       {
         // No free descriptor?
         if (esi=>edi){
-          ax=err_no_free_desc;pop ds;pop esi;b:[esi]=0x82
+          pop ds;pop esi;b:[esi]=0x82
           pop ebp;pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
-          jmp set_cf
+          ax=err_no_free_desc;jmp set_cf
         }
         lodsd;lodsd
         ah=&0x80;cmp ah,0
@@ -215,6 +224,10 @@ exc20_n0:
    //          ax  = LDTNum
    allocate_ldt:
 
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
+
       // Save registers
       push ds;push esi;push ecx;push edi;push edx;push ebx;push ebp
 
@@ -254,11 +267,15 @@ exc20_n1:
    //     Out: CF set on error
    free_ldt:
 
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
+
       // Save registers
       push ds;push esi;push ecx;push edx;push ebx;push eax
 
       // Set LDT as data
-      xor esi,esi;si=bx&0xF8;esi=+0x800
+      xor esi,esi;and bx,0xF8;si=bx;esi=+0x800
       ax=mem_idt_gdt_data;ds=ax
       lodsd;lodsd;
 
@@ -274,8 +291,8 @@ exc20_n1:
       xor ecx,ecx;mov cx,w:[~esi-8];ecx=++
       ecx=<<9
 
-      // Get LDTData descr
-      push bx;push ds
+      // Get LDT descr
+      push ebx;push ds
       ds=bx;xor esi,esi
 
       // Free each entry in LDT
@@ -299,19 +316,21 @@ exc20_n1:
           xor eax,eax;d:[~esi-8]=eax;d:[~esi-4]=eax
 
           // Free pages (ecx = num_of_pages ; edx = location in table)
+          push esi;push ds
           ax=mem_page_catalog;ds=ax;esi=edx
           {
             lodsd;and ax,0xFFFF-busy_page
             mov d:ds:[~esi-4],eax
             loop ?^0
           }
+          pop ds;pop esi
         }
         pop ecx
         loop ?^0
       }
 
-      // Free LDT & read page's catalog
-      pop ds;pop dx;ah=8;int 0x20
+      // Free LDT & reread page's catalog
+      pop ds;pop edx;ah=8;int 0x20
 
       // Restore registers
       pop eax;pop ebx;pop edx;pop ecx;pop esi;pop ds
@@ -322,10 +341,11 @@ exc20_n1:
    //          bx  = LDTNum
    load_ldt:
 
-      // Check is it LDT
-      // ????
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
 
-      // Check if program has rights to do this
+      // Save in TSS
       // ????
 
       lldt bx
@@ -342,6 +362,10 @@ exc20_n2:
    //   Out: CF set on error (not enough memory, free desc. absent)
    //        ax  = SEG of global
    mem_alloc_global:
+
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
 
       // if size=0 => error
       if (ebx==0){
@@ -430,6 +454,10 @@ exc20_n3:
    //   Out: CF set on error (not enough memory)
 
    mem_resize_global:
+
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
 
       push ds;push esi;push edi;push eax;push ecx;push edx
 
@@ -528,6 +556,10 @@ exc20_n4:
 
    mem_free_global:
 
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
+
       push ds;push esi;push ecx;push edx;push eax
 
       // memory location
@@ -585,6 +617,7 @@ exc20_n5:
 
    exc20_n6:
       cmp ah,0xA;jz mem_get_free_info
+      cmp ah,0xB;jz mem_map_global
       ax=err_no_support
    set_cf:
       push ebp
@@ -616,7 +649,117 @@ exc20_n5:
 
       iret
 
+   // 12. Map global to phys address
+   //   In:  ah  = 0xB
+   //        ebx = memory_to_MAP address
+   //        dx  = global selector
+   //   Out: CF set if impossible
+   mem_map_global:
+
+      // check
+      check_first_ring()
+      if (~c){ ax=err_access_denied;jmp set_cf }
+
+      // Save regs
+      push ds;push es;push esi;push edi;push edx;push ecx;push ebx;push eax
+
+      // memory location
+      ax=mem_idt_gdt_data;ds=ax
+      ax=mem_all_data;es=ax
+      xor esi,esi;si=dx&0xF8
+      esi=+0x800;and ebx,0xFFFFF000
+
+      // If it's not global => error
+      mov al,b:[~esi+5];and al,0x9E
+      if (al!=0x92){
+         pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
+         ax=err_wrong_info
+         jmp set_cf
+      }
+
+      // Save location & limit
+      lodsw;cx=ax;ecx=<<16
+      lodsw;dx=ax;edx=<<16
+      lodsb;dl=al
+      lodsb;lodsb;cl=al&15
+      lodsb;dh=al
+      ecx=<16+1;edx=<16>>10 + 4096
+
+      // Check for system integrity
+      ax=mem_page_catalog;ds=ax;esi=edx
+      push esi;push ebx;push ecx
+      while(ecx>0){
+        xor eax,eax;xor esi,esi;dec eax
+        edi=cs:d:mem_size<<2+4096
+        while(esi<edi&&eax!=ebx){
+          lodsd;and eax,0xFFFFF000+fixed_page
+        } esi=-4
+
+        if (eax!=ebx){
+          esp=+12;pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
+          ax=err_access_denied
+          jmp set_cf
+        }
+        ebx=+4096
+        ecx=--
+      }
+      pop ecx;pop ebx;pop esi
+
+      // fix pages (ecx = limit ; esi = location in table ; ebx = dest)
+      _while(ecx>0){
+
+        lodsd
+
+        // Search for page with base=ebx
+        push esi;push eax
+
+        xor eax,eax;xor esi,esi
+        edi=cs:d:mem_size<<2+4096 // <- pointer to end of memory
+        while(esi<edi&&eax!=ebx){
+          lodsd;and eax,0xFFFFF000
+        } esi=-4
+
+        // Not found
+        if (eax!=ebx){
+          esp=+8;pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
+          ax=err_sys_integrity
+          jmp set_cf
+        }
+
+        // Found at ESI
+        pop eax;pop edi;push edi;push esi;push eax
+
+        // Move data ESI => EDI (4096)
+        push ecx;edi=-4;esi=d:[esi];edi=d:[edi];ecx=1024
+        and edi,0xFFFFF000;and esi,0xFFFFF000
+        push ds;push es;pop ds;rep movsd;pop ds;pop ecx
+
+        // Save new base for hard page (r/w,user,present)
+        pop eax;pop esi;push d:[esi];eax=+7;d:[esi]=eax
+
+        // Save new base for our page
+        pop eax;pop esi
+        or eax,busy_page+fixed_page
+        mov d:ds:[~esi-4],eax
+        ebx=+4096
+        ecx=--
+      }
+
+      // reread page's catalog
+      eax=cr3;cr3=eax
+
+      // Restore registers
+      pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
+      iret
+
    mem_base:
      dd 0     // Memory base pointer (in pages)
    mem_size:
      dd 512   // Minimal size for work = 2Mb (in pages)
+
+ check_first_ring:
+      push ebp;mov ebp,esp;push eax
+      eax=d:[~ebp.12];and ax,3
+      ifelse (al<=1){ clc } else { stc }
+      pop eax;pop ebp
+      ret

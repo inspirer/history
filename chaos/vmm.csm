@@ -19,8 +19,8 @@
  gpf: // General Protection fault (PM)
    pop  ebx
    shl  ebx,16
-   pop  eax
    pop  ebp
+   pop  eax
    mov  bx,0xD
    jmp  debug
 
@@ -40,7 +40,7 @@
    movzx ebx,w:fs:[eax]
 
    // int_XX cmd?
-   ifelse (bl==0xCD&&bh!=0xFF){
+   if (bl==0xCD&&bh!=0xFF){
 
      shr ebx,8
      add w:[ebp.vm_ip],2     // Skip int_XX
@@ -69,87 +69,84 @@
      esp=+4
      iret
 
-   } else {
-
-     // Return from VM task to host
-     if (bl==0xCD){
-        pushf
-        pop ecx
-        or ecx,0x4000
-        push ecx
-        popf;pop ebx;pop eax
-        movzx ebx,w:[ebp.vm_fl]
-        iret
-     }
-
-     // Emulate IRET (0xCF)
-     if (bl==0xCF){
-
-        movzx eax,w:[ebp.vm_ss]
-        shl eax,4
-        add eax,d:[ebp.vm_sp]
-        add w:[ebp.vm_sp],6     // Get stack top & set new
-
-        mov ebx,d:fs:[eax]
-        mov w:[ebp.vm_ip],bx    // CS:IP
-        shr ebx,16
-        mov w:[ebp.vm_cs],bx
-        mov bx,w:fs:[eax.4]    // FLAGS
-        and bx,0xFDFF
-        mov w:[ebp.vm_fl],bx
-        jmp clear_return
-     }
-
-     // Cli
-     if (bl==0xFA){
-        add w:[ebp.vm_ip],1
-        and w:[ebp.vm_fl],0xFDFF
-        jmp clear_return
-     }
-
-     // Sti
-     if (bl==0xFB){
-        add w:[ebp.vm_ip],1
-        or w:[ebp.vm_fl],0x200
-        jmp clear_return
-     }
-
-     // Pushf
-     if (bl==0x9C){
-        add w:[ebp.vm_ip],1
-        sub d:[ebp.vm_sp],2     // Get stack top & set new sp
-        movzx eax,w:[ebp.vm_ss]
-        shl eax,4
-        add eax,d:[ebp.vm_sp]
-
-        mov bx,w:[ebp.vm_fl]    // Save flags
-        mov w:fs:[eax],bx
-        jmp clear_return
-     }
-
-     // Popf
-     if (bl==0x9D){
-        add w:[ebp.vm_ip],1
-        movzx eax,w:[ebp.vm_ss]
-        shl eax,4
-        add eax,d:[ebp.vm_sp]
-        add w:[ebp.vm_sp],2     // Get stack top & set new
-
-        mov bx,w:fs:[eax]
-        and bx,0xFDFF
-        mov w:[ebp.vm_fl],bx    // New flags
-        jmp clear_return
-     }
-
-     // BUG in VM (gpf instructions)
-     mov eax,d:[ebp.vm_ip]
-     movzx ebx,w:[ebp.vm_cs]
-     edx=ebx<<4+eax
-     ebp=d:fs:[edx]
-     ebp = 0xFABEA1
-     jmp debug
-
    }
+
+   // Return from VM task to host
+   if (bl==0xCD){
+      pushf
+      pop ecx
+      or ecx,0x4000
+      push ecx
+      popf;pop ebx;pop eax
+      movzx ebx,w:[ebp.vm_fl]
+      iret
+   }
+
+   // Emulate IRET (0xCF)
+   if (bl==0xCF){
+
+      movzx eax,w:[ebp.vm_ss]
+      shl eax,4
+      add eax,d:[ebp.vm_sp]
+      add w:[ebp.vm_sp],6     // Get stack top & set new
+
+      mov ebx,d:fs:[eax]
+      mov w:[ebp.vm_ip],bx    // CS:IP
+      shr ebx,16
+      mov w:[ebp.vm_cs],bx
+      mov bx,w:fs:[eax.4]    // FLAGS
+      mov w:[ebp.vm_fl],bx
+      jmp clear_return
+   }
+
+   // Cli
+   if (bl==0xFA){
+      add w:[ebp.vm_ip],1
+      and w:[ebp.vm_fl],0xFDFF
+      jmp clear_return
+   }
+
+   // Sti
+   if (bl==0xFB){
+      add w:[ebp.vm_ip],1
+      or w:[ebp.vm_fl],0x200
+      jmp clear_return
+   }
+
+   // Pushf
+   if (bl==0x9C){
+      add w:[ebp.vm_ip],1
+      sub d:[ebp.vm_sp],2     // Get stack top & set new sp
+      movzx eax,w:[ebp.vm_ss]
+      shl eax,4
+      add eax,d:[ebp.vm_sp]
+
+      mov bx,w:[ebp.vm_fl]    // Save flags
+      mov w:fs:[eax],bx
+      jmp clear_return
+   }
+
+   // Popf
+   if (bl==0x9D){
+      add w:[ebp.vm_ip],1
+      movzx eax,w:[ebp.vm_ss]
+      shl eax,4
+      add eax,d:[ebp.vm_sp]
+      add w:[ebp.vm_sp],2     // Get stack top & set new
+
+      mov bx,w:fs:[eax]
+      mov w:[ebp.vm_fl],bx    // New flags
+      jmp clear_return
+   }
+
+   // BUG in VM (gpf instructions)
+   mov eax,d:[ebp.vm_ip]
+   movzx ebx,w:[ebp.vm_cs]
+   edx=ebx<<4+eax
+   ebp=d:fs:[edx]
+   ebp = 0xFABEA1
+   jmp debug
+
 
  // Init main virtual mode task
 init_VM_task:
@@ -232,7 +229,7 @@ call_VM_task:
 
    // Return TSS type
    pop esi;pop ds;b:[esi]=0x89
-   ax=mem_kernel_data;es=ax
+   ax=mem_kernel_data;nop;nop;es=ax
 
    // Call VM00
    sldt ax
