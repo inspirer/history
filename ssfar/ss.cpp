@@ -30,17 +30,21 @@ BSTR char_2_BSTR( char *src ) {
 
 SS::SS( int of, int item ) 
 {
+	InitializeCriticalSection( &cs );
 	strcpy( cdir, "$\\" );
 	if( of == OPEN_COMMANDLINE ) {
 		if( !strncmp( "$\\", (char*)item, 2 ) ) {
 			strcpy( cdir, (char *) item );
 			split_cdir();
-			try_to_change = 1;
-			BOOL changed = GetFindData( NULL, NULL, 0 );
-			if( !changed ) {
-				MsgBox( "wrong path", (char *)item );
-				strcpy( cdir, "$\\" );
-				split_cdir();
+
+			if( strcmp( cdir, "$\\" ) ) {
+				try_to_change = 1;
+				BOOL changed = GetFindData( NULL, NULL, 0 );
+				if( !changed ) {
+					MsgBox( "wrong path", (char *)item );
+					strcpy( cdir, "$\\" );
+					split_cdir();
+				}
 			}
 
 		} else
@@ -53,6 +57,7 @@ SS::SS( int of, int item )
 
 SS::~SS() 
 {
+	DeleteCriticalSection( &cs );
 }
 
 
@@ -60,8 +65,15 @@ int SS::db_connect()
 {
 	HRESULT h;
 
+restart:
 	if( !*ssini )
 		return FALSE;
+
+	static __declspec(thread) int cominit = 0;
+	if( !cominit ) {
+		::CoInitialize(NULL);
+		cominit = 1;
+	}
 
 	if( FAILED(h=CoCreateInstance(__uuidof(VSSDatabase),0,CLSCTX_ALL,__uuidof(IVSSDatabase),(void**)&db)) ) {
 		char *msg = (char *)m_malloc( 1024 );
@@ -154,8 +166,10 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		return TRUE;
 	}
 
-	if( !db_connect() )
+	if( !db_connect() ) {
+		MsgBox( "wrong", try_to_change ? "change" : "wrong" );
 		return FALSE;
+	}
 
 	l = char_2_BSTR( cpath );
 	h = db->get_VSSItem( l, false, &item );
@@ -242,7 +256,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		p->FindData.dwFileAttributes = ( VSSITEM_FILE == type ) ? 0 : FILE_ATTRIBUTE_DIRECTORY;
 
 		p->CustomColumnData = (LPSTR*)m_malloc(sizeof(LPSTR)*2);
-		if( co ) {
+		if( co && !(OpMode&OPM_FIND) ) {
 			IVSSCheckouts *couts;
 			IVSSCheckout *cot;
 
@@ -365,14 +379,14 @@ void SS::GetOpenPluginInfo( struct OpenPluginInfo *info )
 		info->PanelModesNumber = sizeof(PanelModesArray)/sizeof(PanelModesArray[0]);
 		info->StartPanelMode = '3';
 
-		FSF.sprintf(Title," SS: %s, %s ", cdbname, cpath );
-		kb.Titles[5-1] = "Get";
-		kb.Titles[6-1] = "ChkOut";
-		kb.Titles[7-1] = "MkProj";
-		kb.Titles[8-1] = "Remove";
-		kb.CtrlTitles[5-1] = "ChckIn";
-		kb.CtrlTitles[6-1] = "UndoCO";
-		kb.CtrlTitles[7-1] = "Commnt";
+		FSF.sprintf( Title, MSG(msg_title_nonroot), cdbname, cpath );
+		kb.Titles[5-1] = MSG(msg_kb5);
+		kb.Titles[6-1] = MSG(msg_kb6);
+		kb.Titles[7-1] = MSG(msg_kb7);
+		kb.Titles[8-1] = MSG(msg_kb8);
+		kb.CtrlTitles[5-1] = MSG(msg_kb_c5);
+		kb.CtrlTitles[6-1] = MSG(msg_kb_c6);
+		kb.CtrlTitles[7-1] = MSG(msg_kb_c7);
 		kb.CtrlTitles[8-1] = "";
 
 	} else {
@@ -380,13 +394,13 @@ void SS::GetOpenPluginInfo( struct OpenPluginInfo *info )
 		info->PanelModesNumber = sizeof(PanelModesArrayRoot)/sizeof(PanelModesArrayRoot[0]);
 		info->StartPanelMode = '3';
 
-		FSF.sprintf(Title," SS: list " );
+		strcpy( Title, MSG(msg_title_root) );
 		kb.Titles[3-1] = "";
-		kb.Titles[4-1] = "Modify";
+		kb.Titles[4-1] = MSG(msg_kb_root4);
 		kb.Titles[5-1] = "";
 		kb.Titles[6-1] = "";
-		kb.Titles[7-1] = "Create";
-		kb.Titles[8-1] = "Remove";
+		kb.Titles[7-1] = MSG(msg_kb_root7);
+		kb.Titles[8-1] = MSG(msg_kb_root8);
 	}
 }
 
@@ -475,8 +489,10 @@ enum {
 	CheckIn,            //     -- " --
 	UndoCO,
 	Remove,
+	Destroy,
 	ShowComment,
 	AddFile,
+	MakeDir,
 };
 
 
@@ -586,6 +602,32 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			item->Release();
 			return FALSE;
 		}
+
+	} else if( type == Destroy ) {
+
+		h = item->raw_Destroy();
+		if( FAILED(h) ) {
+			MsgBox( "Destroy failed", file );
+			item->Release();
+			return FALSE;
+		}
+
+	} else if( type == MakeDir ) {
+
+		IVSSItem *it;
+
+		l = char_2_BSTR( dest ); 
+		cm = char_2_BSTR( comment );
+		h = item->raw_NewSubproject( l, cm, &it );
+		SysFreeString( cm );
+		SysFreeString( l );
+		if( FAILED(h) ) {
+			MsgBox( "NewSubproject failed", dest );
+			item->Release();
+			return FALSE;
+		}
+
+		it->Release();
 
 	} else if( type == CheckIn ) {
 
@@ -755,8 +797,10 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 		}
 	}
 
-	if( !db_connect() )
+	if( !db_connect() ) {
+		destroy_fdlg( &dlg );
 		return FALSE;
+	}
 
 	for( int i = 0; i < ItemsNumber; i++ ) {
 		char *name = PanelItem[i].FindData.cFileName;
@@ -835,8 +879,10 @@ int SS::PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, 
 
 		int ec = process_fdlg( &dlg );
 
-		if( ec < 0 || ec == id_cancel )
+		if( ec < 0 || ec == id_cancel ) {
+			destroy_fdlg( &dlg );
 			return FALSE;
+		}
 
 		Dest = dlg.di[id_dest].Data;
 		comments = dlg.di[id_cmnt].Data;
@@ -847,8 +893,10 @@ int SS::PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, 
 			flags |= VSSFLAG_KEEPYES;
 	}
 
-	if( !db_connect() )
+	if( !db_connect() ) {
+		destroy_fdlg( &dlg );
 		return FALSE;
+	}
 
 	for( int i = 0; i < ItemsNumber; i++ ) {
 		char *name = PanelItem[i].FindData.cFileName;
@@ -885,7 +933,76 @@ int SS::PutFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int Move, 
 
 int SS::DeleteFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int OpMode )
 {
-	return FALSE;
+	/////////////////////// Delete Dialog
+	static int id_perm, id_fname, id_cancel, id_action;
+	static struct InitDialogItem items[] = {
+	 { DI_TEXT,       1,0,0,0,		0,0,DIF_CENTERGROUP,0,(char *)msg_del_msg, &id_action },
+	 { DI_TEXT,       1,1,0,0,		0,0,DIF_CENTERGROUP,0,"", &id_fname },
+	 { DI_TEXT,       1,2,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_CHECKBOX,   1,3,0,0,		0,0,0,0,(char *)msg_del_perm, &id_perm },
+	 { DI_TEXT,       1,4,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_BUTTON,     0,5,0,0,		1,0,DIF_CENTERGROUP,0,(char*)msg_del_ok },
+	 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_del_cancel, &id_cancel },
+	};
+
+	FarDialog dlg;
+	int perm = 0;
+
+    dlg.di = NULL;
+	if( !strcmp( cdir, "$\\" ) || ItemsNumber < 1 )
+		return FALSE;
+
+	if( !(OpMode&OPM_SILENT) ) {
+
+		int w1 = max(strlen(PanelItem[0].FindData.cFileName),strlen(MSG(msg_del_msg)))+10;
+		int w2 = max(strlen(MSG(msg_del_several1)),strlen(MSG(msg_del_several2))+10)+10;
+		int w3 = max(strlen(MSG(msg_del_ok))+strlen(MSG(msg_del_cancel))+18,strlen(MSG(msg_del_perm)) + 14);
+		int width = max( ItemsNumber > 1 ? w2 : w1, w3 );
+
+		create_fdlg( &dlg, width, 10, msg_del_title, items, array_size( items ) );
+
+		GetRegKey( "", "del_perm", dlg.di[id_perm].Selected, 0 );
+
+		if( ItemsNumber > 1 ) {
+			FSF.sprintf( dlg.di[id_action].Data, MSG(msg_del_several1) );
+			FSF.sprintf( dlg.di[id_fname].Data, MSG(msg_del_several2), ItemsNumber );
+
+		} else
+			strcpy( dlg.di[id_fname].Data, PanelItem[0].FindData.cFileName );
+
+		int ec = process_fdlg( &dlg );
+
+		if( ec < 0 || ec == id_cancel ) {
+			destroy_fdlg( &dlg );
+			return FALSE;
+		}
+
+		SetRegKey( "", "del_perm", dlg.di[id_perm].Selected );
+		perm = dlg.di[id_perm].Selected;
+	}
+
+	if( !db_connect() ) {
+		destroy_fdlg( &dlg );
+		return FALSE;
+	}
+
+	for( int i = 0; i < ItemsNumber; i++ ) {
+		char *name = PanelItem[i].FindData.cFileName;
+
+		strcpy( tmp_dir, cpath );
+		strcat( tmp_dir, "\\" );
+		strcat( tmp_dir, name );
+
+		if( !perm )
+			FileOp( Remove, tmp_dir, NULL, NULL, 0 );
+		else 
+			FileOp( Destroy, tmp_dir, NULL, NULL, 0 );
+	}
+
+	db_disconnect();
+	destroy_fdlg( &dlg );
+
+	return TRUE;
 }
 
 
@@ -940,7 +1057,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 
 	} else if( ControlState == 0 && Key == VK_F8 && !strcmp( cdir, "$\\" ) ) {
 
-		const char *items[3] = { "Delete", "Do you wish to delete the entry", NULL };
+		const char *items[3] = { MSG(msg_dlgdel_title), MSG(msg_dlgdel_message), NULL };
 
 		items[2] = pi.PanelItems[pi.CurrentItem].FindData.cFileName;
 		int res = Info.Message( Info.ModuleNumber, FMSG_MB_YESNO, NULL, items, 3, 0 );
@@ -955,42 +1072,13 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 
 		return TRUE;
 
-	} else if( ControlState == 0 && Key == VK_F8 && strcmp( cdir, "$\\" ) ) {
-
-		if( pi.PanelItems[pi.CurrentItem].FindData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY )
-			return TRUE;
-
-		const char *items[3] = { "Delete", "Do you wish to delete the file", NULL };
-
-		items[2] = pi.PanelItems[pi.CurrentItem].FindData.cFileName;
-		int res = Info.Message( Info.ModuleNumber, FMSG_MB_YESNO, NULL, items, 3, 0 );
-
-		if( res != 0 )
-			return TRUE;
-
-		if( !db_connect() )
-			return TRUE;
-
-		strcpy( tmp_dir, cpath );
-		strcat( tmp_dir, "\\" );
-		strcat( tmp_dir, pi.PanelItems[pi.CurrentItem].FindData.cFileName );
-
-		FileOp( Remove, tmp_dir, NULL, NULL, 0 );
-
-		db_disconnect();
-
-		Info.Control( this, FCTL_UPDATEPANEL, NULL );
-		Info.Control( this, FCTL_REDRAWPANEL, NULL );
-
-		return TRUE;
-
 	} else if( ControlState == PKF_CONTROL && Key == VK_F6 && strcmp( cdir, "$\\" ) ) {
 		if( !*pi.PanelItems[pi.CurrentItem].CustomColumnData[0] ) {
-			MsgBox( "Warning", "File is not checked out" );
+			MsgBox( MSG(msg_undoco_warn_title), MSG(msg_undoco_warn_msg) );
 			return TRUE;
 		}
 
-		const char *items[9] = { "Undo CheckOut", "Do you wish to undo the checkout", NULL, NULL, "", "Replace", "Leave", "Delete", "Cancel" };
+		const char *items[9] = { MSG(msg_undoco_title), MSG(msg_undoco_msg), NULL, NULL, "", MSG(msg_undoco_rep),MSG(msg_undoco_leave),MSG(msg_undoco_del),MSG(msg_undoco_cancel) };
 
 		items[2] = pi.PanelItems[pi.CurrentItem].FindData.cFileName;
 		items[3] = pi.PanelItems[pi.CurrentItem].CustomColumnData[0];
@@ -1035,7 +1123,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		return TRUE;
 	} else if( ControlState == PKF_CONTROL && Key == VK_F5 && strcmp( cdir, "$\\" ) ) {
 		if( !*pi.PanelItems[pi.CurrentItem].CustomColumnData[0] ) {
-			MsgBox( "Warning", "File is not checked out" );
+			MsgBox( MSG(msg_undoco_warn_title), MSG(msg_undoco_warn_msg) );
 			return TRUE;
 		}
 
@@ -1053,7 +1141,7 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		strcat( tmp_dir2, name );
 
 		HANDLE sc = Info.SaveScreen(0,0,-1,-1);
-		const char *msg[4] = { "CheckingIn", NULL, "to", NULL };
+		const char *msg[4] = { MSG(msg_ci_action), NULL, MSG(msg_ci_to), NULL };
 		msg[1] = tmp_dir2;
 		msg[3] = tmp_dir;
 		Info.Message( Info.ModuleNumber, 0, NULL, msg, 4, 0 );
@@ -1086,7 +1174,73 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		db_disconnect();
 
 		return TRUE;
+	} else if( ControlState == 0 && Key == VK_RETURN && pi.PanelItems[pi.CurrentItem].CustomColumnNumber == 2 &&
+		*pi.PanelItems[pi.CurrentItem].CustomColumnData[1] ) {
+
+		Info.Control( this, FCTL_SETANOTHERPANELDIR, pi.PanelItems[pi.CurrentItem].CustomColumnData[1] );
+		Info.Control( this, FCTL_UPDATEANOTHERPANEL, NULL );
+
+		PanelInfo pa;
+		Info.Control (this, FCTL_GETANOTHERPANELINFO, &pa );
+
+		for( int i = 0; i < pa.ItemsNumber; i++ ) 
+			if (!strcmpi( pa.PanelItems[i].FindData.cFileName, pi.PanelItems[pi.CurrentItem].FindData.cFileName)) {
+				PanelRedrawInfo info;
+				info.CurrentItem = i;
+				info.TopPanelItem = 0;
+				Info.Control( this, FCTL_REDRAWANOTHERPANEL, &info);
+      			break;
+			}
+		if( i == pi.ItemsNumber )
+			Info.Control( this, FCTL_REDRAWANOTHERPANEL, NULL );
 	}
 
 	return FALSE;
+}
+
+
+int SS::MakeDirectory( char *Name, int OpMode )
+{
+	char comment[MAX_PATH] = "";
+
+	if( !(OpMode&OPM_SILENT) ) {
+
+		FarDialog dlg;
+		static int id_name, id_cancel, id_cmnt;
+		static struct InitDialogItem items[] = {
+		 { DI_TEXT,       1,0,0,0,		0,0,0,0,(char*)msg_dir_name },
+		 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_dirname",DIF_HISTORY,0, "", &id_name },
+		 { DI_TEXT,       1,2,0,0,		0,0,0,0,(char*)msg_dir_cmnt },
+		 { DI_EDIT,       1,3,-2,0,		1,(int)"ss_dircmnt",DIF_HISTORY,0, "", &id_cmnt },
+		 { DI_TEXT,       1,4,0,0,		0,0,DIF_SEPARATOR,0,"" },
+		 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_create },
+		 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_cancel },
+		};
+
+		create_fdlg( &dlg, 70, 10, msg_createnew, items, array_size( items ) );
+		strcpy( dlg.di[id_name].Data, Name );
+		int ec = process_fdlg( &dlg );
+
+		if( ec < 0 || ec == id_cancel ) {
+			destroy_fdlg( &dlg );
+			return -1;
+		}
+
+		strcpy( Name, dlg.di[id_name].Data );
+		strncpy( comment, dlg.di[id_cmnt].Data,MAX_PATH );
+		comment[MAX_PATH-1] = 0;
+		destroy_fdlg( &dlg );
+	}
+
+	if( !*Name )
+		return -1;
+
+	if( !db_connect() )
+		return FALSE;
+
+	FileOp( MakeDir, cpath, Name, comment, 0 );
+
+	db_disconnect();
+
+	return TRUE;
 }

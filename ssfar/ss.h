@@ -101,18 +101,19 @@ private:
 	struct KeyBarTitles kb;
 
 public:
+    CRITICAL_SECTION cs;
 	struct list_of_id *db_found;	//
 	int db_count;					//   by GetFindData
 
 private:
 	int db_connect();
 	void db_disconnect();
+	void split_cdir( );
 
 public:
 	SS( int of, int item );
 	~SS();
 
-	void split_cdir( );
 	int GetFindData(PluginPanelItem **pPanelItem,int *pItemsNumber,int OpMode);
 	void FreeFindData(PluginPanelItem *PanelItem,int ItemsNumber);
 	void GetOpenPluginInfo(struct OpenPluginInfo *Info);
@@ -124,7 +125,7 @@ public:
 	int FileOp( int type, char *file, char *dest, char *comment, int flags );
 	int ProcessKey(int Key,unsigned int ControlState);
 	int DeleteFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int OpMode );
-
+	int MakeDirectory( char *Name, int OpMode );
 };
 
 void SetRegKey( const char *Key, const char *ValueName, char *ValueData );
@@ -137,12 +138,16 @@ int EnumRegKey( const char *key, void (*save)( char *name, char *val, void *data
 
 enum {
 	msg_plugin_name,
+	msg_title_nonroot,
+	msg_title_root,
 
 	msg_getss,
 	msg_checkout,
 	msg_checkin,
 	msg_createdb,
 	msg_modifydb,
+	msg_createnew,
+	msg_config,
 
 	msg_key_checkout,
 	msg_key_create,
@@ -180,6 +185,50 @@ enum {
 
 	msg_db_name,
 	msg_db_file,
+	msg_dir_name,
+	msg_dir_cmnt,
+
+	msg_dlgdel_title,
+	msg_dlgdel_message,
+	msg_dlgdel2_title,
+	msg_dlgdel2_message,
+
+	msg_undoco_warn_title,
+	msg_undoco_warn_msg,
+	msg_undoco_title,
+	msg_undoco_msg,
+	msg_undoco_rep,
+	msg_undoco_leave,
+	msg_undoco_del,
+	msg_undoco_cancel,
+
+	msg_ci_action,
+	msg_ci_to,
+
+	msg_del_title,
+	msg_del_msg,
+	msg_del_perm,
+	msg_del_ok,
+	msg_del_cancel,
+	msg_del_several1,
+	msg_del_several2,
+
+	msg_kb_root4,
+	msg_kb_root7,
+	msg_kb_root8,
+
+	msg_kb5,
+	msg_kb6,
+	msg_kb7,
+	msg_kb8,
+	msg_kb_c5,
+	msg_kb_c6,
+	msg_kb_c7,
+
+	msg_config_alloc,
+	msg_config_ok,
+	msg_config_can,
+	msg_config_prefix,
 };
 
 

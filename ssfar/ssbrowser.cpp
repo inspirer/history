@@ -9,7 +9,8 @@ FARSTANDARDFUNCTIONS FSF;				// Far standart functions
 char PluginRootKey[MAX_PATH];			// REGISTRY root key for plugin
 long allocated_blocks = 0;				// count of allocated memory blocks
 
-
+#define get_SS() EnterCriticalSection( &ss->cs );
+#define put_SS() LeaveCriticalSection( &ss->cs );
 
 int WINAPI _export GetMinFarVersion( void ) {
 
@@ -27,6 +28,7 @@ void WINAPI _export SetStartupInfo(const struct PluginStartupInfo *psi) {
 	FSF.sprintf( PluginRootKey, "%s\\SourceSafe", Info.RootKey );
 }
 
+char cmdprefix[256] = "ss";
 
 void WINAPI _export GetPluginInfo(struct PluginInfo *pi) {
 
@@ -45,7 +47,8 @@ void WINAPI _export GetPluginInfo(struct PluginInfo *pi) {
 	pi->PluginMenuStrings = plugin_name_ptr;
 	pi->PluginMenuStringsNumber = 1;
 
-	pi->CommandPrefix = "ss";
+	GetRegKey( "", "cmdline_prefix", cmdprefix, cmdprefix, 256 );
+	pi->CommandPrefix = cmdprefix;
 }
 
 
@@ -53,8 +56,35 @@ int WINAPI _export Configure( int ItemNumber )
 {
 	char s[128];
 
-	FSF.sprintf( s, "%i", allocated_blocks ); 
-	MsgBox( "Configure", s );
+	FarDialog dlg;
+	static int id_allocated, id_cancel, id_prefix;
+	static struct InitDialogItem items[] = {
+	 { DI_TEXT,       1,0,0,0,		0,0,0,0,(char*)msg_config_prefix },
+	 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_prefix",DIF_HISTORY,0, "", &id_prefix },
+
+	 { DI_TEXT,       1,3,0,0,		0,0,0,0,"",&id_allocated },
+
+	 { DI_TEXT,       1,4,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_config_ok },
+	 { DI_BUTTON,     0,5,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_config_can, &id_cancel },
+	};
+
+	create_fdlg( &dlg, 50, 10, msg_config, items, array_size( items ) );
+	FSF.sprintf( dlg.di[id_allocated].Data, MSG(msg_config_alloc), allocated_blocks ); 
+	GetRegKey( "", "cmdline_prefix", cmdprefix, cmdprefix, 256 );
+	strcpy( dlg.di[id_prefix].Data, cmdprefix );
+
+	int ec = process_fdlg( &dlg );
+
+	if( ec < 0 || ec == id_cancel ) {
+		destroy_fdlg( &dlg );
+		return FALSE;
+	}
+
+	strcpy( cmdprefix, dlg.di[id_prefix].Data );
+	SetRegKey( "", "cmdline_prefix", cmdprefix );
+	destroy_fdlg( &dlg );
+
 	return TRUE;
 }
 
@@ -62,87 +92,107 @@ int WINAPI _export GetFindData( HANDLE hPlugin, struct PluginPanelItem **pPanelI
 		int *pItemsNumber, int OpMode ) 
 {
 	SS *ss = (SS *)hPlugin;
-	//MSGBOX("Get");
-    return ss->GetFindData( pPanelItem, pItemsNumber, OpMode );
+	get_SS();
+    int res = ss->GetFindData( pPanelItem, pItemsNumber, OpMode );
+	put_SS();
+    return res;
 }
 
 
 void WINAPI _export FreeFindData( HANDLE hPlugin, struct PluginPanelItem *PanelItem, int ItemsNumber )
 {
 	SS *ss = (SS *)hPlugin;
-	//MSGBOX("Free");
+	get_SS();
     ss->FreeFindData( PanelItem, ItemsNumber );
+	put_SS();
 }
 
 
 void WINAPI _export GetOpenPluginInfo(HANDLE hPlugin,struct OpenPluginInfo *Info1)
 {
 	SS *ss = (SS *)hPlugin;
-	//MSGBOX("Info");
+	get_SS();
 	ss->GetOpenPluginInfo( Info1 );
+	put_SS();
 }
 
 
 int WINAPI _export SetDirectory(HANDLE hPlugin,const char *Dir,int OpMode)
 {
 	SS *ss = (SS *)hPlugin;
-	//MSGBOX( Dir );
-	return ss->SetDirectory( Dir, OpMode );
+	get_SS();
+	int res = ss->SetDirectory( Dir, OpMode );
+	put_SS();
+    return res;
 }
 
 
 int WINAPI _export ProcessEvent(HANDLE hPlugin,int Event,void *Param)
 {
 	SS *ss = (SS *)hPlugin;
-	//MSGBOX("Event");
-	return ss->ProcessEvent (Event, Param);
-}
-
-int WINAPI _export GetFiles( HANDLE hPlugin,struct PluginPanelItem *PanelItem,
-                   int ItemsNumber,int Move,char *DestPath,int OpMode)
-{
-  SS *ss = (SS *)hPlugin;
-  return ss->GetFiles( PanelItem, ItemsNumber, Move, DestPath, OpMode );
+	get_SS();
+	int res = ss->ProcessEvent (Event, Param);
+	put_SS();
+    return res;
 }
 
 int WINAPI _export ProcessKey( HANDLE hPlugin, int Key, unsigned int ControlState )
 {
 	SS *ss = (SS *)hPlugin;
-	return ss->ProcessKey( Key, ControlState );
+	get_SS();
+	int res = ss->ProcessKey( Key, ControlState );
+	put_SS();
+    return res;
 }
 
-void WINAPI _export ClosePlugin(HANDLE hPlugin)
+int WINAPI _export GetFiles( HANDLE hPlugin,struct PluginPanelItem *PanelItem,
+                   int ItemsNumber,int Move,char *DestPath,int OpMode)
 {
-	//MsgBox( "1", "Delete" );
-	delete (SS *)hPlugin;
+	SS *ss = (SS *)hPlugin;
+	get_SS();
+	int res = ss->GetFiles( PanelItem, ItemsNumber, Move, DestPath, OpMode );
+	put_SS();
+    return res;
+}
+
+int WINAPI _export PutFiles( HANDLE hPlugin, struct PluginPanelItem *PanelItem,
+								int ItemsNumber, int Move, int OpMode )
+{
+	SS *ss = (SS *)hPlugin;
+	get_SS();
+	int res = ss->PutFiles( PanelItem, ItemsNumber, Move, OpMode );
+	put_SS();
+    return res;
 }
 
 int WINAPI _export DeleteFiles( HANDLE hPlugin, struct PluginPanelItem *PanelItem, int ItemsNumber, int OpMode )
 {
 	SS *ss = (SS *)hPlugin;
-	return ss->DeleteFiles( PanelItem, ItemsNumber, OpMode );
+	get_SS();
+	int res = ss->DeleteFiles( PanelItem, ItemsNumber, OpMode );
+	put_SS();
+    return res;
+}
+
+int WINAPI _export MakeDirectory( HANDLE hPlugin, char *Name, int OpMode )
+{
+	SS *ss = (SS *)hPlugin;
+	get_SS();
+	int res = ss->MakeDirectory( Name, OpMode );
+	put_SS();
+    return res;
 }
 
 HANDLE WINAPI _export OpenPlugin(int OpenFrom,int item) {
 
 	int i;
 	SS *ss;
-	
-	static int cominit = 0;
-	if( !cominit ) {
-		::CoInitialize(NULL);
-		cominit = 1;
-	}
 
-	//MsgBox( "1", "Allocate" );
 	ss = new SS(OpenFrom,item);
 	return ss ? ss : INVALID_HANDLE_VALUE;
 }
 
-
-int WINAPI _export PutFiles( HANDLE hPlugin, struct PluginPanelItem *PanelItem,
-								int ItemsNumber, int Move, int OpMode )
+void WINAPI _export ClosePlugin(HANDLE hPlugin)
 {
-	SS *ss = (SS *)hPlugin;
-	return ss->PutFiles( PanelItem, ItemsNumber, Move, OpMode );
+	delete (SS *)hPlugin;
 }
