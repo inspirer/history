@@ -8,5 +8,7 @@ enum a {
 
 enum a { q };
 
+
+// TODO BUG
 enum { yes, no } req;
 

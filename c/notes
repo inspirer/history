@@ -31,6 +31,13 @@
 	arrays-declaration
 	other Expressions
 
+	enum BUG
+
+= 31 === (30 mar 2004)
+  
+	+ slabs modified, now only 2 slabs
+	+ debug.cpp rewritten
+
 = 30 === (24 mar 2004)
 
 	+ il.h (TypeMetrics, BackendOptions, Backend), il_ops.h

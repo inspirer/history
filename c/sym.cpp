@@ -23,7 +23,7 @@
 
 sym *sym::create( char *s, Compiler *cc )
 {
-	sym *m = (sym *)cc->sym_sl.allocate();
+	sym *m = (sym *)cc->allocate(1,sizeof(sym));
 	m->name = s;
 
 	m->storage = scs_none;

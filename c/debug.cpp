@@ -22,104 +22,125 @@
 
 #ifdef DEBUG_TREE
 
-void debug_show_sym( Sym s, int deep )
-{
-	char *head, *stor;
 
-	while( s ) {
-		switch( s->storage ) {
-		    case scs_extern:   stor = "extern"; break;
-		    case scs_static:   stor = "static"; break;
-		    case scs_auto:     stor = "auto"; break;
-		    case scs_register: stor = "register"; break;
-		    case scs_typedef:  stor = "typedef"; break;
-		    case scs_bitfield:  stor = "bit"; break;
-		    case scs_member:  stor = "member"; break;
-		    case scs_imm:  stor = "imm"; break;
-		    case scs_arg:  stor = "arg"; break;
-		    default: stor = "";
-		}
-		switch( s->ns_modifier ) {
- 			case 0: 		head = "sym";	break;
-			case t_struct:  head = "struct_tag";break;
-			case t_union:   head = "union_tag";	break;
-			case t_enum: 	head = "enum_tag";	break;
-			case t_typename:head = "typedef";break;
-			case t_label: 	head = "label";	break;
-			default:		head = "?????"; break;
-		}
-		printf( "%*s%s<%s>(%s) [\n", deep, "", head, stor, s->name ? s->name : "" );
-		printf( "%*stype (\n", deep+4, "" );
-		debug_show_type( s->type, deep+8 );
-		printf( "%*s)\n", deep+4, "" );
-		s = s->next;
-		if( s ) 
-			printf( "%*s] (next) => \n", deep, "" );
-		else
-			printf( "%*s]\n", deep, "" );
+// sym::storage
+const static char *sym_storage[] = {
+    "scs_none",    // 0,
+    "scs_extern",  // 1, 
+    "scs_static",  // 2, 
+    "scs_auto",    // 3, 
+    "scs_register",// 4, 
+    "scs_typedef", // 5,
+	"scs_???",     // 6,
+    "scs_imm",     // 7, 
+	"scs_bitfield",// 8,
+	"scs_member",  // 9,
+	"scs_arg",     // 10,
+	"scs_arg_reg", // 11,
+	"scs_label",   // 12,
+	"scs_code",    // 13,
+};
+
+// sym::ns_modifier
+static const char *sym_ns_mod( int i ) {
+
+	switch( i ) {
+		case 0: 		return "sym";
+		case t_struct:  return "struct";
+		case t_union:   return "union";
+		case t_enum: 	return "enum";
+		case t_typename:return "typename";
+		case t_label: 	return "label";
+		default:		return "unknown_ns_modifier";
 	}
 }
 
 
+void debug_show_sym( Sym s, int deep )
+{
+	while( s ) {
+		const char *storage, *tag;
+
+		storage = ( s->storage >= 0 && s->storage < scs_max ) ? sym_storage[s->storage] : "scs_unkn";
+		tag = sym_ns_mod( s->ns_modifier );
+
+		printf( "sym(\n%*sname='%s' mod='%s'", deep+4, "", s->name ? s->name : "", tag );
+		if( !s->ns_modifier )
+			printf( " storage='%s'", storage );
+		switch( s->storage ) {
+			case scs_imm: printf( " value=%I64u", s->loc.val.u );break;
+			case scs_arg: case scs_arg_reg: printf( " offset=%u", s->loc.arg.offset );break;
+			case scs_member: case scs_bitfield: printf( " offset=%u", s->loc.member.offset );break;
+		}
+		printf( "\n%*s", deep+4, "" );
+		debug_show_type( s->type, deep+4 );
+		s = s->next;
+		printf( "%*s)%s", deep, "", s ? " => " : "\n" );
+	}
+}
+
+
+const char *aggr_type_spec[] = {
+    "t_typename",	// 0x40
+    "t_struct",		// 0x41
+    "t_union",		// 0x42
+    "t_array",		// 0x43
+    "t_func",		// 0x44
+    "t_pointer",	// 0x45
+    "t_enum",		// 0x46
+    "t_label",		// 0x47
+};
+
+
 void debug_show_type( Type t, int deep )
 {
-	char *spec, qual[128] = "";
+	const char *spec;
+	char qual[128];
 	Type s = t;
 
+	printf( "type(\n" );
 	while( s ) {
-		switch( s->specifier ) {
-			case t_void: spec = "void"; break;
-			case t_char: spec = "char"; break;
-			case t_schar: spec = "signed char"; break;
-			case t_uchar: spec = "unsigned char "; break;
-			case t_short: spec = "short"; break;
-			case t_ushort: spec = "unsigned short"; break;
-			case t_int: spec = "int"; break;
-			case t_uint: spec = "unsigned"; break;
-			case t_long: spec = "long"; break;
-			case t_ulong: spec = "unsigned long"; break;
-			case t_llong: spec = "long long"; break;
-			case t_ullong: spec = "unsigned long long"; break;
-			case t_float: spec = "float"; break;
-			case t_double: spec = "double"; break;
-			case t_ldouble: spec = "long double"; break;
-			case t_bool: spec = "_Bool"; break;
-			case t_fcompl: spec = "float _Complex"; break;
-			case t_dcompl: spec = "double _Complex"; break;
-			case t_lcompl: spec = "long double _Complex"; break;
-			case t_fimg: spec = "float _Imaginary"; break;
-			case t_dimg: spec = "double _Imaginary"; break;
-			case t_limg: spec = "long double _Imaginary"; break;
-			case t_typename: spec = "typename"; break;
-			case t_struct: spec = "struct"; break;
-			case t_union: spec = "union"; break;
-			case t_array: spec = "array"; break;
-			case t_func: spec = "function"; break;
-			case t_pointer: spec = "*"; break;
-			case t_enum: spec = "enum"; break;
-			default: spec = "?????"; break;
+		spec = ( BASICTYPE(s) ) ? tdescr[T(s)].name : 
+				( ( T(s) >= t_typename && T(s) <= t_label ) ?
+					aggr_type_spec[T(s)-t_typename] : 
+					"unkn_spec" );
+
+		qual[0] = qual[1] = 0;
+		if( Q(s) & tq_const ) strcat( qual, " const" );
+		if( Q(s) & tq_volatile ) strcat( qual, " volatile" );
+		if( Q(s) & tq_restrict ) strcat( qual, " restrict" );
+
+		printf( "%*sspecifier='%s' qual='%s' size=%i align=%i", deep+4, "", spec, qual+1, s->size, s->align );
+		if( ( T(s) == t_struct || T(s) == t_union ) && s->tagname )
+			printf( " tag='%s'", s->tagname );
+
+		if( T(s) == t_array ) {
+			if( s->ar_size_val > 0 )
+				printf( " dim=%i", s->ar_size_val );
+			else if( s->ar_size_val == 0 )
+				printf( " dim=undef" );
+			else
+				printf( " dim=var" );
 		}
-		*qual = 0;
-		if( s->qualifier & tq_const ) strcat( qual, "const " );
-		if( s->qualifier & tq_volatile ) strcat( qual, "volatile " );
-		if( s->qualifier & tq_restrict ) strcat( qual, "restrict " );
 
-		printf( "%*s%s%s%s\n", deep, "", qual, spec, s->parent ? " =>" : "" );
+		printf( s->parent ? " =>\n" : "\n" );
 
-		if( (s->specifier == t_struct || s->specifier == t_union) && s == t && s->params ) {
-			debug_show_sym( s->params, deep + 4 );
+		if( (T(s) == t_struct || T(s) == t_union) && s == t && s->params ) {
+			printf( "%*scontains = ", deep+4, "" );
+			debug_show_sym( s->params, deep + 8 );
 		} else if( s->specifier == t_func ) {
 			if( s->params ) {
-				printf( "%*sparams:\n", deep, "" );
-				debug_show_sym( s->params, deep + 4 );
+				printf( "%*sparams = ", deep+4, "" );
+				debug_show_sym( s->params, deep + 8 );
 			}
-			printf( "%*sreturn value:\n", deep, "" );
-			deep += 4;
+			printf( "%*sreturn = ", deep+4, "" );
+			debug_show_type( s->parent, deep + 8 );
+			break;
 		}
 
 		s = s->parent;
 	}
-
+	printf( "%*s)\n", deep, "" );
 }
 
 #endif

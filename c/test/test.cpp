@@ -64,3 +64,4 @@ void main() {
   */
 
 
+static const int f ( int a, const struct b { int yo;} *c );

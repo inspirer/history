@@ -81,7 +81,7 @@ Sym Namespace::search_id( const char *name, int modifier, int go_deep )
 
 void Namespace::newns( Compiler *cc ) 
 { 
-	Namespace *n = new (cc->ns_sl.allocate()) Namespace; 
+	Namespace *n = new (cc->allocate(1,sizeof(Namespace))) Namespace; 
 	n->parent = this;
 	cc->current = n;
 }
@@ -118,6 +118,7 @@ void debug_show_namespace( Namespace *ns, int deep )
 	printf( "%*snamespace [\n", deep, "" );
 	for( hash_id = 0; hash_id < HASH_SIZE; hash_id++ )
 		for( s = ns->hash[hash_id]; s; s = s->hashed ) {
+			printf( "%*s", deep+4, "" );
 			debug_show_sym( s, deep+4 );
 		}
 	printf( "%*s]\n", deep, "" );

@@ -74,9 +74,9 @@ typedef struct expr *Expr;
 
 
 #include "types.h"
-#include "slab.h"
 #include "stmt.h"
 #include "il.h"
+#include "slab.h"
 
 #define ASSERT(x) assert(x)
 #define TODO() ASSERT(0);
@@ -84,20 +84,20 @@ typedef struct expr *Expr;
 class Compiler {
 private:
     char b[1025], *l, *end;
+    slab m_perm, m_func;
 
 	char *identifier( char *token, int *n, int tnID );
 	void set_backend( Backend *be );
 
 public:
-    slab sym_sl, type_sl, ns_sl, expr_sl, node_sl;
     type *basic[t_basiccnt];
-    Expr free_expr; 						// see comment in stmt.h
-    //Node *free_node; 						// -----""-----
     Namespace *current, global, *func;
     Backend *be;
 
 public:
     Compiler();
+	void *allocate( int permanent, int size );
+
     void error( char *r, ... );
     int parse();
     void fillb();

@@ -20,37 +20,36 @@
 
 #include "slab.h"
 
-slab::slab( int size )
+slab::slab()
 {
 	current = NULL;
-	ssize = (size + 3) & ~3;
 }
 
 slab::~slab()
 {
-	destroy();
+	clear();
 }
 
 
-void *slab::allocate()
+void *slab::allocate( int size )
 {
 	void *res = NULL;
 
-	if( current && current->size + ssize <= SLAB_SIZE ) {
+	if( current && current->size + size <= SLAB_SIZE ) {
 		res = current->data + current->size;
-		current->size += ssize;
+		current->size += size;
 	} else {
 		struct block *tmp = new struct block;
 		tmp->next = current;
 		current = tmp;
 		res = tmp->data;
-		tmp->size = ssize;
+		tmp->size = size;
 	}
 
 	return res;
 }
 
-void slab::destroy()
+void slab::clear()
 {
 	while( current ) {
 		struct block *tmp = current->next;
@@ -58,4 +57,3 @@ void slab::destroy()
 		current = tmp;
 	}
 }
-

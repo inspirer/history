@@ -21,7 +21,7 @@
 #ifndef types_h_included
 #define types_h_included
 
-//#define DEBUG_TREE
+#define DEBUG_TREE
 
 #define TYPE(tt) ((struct type *)(tt))
 #define SYM(tt) ((struct sym *)(tt))
@@ -261,10 +261,11 @@ struct type {
 //  Basic type information array declaration.
 
 struct basic_type_descr {
-	int size_name;
+	int size_name;			// _c _s _i _l _h _f _d _x _p
 	int suffix;				// F I U P V B
     int rank;				// type rank
     int domain;				// only for floating types
+    const char *name;
 };
 
 // (see 6.3.1.1 Boolean, characters, and integers)
@@ -311,7 +312,7 @@ extern const struct basic_type_descr tdescr[t_basiccnt];
 */
 
 
-// storage class specifiers
+// storage class specifiers (see debug.cpp)
 enum {
     scs_none     = 0,
     scs_extern   = 1, 
@@ -327,6 +328,7 @@ enum {
 	scs_arg_reg  = 11,
 	scs_label	 = 12,
 	scs_code	 = 13,
+	scs_max      = 14,
 };
 
 

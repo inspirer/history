@@ -1,6 +1,6 @@
 // Test of (expr.cpp -> Expr::create_conditional)
 
-void main() {
+void main(int argc, char *argv[]) {
 
 	const void *c_vp;
 	void *vp;

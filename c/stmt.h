@@ -102,9 +102,6 @@ struct expr {
 	// casting
 	static Expr cast_to( Expr e, Type t, Place loc, Compiler *cc );
 	static Type usual_conversions( Expr *e1, Expr *t2, int action, Compiler *cc );
-
-	// destructors
-	void free( Compiler *cc );
 };
 
 

@@ -23,7 +23,7 @@
 
 type *type::create( int ts, Compiler *cc )
 {
-	type *t = (type *)cc->type_sl.allocate();
+	type *t = (type *)cc->allocate(1, sizeof(type));
 	t->specifier = ts;
 	t->st1.storage = scs_none;
 	t->qualifier = tq_none;
@@ -40,7 +40,7 @@ type *type::create( int ts, Compiler *cc )
 // 
 type *type::clone( Compiler *cc ) const
 {
-	type *t = (type *)cc->type_sl.allocate();
+	type *t = (type *)cc->allocate(1, sizeof(type));
 	*t = *this;
 	TYPE(this)->cloned = t;
 	return t;
@@ -233,29 +233,29 @@ const char *type::toString() const
 #define FD(i,e) ((i<<4) + e)
 
 const struct basic_type_descr tdescr[t_basiccnt] = {
- {	0, 0, 0,      		0,       },	
- {	0, V, 0,			0,		 },	//1 void
- { _c, I, 2,			0,		 },	//2 char
- { _c, I, 2 | SBIT,		0,       },	//3 signed char
- { _c, U, 2,		 	0,		 },	//4 unsigned char 
- { _s, I, 3 | SBIT,		0,       },	//5 short, signed short, short int, or signed short int
- { _s, U, 3,		 	0,		 },	//6 unsigned short, or unsigned short int
- { _i, I, 4 | SBIT,		0,       },	//7 int, signed, or signed int
- { _i, U, 4,		 	0,		 },	//8 unsigned, or unsigned int
- { _l, I, 5 | SBIT,		0,       },	//9 long, signed long, long int, or signed long int
- { _l, U, 5,		 	0,		 },	//0 unsigned long, or unsigned long int
- { _h, I, 6 | SBIT,		0,       },	//1 long long, signed long long, long long int, or signed long long int
- { _h, U, 6,		 	0,		 },	//2 unsigned long long, or unsigned long long int
- { _f, F, 0,		 	FD(0,0), },	//3 float
- { _d, F, 0,		 	FD(0,1), },	//4 double
- { _x, F, 0,		 	FD(0,2), },	//5 long double
- { _c, I, 1,		 	0,		 },	//6 _Bool
- {	0, B, 0,		 	FD(2,0), },	//7 float _Complex
- {	0, B, 0,		 	FD(2,1), },	//8 double _Complex
- {	0, B, 0,		 	FD(2,2), },	//9 long double _Complex
- {	0, B, 0,		 	FD(1,0), },	//0 float _Imaginary
- {	0, B, 0,		 	FD(1,1), },	//1 double _Imaginary
- {	0, B, 0,		 	FD(1,2), },	//2 long double _Imaginary
+ {	0, 0, 0,      		0,       "" },	
+ {	0, V, 0,			0,		 "void" },			//1 void
+ { _c, I, 2,			0,		 "char" },			//2 char
+ { _c, I, 2 | SBIT,		0,       "signed char" },	//3 signed char
+ { _c, U, 2,		 	0,		 "unsigned char" },	//4 unsigned char 
+ { _s, I, 3 | SBIT,		0,       "short" },			//5 short, signed short, short int, or signed short int
+ { _s, U, 3,		 	0,		 "unsigned short" },//6 unsigned short, or unsigned short int
+ { _i, I, 4 | SBIT,		0,       "int" },			//7 int, signed, or signed int
+ { _i, U, 4,		 	0,		 "unsigned" },		//8 unsigned, or unsigned int
+ { _l, I, 5 | SBIT,		0,       "long" },			//9 long, signed long, long int, or signed long int
+ { _l, U, 5,		 	0,		 "unsigned long" },	//0 unsigned long, or unsigned long int
+ { _h, I, 6 | SBIT,		0,       "long long" },		//1 long long, signed long long, long long int, or signed long long int
+ { _h, U, 6,		 	0,		 "unsigned long long" },//2 unsigned long long, or unsigned long long int
+ { _f, F, 0,		 	FD(0,0), "float" },			//3 float
+ { _d, F, 0,		 	FD(0,1), "double" },		//4 double
+ { _x, F, 0,		 	FD(0,2), "long double" },	//5 long double
+ { _c, I, 1,		 	0,		 "_Bool" },			//6 _Bool
+ {	0, B, 0,		 	FD(2,0), "float _Complex" },		//7 float _Complex
+ {	0, B, 0,		 	FD(2,1), "double _Complex" },		//8 double _Complex
+ {	0, B, 0,		 	FD(2,2), "long double _Complex" },	//9 long double _Complex
+ {	0, B, 0,		 	FD(1,0), "float _Imaginary" },		//0 float _Imaginary
+ {	0, B, 0,		 	FD(1,1), "double _Imaginary" },		//1 double _Imaginary
+ {	0, B, 0,		 	FD(1,2), "long double _Imaginary" },//2 long double _Imaginary
 };
 
 
@@ -570,6 +570,8 @@ Type type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 	} else if( !t /* && name */ ) {
 		// 6.7.2.3.2 A type specifier of the form 'enum identifier' without an enumerator
 		// list shall only appear after the type it specifies is completed.
+
+		// BUG test_enum.c
 		cc->error( LOC "'enum %s': unknown type\n", loc, name );
 		t = type::create( t_bad, cc );
 	}

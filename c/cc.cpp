@@ -22,18 +22,26 @@
 
 extern Backend *get_bytecode_be();
 
-Compiler::Compiler() : 
-    sym_sl( sizeof( sym ) ), type_sl( sizeof( type ) ), ns_sl( sizeof( Namespace ) ),
-    expr_sl( sizeof( expr ) ), node_sl( sizeof( node ) )
+Compiler::Compiler()
 {
 	current = &global;
 	func = NULL;
-	free_expr = NULL;
-	//free_node = NULL;
 	set_backend( get_bytecode_be() );
 
 	for( int i = 0; i < t_basiccnt; i++ )
 		basic[i] = NULL;
+}
+
+
+void *Compiler::allocate( int permanent, int size )
+{
+	ASSERT( size > 0 );
+	size = (size + 3) & ~3;
+
+	if( permanent )
+		return m_perm.allocate( size );
+	else
+		return m_func.allocate( size );
 }
 
 

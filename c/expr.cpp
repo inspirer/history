@@ -25,16 +25,9 @@
 */
 Expr expr::create( int type, Type restype, Compiler *cc )
 {
-	Expr e;
+	expr *e;
 	
-	// get from pool
-	if( cc->free_expr ) {
-		e = cc->free_expr;
-		cc->free_expr = e->next_free;
-
-	} else 
-		e = (Expr)cc->expr_sl.allocate();
-
+	e = (expr *)cc->allocate(0, sizeof(expr));
 	e->type = type;
 	e->restype = restype;
 
@@ -673,17 +666,6 @@ exit:
 	#endif
 	return e;
 }
-
-
-//
-//	DESC: moves the expression to free_expr list
-//
-void expr::free( Compiler *cc )
-{
-	next_free = cc->free_expr;
-	cc->free_expr = this;
-}
-
 
 // 6.6 Constant expressions
 
