@@ -3,7 +3,7 @@
 #ifndef SS_H_INCLUDED
 #define SS_H_INCLUDED
 
-#define VERSION   "1.04"
+#define VERSION   "1.05"
 
 #include <windows.h>
 #include <string.h>
@@ -95,13 +95,17 @@ private:
 
 	char cdir[MAX_PATH];
 	char cpath[MAX_PATH], cdbname[MAX_PATH], ssini[MAX_PATH]; // filled by split_cdir
-	int try_to_change;
 	char Title[NM];			// by GetOpenPluginInfo
 
 	// temporary
 	char tmp_dir[MAX_PATH], tmp_dir2[MAX_PATH];
 	struct KeyBarTitles kb;
 	int next_dir_is_default;
+
+	char file_to_pos[MAX_PATH];
+	int file_pos_state;
+
+	int project_first_open;
 
 public:
     CRITICAL_SECTION cs;
@@ -113,6 +117,8 @@ private:
 	void db_disconnect();
 	char *get_default_dir_for( char *sspath );
 	void split_cdir( );
+	int try_to_change( int first_enter );
+	int get_date( IVSSItem *item, DATE *change );
 
 public:
 	SS( int of, int item );
@@ -239,6 +245,7 @@ enum {
 	msg_config_can,
 	msg_config_prefix,
 	msg_config_version,
+	msg_config_showdates,
 
 	msg_defdir_title,
 	msg_defdir_msg,

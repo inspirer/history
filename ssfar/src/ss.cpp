@@ -56,28 +56,102 @@ SS::SS( int of, int item )
 {
 	InitializeCriticalSection( &cs );
 	strcpy( cdir, "$\\" );
-	if( of == OPEN_COMMANDLINE ) {
-		if( !strncmp( "$\\", (char*)item, 2 ) ) {
-			strcpy( cdir, (char *) item );
-			split_cdir();
+	project_first_open = 1;
+	file_pos_state = 0;
+	next_dir_is_default = 0;
 
-			if( strcmp( cdir, "$\\" ) ) {
-				try_to_change = 1;
-				BOOL changed = GetFindData( NULL, NULL, 0 );
-				if( !changed ) {
-					MsgBox( "wrong path", (char *)item );
-					strcpy( cdir, "$\\" );
-					split_cdir();
+	if( of == OPEN_COMMANDLINE ) {
+		char *start = (char *)item;
+		int force_pos = 0;
+
+		while( *start == '\t' || *start == ' ' ) start++;
+		if( *start == '"' ) start++;
+
+		if( *start == '!' ) force_pos = 1, start++;
+
+		if( start[0] == '$' && start[1] == '\\' )
+			strcpy( cdir, start );
+		else {
+			strcpy( cdir, "$\\" );
+			strcpy( cdir+2, start );
+		}
+
+		char *s;
+
+		if( (s=strchr(cdir, '"')) ) *s = 0;
+
+		while( s = strchr( cdir, '/' ) ) *s = '\\';
+		s = cdir + strlen( cdir ) - 1;
+		while( *s == '\\' ) *s-- = 0;
+
+		split_cdir();
+
+		if( strcmp( cdir, "$\\" ) ) {
+
+			BSTR l;
+			HRESULT h;
+			IVSSItem *item;
+
+			if( !db_connect() ) {
+				MsgBox( "wrong path", start );
+				goto fail;
+			}
+
+			if( !strcmp( cpath, "$\\" ) ) {
+				h = db->get_CurrentProject( &l );
+
+				if( SUCCEEDED(h) ) {
+					BSTR_2_char( l, tmp_dir2, MAX_PATH );
+					SysFreeString( l );
+					if( *tmp_dir2 == '$' ) {
+						char *s;
+						while( s = strchr( tmp_dir2, '/' ) ) *s = '\\';
+						FSF.sprintf( cdir, "$\\%s%s", cdbname, tmp_dir2+1 );
+						split_cdir();
+					}
 				}
 			}
 
-		} else
-			MsgBox( "wrong path", (char*)item );
+			l = char_2_BSTR( cpath );
+			h = db->get_VSSItem( l, false, &item );
+			SysFreeString( l );
+			if( FAILED(h) ) {
+				db_disconnect();
+				comError( "Item not opened", h );
+			fail:
+				strcpy( cdir, "$\\" );
+				goto exit;
+			}
+
+			int type;
+			h = item->get_Type( &type );
+			if( FAILED(h) )
+				type = VSSITEM_FILE;
+
+			item->Release();
+			db_disconnect();
+
+			if( type == VSSITEM_FILE || force_pos ) {
+				s = strrchr( cdir, '\\' );
+
+				if( s && s > cdir + 1 )
+					*s = 0;
+				else
+					cdir[2] = 0;
+
+				s++;
+
+				// position to s
+				strcpy( file_to_pos, s );
+				file_pos_state = 1;
+			}
+		}
 	}
+exit:
 	split_cdir();
-	next_dir_is_default = try_to_change = 0;
 	db = NULL;
 }
+
 
 SS::~SS() 
 {
@@ -89,7 +163,6 @@ int SS::db_connect()
 {
 	HRESULT h;
 
-restart:
 	if( !*ssini )
 		return FALSE;
 
@@ -130,6 +203,48 @@ void SS::db_disconnect()
 }
 
 
+int SS::try_to_change( int first_enter ) 
+{
+
+	IVSSItem *item = NULL;
+	HRESULT h;
+	BSTR l;
+
+	if( !db_connect() ) {
+		MsgBox( "change", "wrong directory" );
+		return FALSE;
+	}
+
+	if( first_enter ) {
+		h = db->get_CurrentProject( &l );
+
+		if( SUCCEEDED(h) ) {
+			BSTR_2_char( l, tmp_dir2, MAX_PATH );
+			SysFreeString( l );
+			if( *tmp_dir2 == '$' ) {
+				char *s;
+				while( s = strchr( tmp_dir2, '/' ) ) *s = '\\';
+				FSF.sprintf( cdir, "$\\%s%s", cdbname, tmp_dir2+1 );
+				split_cdir();
+			}
+		}
+	}
+
+	l = char_2_BSTR( cpath );
+	h = db->get_VSSItem( l, false, &item );
+	SysFreeString( l );
+	if( FAILED(h) ) {
+		db_disconnect();
+		comError( "Item not opened", h );
+		return FALSE;
+	}
+
+	item->Release();
+	db_disconnect();
+	return TRUE;
+}
+
+
 void add_item( char *name, char *val, void *data ) {
 
 	SS *ss = (SS *)data;
@@ -144,19 +259,84 @@ void add_item( char *name, char *val, void *data ) {
 }
 
 
+int SS::get_date( IVSSItem *item, DATE *change ) 
+{
+	HRESULT h;
+	IVSSVersions *vers;
+
+	h = item->get_Versions( 0, &vers );
+	if( FAILED(h) ) {
+		comError( "IVSSItem.get_Versions failed", h );
+		return FALSE;
+	}
+
+	IUnknown *gv;
+
+	h = vers->raw__NewEnum( &gv );
+	if( FAILED(h) ) {
+		comError( "IVSSItem.NewEnum failed", h );
+	  exit_free_versions:
+		vers->Release();
+		return FALSE;
+	}
+
+	IEnumVARIANT *ev;
+
+	h = gv->QueryInterface( __uuidof( IEnumVARIANT ), (void **)&ev );
+	gv->Release();
+	if( FAILED(h) ) {
+		comError( "IUnknown.QueryInterface(IEnumVARIANT) failed", h );
+		goto exit_free_versions;
+	}
+
+	VARIANT v;
+	unsigned long fetched;
+	h = ev->Next( 1, &v, &fetched );
+	if( FAILED(h) || !fetched ) {
+		comError( "IEnumVARIANT.Next failed", h );
+		ev->Release();
+		goto exit_free_versions;
+	}
+
+	IVSSVersion *ver;
+	
+	h = v.punkVal->QueryInterface( __uuidof( IVSSVersion ), (void **)&ver );
+	v.punkVal->Release();
+
+	if( FAILED(h) ) {
+		comError( "IUnknown.QueryInterface(IVSSVersion) failed", h );
+		ev->Release();
+		goto exit_free_versions;
+	}
+
+	h = ver->get_Date( change );
+	if( FAILED(h) ) {
+		comError( "IVSSVersion.get_Date failed", h );
+	exit_free_all:
+		ver->Release();
+		ev->Release();
+		goto exit_free_versions;
+	}
+
+	ver->Release();
+	ev->Release();
+	vers->Release();
+	return TRUE;
+}
+
+
 int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode )
 {
 	long count = 0;
+	int show_dates;
 	IVSSItem *item = NULL;
 	IVSSItems *items = NULL;
 	PluginPanelItem *NewPanelItem = NULL;
 	HRESULT h;
 	BSTR l;
 
-	if( !try_to_change ) {
-		*pItemsNumber = 0;
-		*pPanelItem = NULL;
-	}
+	*pItemsNumber = 0;
+	*pPanelItem = NULL;
 
 	/*
      *     Root directory
@@ -191,7 +371,7 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 	}
 
 	if( !db_connect() ) {
-		MsgBox( "wrong", try_to_change ? "change" : "wrong" );
+		MsgBox( "not connected", "wrong" );
 		return FALSE;
 	}
 
@@ -202,12 +382,6 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		db_disconnect();
 		comError( "Item not opened", h );
 		return FALSE;
-	}
-
-	if( try_to_change ) {
-		item->Release();
-		db_disconnect();
-		return TRUE;
 	}
 
 	h = item->get_Items(false,&items);
@@ -234,6 +408,8 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 		comError( "IVSSItem.count < 0", h );
 		return FALSE;
 	}
+
+	GetRegKey( "", "showdates", show_dates, 0 );
 
 	if( count )
 		NewPanelItem = (PluginPanelItem *)m_malloc( sizeof(PluginPanelItem) * (count) );
@@ -279,6 +455,23 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 
 		p->FindData.dwFileAttributes = ( VSSITEM_FILE == type ) ? 0 : FILE_ATTRIBUTE_DIRECTORY;
 
+		if( co )
+			p->FindData.dwFileAttributes |= FILE_ATTRIBUTE_SYSTEM;
+
+		if( co != VSSFILE_CHECKEDOUT_ME )
+			p->FindData.dwFileAttributes |= FILE_ATTRIBUTE_READONLY;
+
+		if( show_dates && co != VSSFILE_CHECKEDOUT_ME && !(OpMode&OPM_FIND) ) {
+
+			SYSTEMTIME st;
+			DATE change;
+			if( get_date( item, &change ) ) {
+				VariantTimeToSystemTime( change, &st );
+				SystemTimeToFileTime( &st, &p->FindData.ftLastAccessTime );
+				p->FindData.ftLastWriteTime = p->FindData.ftLastAccessTime;
+			}
+		}
+		
 		p->CustomColumnData = (LPSTR*)m_malloc(sizeof(LPSTR)*2);
 		if( co && !(OpMode&OPM_FIND) ) {
 			IVSSCheckouts *couts;
@@ -365,6 +558,9 @@ int SS::GetFindData( PluginPanelItem **pPanelItem, int *pItemsNumber, int OpMode
 	item->Release();
 
 	db_disconnect();
+
+	if( file_pos_state )
+		file_pos_state = 2;
 
 	return TRUE;
 }
@@ -505,6 +701,9 @@ int SS::SetDirectory( const char *Dir, int OpMode )
 	} else {
 		if( strcmp( cdir, "$\\" ) )
 			strcat( cdir, "\\" );
+		else if( project_first_open )
+			project_first_open = 2;
+
 		strcat( cdir, Dir );
 	}
 
@@ -515,13 +714,15 @@ int SS::SetDirectory( const char *Dir, int OpMode )
 
 	split_cdir();
 
-	try_to_change = 1;
-	BOOL changed = GetFindData( NULL, NULL, 0 );
+	BOOL changed = try_to_change( project_first_open == 2 );
+
+	if( project_first_open == 2 )
+		project_first_open = 0;
+
 	if( !changed ) {
 		strcpy( cdir, tmp_dir );
 		split_cdir();
 	}
-	try_to_change = 0;
 
 	return changed;
 }
@@ -529,6 +730,25 @@ int SS::SetDirectory( const char *Dir, int OpMode )
 
 int SS::ProcessEvent( int Event, void *Param )
 {
+	if( file_pos_state == 2 ) {
+
+		// ASSERT( Event == FE_REDRAW );
+
+		file_pos_state = 0;
+
+		PanelInfo pi;
+		Info.Control( this, FCTL_GETPANELINFO, &pi );
+
+		for( int i = 0; i < pi.ItemsNumber; i++ ) 
+			if (!strcmpi( pi.PanelItems[i].FindData.cFileName, file_to_pos ) ) {
+				PanelRedrawInfo info;
+				info.CurrentItem = i;
+				info.TopPanelItem = 0;
+				Info.Control( this, FCTL_REDRAWPANEL, &info );
+      			break;
+			}
+	}
+
 	return FALSE;
 }
 
@@ -1527,6 +1747,15 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 			Info.AdvControl( Info.ModuleNumber, ACTL_POSTKEYSEQUENCE, &ks );
 		}
 		return TRUE;
+	} else if( ControlState == (PKF_ALT|PKF_CONTROL) && Key == VK_F5 ) {
+		int state;
+
+		GetRegKey( "", "showdates", state, 0 );
+		state = !state;
+
+		SetRegKey( "", "showdates", state );
+		Info.Control( this, FCTL_UPDATEPANEL, NULL );
+		Info.Control( this, FCTL_REDRAWPANEL, NULL );
 	}
 
 	return FALSE;

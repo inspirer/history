@@ -1,11 +1,24 @@
 
-	MS SourceSafe 6.0 navigator 1.04
+	MS SourceSafe 6.0 navigator 1.05
 
 [!] Important
 [+] New
 [-] Bugs fixed
 [*] Changes
 
+Version 1.05, 16 Apr 2004
+
+[+] Works cmdline: ss:$\base\dir\file (locates the given file in the panel)
+[+] Works cmdline: ss:"$\base\dir\file" (parses quoted file/directory name)
+[+] Works cmdline: ss:!$\base\dir\dir2 (locates dir2, but does not enter in it)
+
+[+] Ctrl-Alt-F5         Show modification dates mode on/off (slow)
+
+[+] Works cmdline: ss:dbname or ss:$\dbname (shows default project directory)
+[+] Shows default project directory on first DB open
+
+[*] CheckedOut files are system files (FILE_ATTRIBUTE_SYSTEM)
+[*] Not checked out files and CheckedOut by other users files are readonly (FILE_ATTRIBUTE_READONLY)
 
 Version 1.04, 15 Apr 2004
 
@@ -41,6 +54,5 @@ Version 1.01, 09 Apr 2004
 
 TODO 
 
-Ctrl-Alt-F5         Show dates (and maybe sizes) mode on/off
-для CO файла (alt)F4/(alt)F3/(shift)Enter должны работать с локальной
+*) для CO файла (alt)F4/(alt)F3/(shift)Enter должны работать с локальной
               копией (опционально, по умолчанию установлено)

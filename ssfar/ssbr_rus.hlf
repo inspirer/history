@@ -2,7 +2,7 @@
 .PluginContents=Просмотр SourceSafe-а
 
 @Contents
-$^  #MS SourceSafe 6.0 navigator 1.04#
+$^  #MS SourceSafe 6.0 navigator 1.05#
 $^  #Beginning#
 
     С помощью этого модуля вы можете подключаться к базам SourceSafe-а,
@@ -15,7 +15,7 @@ $^  #Beginning#
 	~О плагине~@about@
 
 @list
-$^  #MS SourceSafe 6.0 navigator 1.04#
+$^  #MS SourceSafe 6.0 navigator 1.05#
 $^    #Список баз#
 
     Вы можете открыть модуль SourceSafe-а из меню дисков, меню плагинов
@@ -46,7 +46,7 @@ $^    #Список баз#
     ~Начало~@Contents@
 
 @inbase
-$^  #MS SourceSafe 6.0 navigator 1.04#
+$^  #MS SourceSafe 6.0 navigator 1.05#
 $^    #Манипуляции внутри базы#
 
     #Копирование из базы# эквивалентно взятию последней версии. В диалоге можно
@@ -104,7 +104,7 @@ $^    #Манипуляции внутри базы#
     ~О плагине~@about@
 
 @about
-$^  #MS SourceSafe 6.0 navigator 1.04#
+$^  #MS SourceSafe 6.0 navigator 1.05#
 $^    #О Плагине#
 
     Плагин использует для работы библиотеку типов SourceSafe-а, поэтому

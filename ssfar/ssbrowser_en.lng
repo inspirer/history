@@ -98,6 +98,7 @@
 "&Cancel"
 "Command line &prefix:"
 "Version: %s"
+"Show file dates (slow)"
 
 "Set Working folder"
 "Do you wish to set working folder for"
