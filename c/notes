@@ -18,7 +18,48 @@
 #   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 
+#     !   bug fixed
+#     +   new feature
+#     $   sample now works
+#     -   deprecated
+
 = check examples ====
+
+= TODO =====
+
+   Expressions
+
+= 19 === (3 feb 2004)
+
+	+ Expr::create_binary (+-/*% checks)
+	+ file: intro
+
+= 19 === (1 feb 2004)
+
+    + Expr::create_struct_member, create_struct_member_ptr
+	+ defines ARITHMETIC/INCOMPLETE/AGGREGATE/SCALAR
+	+ sizeof, cast expressions
+	+ location driven error reporting
+	+ fixed structure size
+
+= 18 === (25 jan 2004)
+
+	+ Place, LOC
+	+ Type::get_basic_type
+	+ Expr::create_array_subscripting
+	+ fixed Expr::create etc
+	- Expr::sub
+
+= 17 === (18 jan 2004)
+
+	+ Expr::create_from_id
+	+ sym.offset calculation
+	+ Expr.restype
+    ! Namespace, scs_typedef bug
+    + constant Sym -> e_direct Expr automatically
+    $ enum a {  a,  b,  c,  d = 6262,  e,  f = 67,  g = e };
+	! typedef, enum, mod bug
+	$ typedef const enum qq { a, } s;
 
 = 16 === (11 jan 2004)
 
@@ -78,7 +119,7 @@
     + adding (struct xxx { }; struct xxx;) to namespace (Type::create_struct)
     + build.bat {clean|test}
     + Namespace::newns
-    * Namespace::searchid
+    + Namespace::searchid
 
 = 06 === (05 nov 2003)
 

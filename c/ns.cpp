@@ -26,7 +26,7 @@
 
 enum { HASH_SIZE = 1023 };
 
-static inline unsigned get_hash( char *name )
+static inline unsigned get_hash( const char *name )
 {
 	unsigned long code = 0x102;
     while( *name )
@@ -65,15 +65,15 @@ void Namespace::add_item( Sym *i )
     if( t ) {
 		while( t->parent )
 			t = t->parent;
-		if( t->storage & scs_typedef ) {
+		if( t->storage == scs_typedef ) {
 			i->ns_modifier = t_typename;
-			t->storage &= ~scs_typedef;
+			t->storage = scs_none;
 		}
 	}
 }
 
 
-Sym *Namespace::search_id( char *name, int modifier, int go_deep )
+Sym *Namespace::search_id( const char *name, int modifier, int go_deep )
 {
     int hs;
 	Sym *res;

@@ -21,19 +21,36 @@
 #ifndef cc_h_included
 #define cc_h_included
 
+/*
+ *	Common headers and types.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <string.h>
 
-#define ASSERT(x) assert(x)
+/*
+ *	Place structure is redefinition of lapg_place structure.
+ */
 
+struct Place {
+	int line, column;
+};
+
+#define LOC "%i(%i): "
+
+// compiler-specific types
 typedef unsigned __int64 vlong;
+typedef unsigned long word;
 
 #include "types.h"
 #include "slab.h"
 #include "stmt.h"
+
+#define ASSERT(x) assert(x)
+
 
 class Compiler {
 private:
@@ -43,10 +60,10 @@ private:
 
 public:
     slab sym_sl, type_sl, ns_sl, expr_sl, node_sl;
+    Type *basic[t_basiccnt];
     Expr *free_expr; 						// see comment in stmt.h
     Node *free_node; 						// -----""-----
-    Namespace *current, global;
-    Namespace *func;
+    Namespace *current, global, *func;
 
 public:
     Compiler();

@@ -41,7 +41,7 @@ void Sym::fixtype( Type *t, Compiler *cc )
 	if( type )
 		type_tail->parent = t;
 	else
-	    type = t;
+		type = t;
 }
 
 
@@ -69,7 +69,7 @@ void Sym::addnext( Sym *s )
 
 
 /*
-	registers variable declaration (global, or in function)
+	registers variable declaration (global, in structure or in function)
 	!: if variable is function declaration, redirect to declare_function
 */
 Node *Sym::register_self( Compiler *cc )
@@ -128,7 +128,7 @@ void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
 		ASSERT( statement == NULL );
 
 		// 1. A function declarator shall not specify a return type that 
-		//    is a function type or an array type.
+		//	is a function type or an array type.
 		if( type->return_value->specifier == t_array || type->return_value->specifier == t_func ) {
 			cc->error( "function cannot return function or array type\n" );
 			makebad( this );
@@ -136,7 +136,7 @@ void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
 		}
 
 		// 2. The only storage-class specifier that shall occur in a 
-		//    parameter declaration is register.
+		//	parameter declaration is register.
 		for( Sym *param = type->params; param; param = param->next )
 			if( param->type->storage != scs_register && param->type->storage != scs_none ) {
 				cc->error( "parameter `%s' has invalid storage-class specifier\n", param->name );
@@ -145,13 +145,13 @@ void Sym::declare_function( Node *statement, Namespace *outer, Compiler *cc )
 			}
 
 		// 3. An identifier list in a function declarator that is not part 
-		//    of a definition of that function shall be empty.
+		//	of a definition of that function shall be empty.
 
 		// TODO
 
 		// 4. After adjustment, the parameters in a parameter type list in 
-		//    a function declarator that is part of a definition of that
-		//    function shall not have incomplete type.
+		//	a function declarator that is part of a definition of that
+		//	function shall not have incomplete type.
 
 		// TODO
 

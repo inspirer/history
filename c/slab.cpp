@@ -22,40 +22,40 @@
 
 slab::slab( int size )
 {
-    current = NULL;
-    ssize = (size + 3) & ~3;
+	current = NULL;
+	ssize = (size + 3) & ~3;
 }
 
 slab::~slab()
 {
-    destroy();
+	destroy();
 }
 
 
 void *slab::allocate()
 {
-    void *res = NULL;
+	void *res = NULL;
 
-    if( current && current->size + ssize <= SLAB_SIZE ) {
-        res = current->data + current->size;
-        current->size += ssize;
-    } else {
-        struct block *tmp = new struct block;
-        tmp->next = current;
-        current = tmp;
-        res = tmp->data;
-        tmp->size = ssize;
-    }
+	if( current && current->size + ssize <= SLAB_SIZE ) {
+		res = current->data + current->size;
+		current->size += ssize;
+	} else {
+		struct block *tmp = new struct block;
+		tmp->next = current;
+		current = tmp;
+		res = tmp->data;
+		tmp->size = ssize;
+	}
 
-    return res;
+	return res;
 }
 
 void slab::destroy()
 {
-    while( current ) {
-        struct block *tmp = current->next;
-	delete current;
-        current = tmp;
-    }
+	while( current ) {
+		struct block *tmp = current->next;
+		delete current;
+		current = tmp;
+	}
 }
 

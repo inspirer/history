@@ -16,6 +16,9 @@
  *   You should have received a copy of the GNU General Public License
  *   along with this program; if not, write to the Free Software
  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ *   
+ *   This file describes three global structures: Expr, Node and Init
  */
 
 #ifndef stmt_h_included
@@ -27,13 +30,27 @@
  *	Expr structure describes an expression. It can be a leaf or a node.
  *	While parsing an input, first, we build Expr tree, then if the tree
  *	needs code generation we generate a code for it (Node list).
+ *
+ *  !! We handle bad subexpressions as NULLs, i.e. if there was some syntax
+ *	 or semantic error in expression. All create_* functions that create a new
+ *	 expression verify that subexpressions are not NULL.
  */
 
 enum {
-	e_leaf,
-	e_direct,
-	e_unary,
-	e_binary,
+
+	//	I've put binary expressions at the top of list to help compiler's
+	//	'switch optimizer'.
+	e_mult = 0, e_div, e_perc,
+	e_plus, e_minus,
+	e_shl, e_shr,
+	e_xor, e_or, e_and,
+
+	e_leaf,						// base = symbol, restype = type of symbol
+	e_direct,					// restype = integral or float type, (d)value = imm value
+	e_uminus,
+	e_array_subscripting,		// op0 = array, op1 = index, restype = element type
+	e_member,					// op1 = structure, restype, base = structure member
+	e_deref,					// op0 = pointer_to_deref (op0->restype->specifier == t_pointer)
 	e_tripl,
 };
 
@@ -50,11 +67,13 @@ enum {
 
 struct Expr {
 
-	short type, sub;
+	int type;
+	Type *restype;			// !! be carefull, it must not be NULL
 	union {
-		Expr  *op[3];		// e_unary, e_binary, e_tripl
+		Expr  *op[3];		// e_*
 		vlong value;		// e_direct
-		Sym   *base;		// e_leaf
+		double dvalue;		// e_direct
+		Sym   *base;		// e_leaf, e_member
 		Expr  *next_free;	// (see comment above about next_free)
 	};
 
@@ -62,19 +81,28 @@ struct Expr {
 	vlong calculate( int dest_type, Compiler *cc );
 
 	// constructors
-	static Expr *create( int type, int subtype, Compiler *cc );
-	static Expr *create_icon_from_string( const char *s, Compiler *cc );
-	static Expr *create_ccon_from_string( const char *s, Compiler *cc );
-	              
+	static Expr *create( int type, Type *restype, Compiler *cc );
+	static Expr *create_icon_from_string( const char *s, Place loc, Compiler *cc );
+	static Expr *create_ccon_from_string( const char *s, Place loc, Compiler *cc );
+	static Expr *create_from_id( const char *id, Place loc, Compiler *cc );
+	static Expr *create_array_subscripting( Expr *arr, Expr *index, Place loc, Compiler *cc );
+	static Expr *create_struct_member( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
+	static Expr *create_struct_member_ptr( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
+	static Expr *get_type_size( Type *t, Place loc, Compiler *cc );
+	static Expr *create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc );
+
+	// casting
+	Expr *cast_to( Type *t, Place loc, Compiler *cc );
+
 	// destructors
 	void free( Compiler *cc );
 };
 
 /*
- *    Node represents an intermediate language construction. Each node
- *    is described by quadruple:  op, res, arg1, arg2
- *    arg1 and arg2 can be of the following types: reg/imm/mem/addr
- *    res is always reg
+ *	Node represents an intermediate language construction. Each node
+ *	is described by quadruple:  op, res, arg1, arg2
+ *	arg1 and arg2 can be of the following types: reg/imm/mem/addr
+ *	res is always reg
  */
 
 enum {
@@ -85,7 +113,7 @@ enum {
 };
 
 enum {
-	cl_binop  = 1,          // res = arg1(reg,imm) op arg2(reg,imm)
+	cl_binop  = 1,		  // res = arg1(reg,imm) op arg2(reg,imm)
 	cl_unop   = 2,			// res = op arg1(reg,imm)
 	cl_assign = 3,			// arg1(mem,reg) = arg2(mem,reg,imm,addr)
 	cl_if_x_rel_y = 4,		// if( arg1(reg,imm) rel arg2(reg,imm) ) goto res(addr)
@@ -120,7 +148,7 @@ struct Node {
 	Node *next;
 	union {
 		Node *next_tail;	// during syntax analysis
-		Node *next_free;    // (see comment above about next_free)
+		Node *next_free;	// (see comment above about next_free)
 	};
 
 	// methods
@@ -146,7 +174,7 @@ struct Init {
 	Init *next;
 
 	union {
-		Expr *expr;     	// init_expr
+		Expr *expr;	 	// init_expr
 		Init *child;		// init_designator, init_sublist
 	};
 	union {

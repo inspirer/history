@@ -93,6 +93,7 @@ void debug_show_type( Type *t, int deep )
 		    case scs_auto:     stor = "auto "; break;
 		    case scs_register: stor = "register "; break;
 		    case scs_typedef:  stor = "typedef "; break;
+		    case scs_imm:  stor = "im "; break;
 		    default: stor = "";
 		}
 		*qual = 0;

@@ -21,22 +21,23 @@
 #include "cc.h"
 
 Compiler::Compiler() : 
-    sym_sl(sizeof(Sym)), 
-    type_sl(sizeof(Type)), 
-    ns_sl(sizeof(Namespace)),
-    expr_sl(sizeof(Expr)),
-    node_sl(sizeof(Node))
+    sym_sl( sizeof( Sym ) ), type_sl( sizeof( Type ) ), ns_sl( sizeof( Namespace ) ),
+    expr_sl( sizeof( Expr ) ), node_sl( sizeof( Node ) )
 {
 	current = &global;
 	func = NULL;
 	free_expr = NULL;
 	free_node = NULL;
+
+	for( int i = 0; i < t_basiccnt; i++ )
+		basic[i] = NULL;
 }
 
+
 /*
-	detects whether the ID is a typename, and if so puts tnID into *n.
-	returns a pointer to allocated string (like strdup)
-*/
+ *	detects whether the ID is a typename, and if so puts tnID into *n.
+ *	returns a pointer to allocated string (like strdup)
+ */
 char *Compiler::identifier( char *token, int *n, int tnID )
 {
 	char *id = new char[ 1 + sizeof(Type*) + strlen(token)];

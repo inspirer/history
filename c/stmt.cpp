@@ -50,7 +50,7 @@ Node *Node::combine( Node *left, Node *right )
 	if( left && right ) {
 		left->next_tail->next = right;
 		left->next_tail = right->next_tail;
-        return left;
+		return left;
 
 	} else if( left )
 		return left;
@@ -64,5 +64,5 @@ Node *Node::combine( Node *left, Node *right )
 void Node::free( Compiler *cc )
 {
 	next_free = cc->free_node;
-    cc->free_node = this;
+	cc->free_node = this;
 }

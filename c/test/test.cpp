@@ -7,9 +7,29 @@ yo b;*/
 
 //typedef int (*f)(const int a, int (*[])(int), ...);
 
-void main( void ) {
+//long long extern *x;
 
-	int i;
+/*static void main( void ) {
 
-	i = a;
+	int *i,a;
+
+    i [a] = a;
+}*/
+  
+/*
+typedef const enum qq { a, } s;
+  */
+
+
+void main()
+{
+
+	int *p, *q ,i,e;
+	float d;
+	struct a {
+		int a;
+	} b,c;
+
+	i = c + b;
+
 }

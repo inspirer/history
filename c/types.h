@@ -32,7 +32,13 @@ enum {
     scs_auto     = 3, 
     scs_register = 4, 
     scs_typedef  = 5,
+    scs_imm      = 6, 
 };
+
+/*
+ *    scs_imm means that value of the symbol is known during the compilation
+ */
+
 
 // type qualifiers
 enum {
@@ -88,8 +94,38 @@ enum {
     t_limg   = 22,     // long double _Imaginary
     t_basiccnt = 23,
 
-    t_maxnum = 12,
-    t_minnum = 2,
+	// 6.2.5.17 The type char, the signed and unsigned integer types, and the
+	// enumerated types are collectively called integer types.
+
+#define INTTYPE(tt) ((tt)->specifier >= t_char && (tt)->specifier <= t_ullong ||\
+	(tt)->specifier == t_enum )
+
+#define VOIDTYPE(tt) ((tt)->specifier == t_void )
+#define PTRTYPE(tt) ((tt)->specifier == t_pointer )
+#define FLOATTYPE(tt) ((tt)->specifier >= t_float && (tt)->specifier <= t_limg )
+
+	// 6.2.5.18 Integer and floating types are collectively called arithmetic
+	// types. Each arithmetic type belongs to one type domain: the real type domain
+	// comprises the real types, the complex type domain comprises the complex types.
+
+#define ARITHMETIC(tt) (INTTYPE(tt) || FLOATTYPE(tt))
+
+	// 6.2.5.21 Arithmetic types and pointer types are collectively called scalar
+	// types. Array and structure types are collectively called aggregate types.
+
+#define SCALAR(tt) ( PTRTYPE(tt) || ARITHMETIC(tt) )
+#define AGGREGATE(tt) ( (tt)->specifier == t_struct || (tt)->specifier == t_union || \
+	(tt)->specifier == t_array )
+
+	// 6.2.5.22 An array type of unknown size is an incomplete type. It is 
+	// completed, for an identifier of that type, by specifying the size in a 
+	// later declaration (with internal or external linkage). A structure or 
+	// union type of unknown content (as described in 6.7.2.3) is an incomplete
+	// type. It is completed, for all declarations of that type, by declaring the
+	// same structure or union tag with its defining content later in the same scope.
+
+#define INCOMPLETE(tt) ( (tt)->specifier == t_array && (tt)->ar_size == NULL || \
+	((tt)->specifier == t_union || (tt)->specifier == t_struct) && (tt)->params == NULL )
 
     /*
 		EG: To simplify the compiler's logic we suppose that 'long _Imaginary' is the
@@ -158,7 +194,8 @@ class Compiler;
 */
 
 struct Type {
-    int  specifier, storage, qualifier, size;
+    int    specifier, storage, qualifier;
+	word   size;
 	union {
 	    Type *parent, *return_value;
 	};
@@ -171,7 +208,7 @@ struct Type {
                 Namespace *members; // members structure is fast access to params
         	};			
 		};
-		Expr  *ar_size;			 // t_array (-1 means incompleted)
+		Expr  *ar_size;			 // t_array (NULL means incompleted)
 		Namespace *enum_members; // t_enum
     };
 
@@ -183,15 +220,13 @@ struct Type {
     static Type *create_enum( char *name, Namespace *ns, Compiler *cc );
     static Type *create_array( int tqualifiers, Expr *expr, Compiler *cc );
     static Type *get_enum_type( Compiler *cc );
-
-    // private
-    static Type *enum_type;
+	static Type *get_basic_type( int spec, Compiler *cc );
 
     // grammar-based operations
-    void add( int ts, Compiler *cc );
-    void add_modifier( int modifier, Compiler *cc );
+    void add( int ts, Place loc, Compiler *cc );
+    void add_modifier( int modifier, Place loc, Compiler *cc );
     void fixup( Compiler *cc );
-    static int addqualifier( int list, int one, Compiler *cc );
+    static int addqualifier( int list, int one, Place loc, Compiler *cc );
 };
 
 /* EG:
@@ -218,8 +253,8 @@ struct Sym {
     Init *init;
 
     union {
-    	int offset;			// ns_modifier == 0, -1 if not in (structure or union)
-    	vlong value;		// ns_modifier == 0, constant value (type->qualifier & tq_const)
+    	int offset;			// ns_modifier == 0, -1 if not in (structure, union, params)
+    	vlong value;		// ns_modifier == 0, immediate value (type->storage == scs_imm)
     	Node *label_node;	// ns_modifier == t_label  (TODO)
     };
 
@@ -256,7 +291,7 @@ struct Namespace {
     Namespace();
     ~Namespace();
     void add_item( Sym *i );
-    Sym *search_id( char *name, int modifier, int go_deep );
+    Sym *search_id( const char *name, int modifier, int go_deep );
 
     /*
 		EG: entering to and exiting from namespaces (in slab)

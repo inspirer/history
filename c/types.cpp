@@ -157,13 +157,13 @@ static int validate_type( int ts )
 }
 
 
-void Type::add( int ts, Compiler *cc )
+void Type::add( int ts, Place loc, Compiler *cc )
 {
     if( ts == ts_long && (specifier & ts_long ) )
         ts = ts_llong;
 
     if( t_mask & specifier ) {
-        cc->error( " : error: '" );
+        cc->error( LOC "'", loc );
 		switch( t_mask & specifier ) {
             case t_typename:
             case t_struct:
@@ -178,7 +178,7 @@ void Type::add( int ts, Compiler *cc )
     }
 
     if( (ts & specifier) || !validate_type(specifier|ts) ) {
-        cc->error( " : error: '" );
+        cc->error( LOC "'", loc );
         print_type( specifier, cc );
         cc->error( "' followed by '" );
         print_type( ts, cc );
@@ -190,20 +190,20 @@ void Type::add( int ts, Compiler *cc )
 }
 
 
-void Type::add_modifier( int modifier, Compiler *cc )
+void Type::add_modifier( int modifier, Place loc, Compiler *cc )
 {
 	switch( modifier & ~0xff ) {
 		case mod_storage:
 			if( storage == scs_none )
 				storage = modifier & 0xff;
 			else
-				cc->error( " : error: more than one storage class specified\n" );
+				cc->error( LOC "more than one storage class specified\n", loc );
 			break;
 		case mod_func:
-			cc->error("not implemented yet: 'inline'\n" ); // TODO
+			cc->error( "not implemented yet: 'inline'\n" ); // TODO
  			break;
 		case mod_qual:
-			qualifier = addqualifier( qualifier, modifier & 0xff, cc );
+			qualifier = addqualifier( qualifier, modifier & 0xff, loc, cc );
 	}
 }
 
@@ -218,13 +218,14 @@ void Type::fixup( Compiler *cc )
 }
 
 
-int Type::addqualifier( int list, int one, Compiler *cc )
+int Type::addqualifier( int list, int one, Place loc, Compiler *cc )
 {
 	if( list & one )
-		cc->error( " : warning: same type qualifier used more than once\n" );
+		cc->error( LOC "warn: same type qualifier used more than once\n", loc );
 
 	return list|one;
 }
+
 
 Type *Type::create_function( Sym *paramlist, Compiler *cc )
 {
@@ -281,9 +282,18 @@ Type *Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Co
 	} else if( members ) {
 		t->params = members;
 		t->members = mm;
+
+		word size = 0;
+
+		for( Sym *s = members; s; s = s->next ) {
+			s->offset = type == t_struct ? size : 0;
+			size += s->type->size;
+		}
+
+		t->size = size;
 	}
 
-	return t;
+	return t->clone( cc );
 }
 
 
@@ -303,20 +313,34 @@ Type *Type::create_array( int tqualifier, Expr *expr, Compiler *cc )
 }
 
 /*
-	DESC: returns the pointer to "const unsigned int" type
+	DESC: returns the pointer to "unsigned int" imm type
 	
-	EG: the type is cached in the enum_type static variable
+	EG: the type is cached in the Compiler::basic[0] variable
 */
-Type *Type::enum_type = NULL;
-
 Type *Type::get_enum_type( Compiler *cc )
 {
-	if( enum_type == NULL ) {
-		enum_type = create( t_uint, cc );
-		enum_type->qualifier = tq_const;
+	if( cc->basic[0] == NULL ) {
+		cc->basic[0] = create( t_uint, cc );
+		cc->basic[0]->storage = scs_imm;
 	}
 
-	return enum_type;
+	return cc->basic[0];
+}
+
+
+/*
+	DESC: returns the pointer to basic type
+	
+	EG: the type is cached in the Compiler::basic[1..t_basiccnt] variable
+*/
+Type *Type::get_basic_type( int spec, Compiler *cc )
+{
+	ASSERT( spec > 0 && spec < t_basiccnt );
+
+	if( cc->basic[spec] == NULL )
+		cc->basic[spec] = create( spec, cc );
+
+	return cc->basic[spec];
 }
 
 
@@ -356,5 +380,5 @@ Type *Type::create_enum( char *name, Namespace *ns, Compiler *cc )
         cc->current->add_item( s );
 	}
 
-	return t;
+	return t->clone( cc );
 }

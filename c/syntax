@@ -30,7 +30,7 @@
 typename(char*):
 Lid(char*): /[a-zA-Z_][a-zA-Z_0-9]*/ -1  \ @ = identifier( token, &$$, $typename );
 Licon(Expr*):  /([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?/ 
-	\ @ = Expr::create_icon_from_string(token,this);
+	\ @ = Expr::create_icon_from_string(token,PLACE($@),this);
 
 # Floating point constant
 Lfcon:		/([0-9]*\.[0-9]+|[0-9]+\.)([eE][+-]?[0-9]+)?[flFL]?/
@@ -40,7 +40,7 @@ Lfcon:		/0[xX]([0-9a-fA-F]*\.[0-9a-fA-F]+|[0-9a-fA-F]+\.?)[pP][+-]?[0-9]+[flFL]?
 # Strings and Chars
 Lscon:      /L?"([^"\\]|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))*"/
 Lccon(Expr*):/L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'/
-	\ @ = Expr::create_ccon_from_string(token,this);
+	\ @ = Expr::create_ccon_from_string(token,PLACE($@),this);
 
 # Non-terminal, skip
 _skip:      /\/\/.*/
@@ -173,7 +173,7 @@ constant (Expr *) ::
 
 primary_expression (Expr *) ::
   = Lid
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_from_id( $Lid, PLACE(@0), this );
 
   = constant
   = Lscon
@@ -186,7 +186,7 @@ primary_expression (Expr *) ::
 postfix_expression (Expr *) ::
   = primary_expression
   = postfix_expression '[' expression ']'
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_array_subscripting( $postfix_expression#1, $expression, PLACE(@1), this );
 
   = postfix_expression '(' ')'
 		error("not implemented yet at %i\n", __LINE__ );
@@ -195,10 +195,10 @@ postfix_expression (Expr *) ::
 		error("not implemented yet at %i\n", __LINE__ );
 
   = postfix_expression '.' ID
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_struct_member( $postfix_expression#1, $ID, PLACE(@1), this );
 
   = postfix_expression '->' ID
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_struct_member_ptr( $postfix_expression#1, $ID, PLACE(@1), this );
   
   = postfix_expression '++'
 		error("not implemented yet at %i\n", __LINE__ );
@@ -236,7 +236,7 @@ unary_expression (Expr *) ::
 		error("not implemented yet at %i\n", __LINE__ );
 
   = Lsizeof '(' type_name ')'
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::get_type_size( $type_name, PLACE(@0), this );
 ;
 
 unary_operator (int) ::= '&' | '*' | '+' | '-' | '~' | '!' ;
@@ -244,7 +244,7 @@ unary_operator (int) ::= '&' | '*' | '+' | '-' | '~' | '!' ;
 cast_expression (Expr *) ::
   = unary_expression
   = '(' type_name ')' cast_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = $cast_expression#1->cast_to( $type_name, PLACE(@0), this );
 ;
 
 %left  '||' ;
@@ -261,25 +261,25 @@ cast_expression (Expr *) ::
 oneexpr (Expr *) ::
   = cast_expression
   = oneexpr '*'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_mult, PLACE(@1), this );
 
   = oneexpr '/'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_div, PLACE(@1), this );
 
   = oneexpr '%'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_perc, PLACE(@1), this );
 
   = oneexpr '+'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_plus, PLACE(@1), this );
 
   = oneexpr '-'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_minus, PLACE(@1), this );
 
   = oneexpr '<<' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_shl, PLACE(@1), this );
 
   = oneexpr '>>' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_shr, PLACE(@1), this );
 
   = oneexpr '<'  oneexpr
 		error("not implemented yet at %i\n", __LINE__ );
@@ -300,13 +300,13 @@ oneexpr (Expr *) ::
 		error("not implemented yet at %i\n", __LINE__ );
 
   = oneexpr '&'  oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_and, PLACE(@1), this );
 
   = oneexpr '^'  oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_xor, PLACE(@1), this );
 
   = oneexpr '|'  oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_or, PLACE(@1), this );
 
   = oneexpr '&&' oneexpr 
 		error("not implemented yet at %i\n", __LINE__ );
@@ -357,7 +357,7 @@ declaration (Node *) ::
 
 declaration_specifiers (Type *) ::
   = declaration_specifier_notype declaration_specifiers
-		$declaration_specifiers#1->add_modifier( $declaration_specifier_notype, this );
+		$declaration_specifiers#1->add_modifier( $declaration_specifier_notype, PLACE(@0), this );
 		$declaration_specifiers#0 = $declaration_specifiers#1;
 
   = declaration_specifiers1
@@ -370,10 +370,10 @@ declaration_specifiers1 (Type *) ::
 
   = type_specifier2
   = declaration_specifiers1 type_specifier
-		$declaration_specifiers1#1->add( $type_specifier, this );
+		$declaration_specifiers1#1->add( $type_specifier, PLACE(@1), this );
 
   = declaration_specifiers1 declaration_specifier_notype
-		$declaration_specifiers1#1->add_modifier( $declaration_specifier_notype, this );
+		$declaration_specifiers1#1->add_modifier( $declaration_specifier_notype, PLACE(@1), this );
 ;
 
 declaration_specifier_notype (int) ::
@@ -457,7 +457,7 @@ struct_declaration (Sym *) ::
 
 specifier_qualifier_list (Type *) ::
   = type_qualifier specifier_qualifier_list
-		$specifier_qualifier_list#1->add_modifier( mod_qual | $type_qualifier, this );
+		$specifier_qualifier_list#1->add_modifier( mod_qual | $type_qualifier, PLACE(@0), this );
 		$specifier_qualifier_list#0 = $specifier_qualifier_list#1;
 
   = specifier_qualifier_list1
@@ -470,19 +470,21 @@ specifier_qualifier_list1 (Type *) ::
 
   = type_specifier2
   = specifier_qualifier_list1 type_qualifier
-		$specifier_qualifier_list1#1->add_modifier( mod_qual | $type_qualifier, this );
+		$specifier_qualifier_list1#1->add_modifier( mod_qual | $type_qualifier, PLACE(@1), this );
 
   = specifier_qualifier_list1 type_specifier
-		$specifier_qualifier_list1#1->add( $type_specifier, this );
+		$specifier_qualifier_list1#1->add( $type_specifier, PLACE(@1), this );
 ;
 
 struct_declarator_list (Sym *) ::
   = struct_declarator
 		$struct_declarator->fixtype( $#, this );
+		$struct_declarator->register_self( this );
 
   = struct_declarator_list ',' struct_declarator
 		$struct_declarator->fixtype( $#, this );
 		$struct_declarator_list#1->addnext( $struct_declarator );
+		$struct_declarator->register_self( this );
 ;
 
 struct_declarator (Sym *) ::
@@ -496,7 +498,11 @@ struct_declarator (Sym *) ::
 
 enum_specifier ::
   = Lenum '{' enumerator_list ',' '}'
+		error("not implemented yet at %i\n", __LINE__ );
+
   = Lenum '{' enumerator_list '}'
+		error("not implemented yet at %i\n", __LINE__ );
+
   = Lenum ID '{' new_ns enumerator_list ','  close_ns '}'
 		$enum_specifier = Type::create_enum( $ID, $new_ns, this );
 
@@ -680,7 +686,7 @@ pointer (Type *) ::
 type_qualifier_list (int) ::
   = type_qualifier
   = type_qualifier_list type_qualifier
-		$type_qualifier_list = Type::addqualifier( $type_qualifier_list#1, $type_qualifier, this );
+		$type_qualifier_list = Type::addqualifier( $type_qualifier_list#1, $type_qualifier, PLACE(@1), this );
 ;
 
 parameter_type_list (Sym *) ::
@@ -953,4 +959,6 @@ close_ns ::=
 #include "cc.h"
 #include "types.h"
 #include "stmt.h"
+
+#define PLACE(i) (*(struct Place *)&(i))
 

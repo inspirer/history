@@ -27,19 +27,19 @@ enum { SLAB_SIZE = 32768 - sizeof(void *) - sizeof(int) };
 
 class slab {
 private:
-    int ssize;
+	int ssize;
 
-    struct block {
+	struct block {
 	struct block *next;
-        int  size;
-        char data[SLAB_SIZE];
-    } *current;
+		int  size;
+		char data[SLAB_SIZE];
+	} *current;
 
 public:
-    slab(int size);
-    void *allocate();
-    void destroy();
-    ~slab();
+	slab(int size);
+	void *allocate();
+	void destroy();
+	~slab();
 };
 
 #endif
