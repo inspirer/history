@@ -101,23 +101,46 @@
    // drivers
    init_drivers()
 
-   // Switch first task
+   // switch task
    cli
    w:m_task_en=multitasking
-   callf d:[xtask]
-   w:m_task_en=2
+   ax=mem_kernel_data;ds=ax
+
+   // Jmp first task
+load_next_task:
+   jmpf d:cs:[xtask]
+
+   // Signal to kill task
+   xor ebx,ebx;bx=w:kill_task;ah=0x22;int 0x20
+
+   // search for next task
+   esi=process_list
+   ecx=max_process
+   {
+      lodsd
+      if(ax!=0){
+        w:task_no=si
+        w:task_lft=ax
+        eax=>>16
+        w:task_PID=ax
+        w:xtask_PID=ax
+        jmp load_next_task
+      }
+      loop ?^0
+   }
 
    // Exit to DOS (no errors)
 _dos_exit:
+   w:m_task_en=2
    xor ecx,ecx
    jmp exit
 
-xtask_name  : db "startup.bin",0
 #shortdef xtask $-4
 xtask_PID   : dw 0
 
 #shortdef kernel_switch $-4
 kernel_PID  : dw 0
+kill_task: dw 0
 
    // ------------------------------ [ Data ] ------------------------------
 

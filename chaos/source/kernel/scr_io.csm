@@ -25,12 +25,12 @@
   display_string:
     push edi;push es;push ebx;push esi
 
-    // prepeare ES:EDI
+    // prepare ES:EDI
     xor edi,edi;di=w:cs:dos_vm_call;edi=<<4
     movzx esi,w:cs:dos_vm_call.4;add edi,esi
     si=mem_all_data;es=si
 
-    // Prepeare registers
+    // prepare registers
     push ds;si=mem_kernel_data;cli;ds=si
     ah=0x9;w:[VM_TSS.tss_eax]=ax
     ax=w:[dos_vm_call.4]

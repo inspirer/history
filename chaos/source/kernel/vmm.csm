@@ -17,12 +17,8 @@
 #shortdef tss_esi 64
 
  gpf: // General Protection fault (PM)
-   pop  ebx
-   shl  ebx,16
-   pop  ebp
-   pop  eax
-   mov  bx,0xD
-   jmp  debug
+   pop ebx;shl ebx,16
+   ebx=0xD;jmp fault
 
  exc_0D: // GPF => VM or standart
    test b:[esp.12.2],2
@@ -231,10 +227,23 @@ call_VM_task:
    pop esi;pop ds;b:[esi]=0x89
    ax=mem_kernel_data;nop;nop;es=ax
 
+   // Disable ints
+   push ebx
+   in al,0x21;bl=al
+   in al,0xA1;bh=al
+   al=0xFF
+   out 0x21,al
+   out 0xA1,al
+
    // Call VM00
    sldt ax
    callf d:cs:[vm_task]
    lldt ax
+
+   // Restore ints
+   al=bl;out 0x21,al
+   al=bh;out 0xA1,al
+   pop ebx
 
    // Set DATA type
    b:[esi]=0x92;push ds;push esi

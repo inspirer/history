@@ -1,5 +1,50 @@
    -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
+ INT 0x20: (memory)
+
+  1. Allocate memory
+     In:  ah  = 0x00;al  = 0 (ring3), 1 (ring0), 2 (ring1);ebx=Size in pages
+     Out: CF(error) or ax=SEG_of_new_block
+  2. Free memory
+     In:  ah  = 0x01;dx  = SEG to Free
+     Out: CF(error)
+  ?? not ready yet ?? 3. Resize memory
+     In:  ah  = 0x02;ebx = NewSize;dx  = SEG of block (in LDT)
+     Out: CF(error)
+  4. Allocate LDT
+     In:  ah  = 0x03
+     Out: CF(error) or ax=LDTNum
+  5. Free LDT
+     In:  ah  = 0x04;bx  = LDTNum
+     Out: CF(error)
+  6. Load LDT
+     In:  ah  = 0x05;bx  = LDTNum
+     Out: CF(error)
+  7. Allocate Global
+     In:  ah  = 0x06;ebx = size in pages (4096)
+     Out: CF set on err (not enough mem, free desc. absent);ax=SEG of global
+  8. Resize Global
+     In:  ah  = 0x07;ebx = NewSize in pages (4096);dx  = SEG of global
+     Out: CF(error)
+  9. Free Global
+     In:  ah  = 0x08;dx  = SEG of global
+     Out: CF(error)
+  ?? not ready yet ?? 10. Defragment
+     In:  ah  = 0x09
+     Out: <none>
+  11. Get free memory info
+     In:  ah  = 0x0A
+     Out: edx = free memory
+  12. Map global
+     In:  ah  = 0x0B;ebx = memory_to_MAP address;dx  = global selector
+     Out: CF(impossible)
+
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+ INT 0x20: (process)
+
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
  INT 0x20: (registers)
 
    1. Create reg_key          ah=0x40;al=rights;            CF
@@ -15,7 +60,7 @@
                               al=+1(next),+2(sub),+4(up)    edx=sub, edi=up
    7. Get register key name   ah=0x46;ebx=ID                ES:EDI<-buffer
                                                             eax = size
-                                                           
+
    -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
  INT 0x23: (screen)
@@ -27,14 +72,17 @@
    5. Set screen to write       ah=4;bx=ID         CF
    6. Write char                ah=5;al=char       CF
    7. GotoXY                    ah=6;bh:bl = xy    CF
+   8. Get XY                    ah=7;              CF or bh:bl = xy
    13.Write string              ah=0xC;ds:esi<-str <none>
+   14.Write chr > syscons       ah=0xD;al=char     CF
+   15.Write str > syscons       ah=0xE;ds:esi<-str <none>
 
    -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
  INT 0x24: (keyb+console)
 
    1. Read input                ah=0               CF or al=CODE
-   2. Read char/code
+   2. Read char/code            ah=1               Al=char ; Ah = code
    3. Get keyboard shift status ah=2               AX=bitreg (0-ALT, 1-SHIFT)
    4. Allocate console          ah=3               CF or AX=ID
    5. Free console              ah=4;bx=ID         CF
@@ -44,10 +92,19 @@
 
  INT 0x25: (file system)
 
-   1. Create file
-   2. Open file
-   3. Close file
-   4. Read file
-   5. Write file
+   1. Create file    In:  ah=0;cx = attr ;  ds:esi - name
+                     Out: CF or ax=handle
+   2. Open file      In:  ah=1;al=access mode(0-r;1-w;2-r/w); ds:esi - name
+                     Out: CF or ax=handle
+   3. Close file     In:  ah=2;bx = handle
+                     Out: CF
+   4. Read file      In:  ah=3; bx=handle;ecx=bytes;es:edi = buffer
+                     Out: CF or EAX=BYTES_READ
+   10. FindFirst     In:  ah=9;ds:esi-filespec;es:edi-FileInfoRec;cx=attr
+                     Out: CF set on error
+   11. FindNext      In:  ah=10 ; ds:esi - previous FileInfoRec
+                     Out: CF set on error
+   17. Execute       In:  ah=16 ; ds:esi - file to exec
+                     Out: AX=PID or CF set on error
 
    -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --

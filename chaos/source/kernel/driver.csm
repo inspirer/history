@@ -178,11 +178,10 @@ load_driver:
       bh=0xEF;d:[0x404]=ebx
 
       // create task to call int80
-      ah=3;int 0x20;lldt ax;ebx=1;ax=0;int 0x20
-      push ds;ds=ax;d:[0]=0xCF80CD;pop ds
-      dx=ax;ah=0x27;int 0x20
-      ah=0x20;xor edi,edi;ecx=1;int 0x20
-      xor bx,bx;lldt bx
+      ah=6;ebx=1;int 0x20;push eax
+      push ds;ds=ax;d:[0]=0xCF80CD
+      ecx=1;ebx=ecx;ah=0x28;int 0x20
+      pop ds;pop edx;push eax;ah=8;int 0x20;pop eax
 
       // Call task
       push ds;bx=mem_kernel_data;ds=bx
@@ -233,40 +232,39 @@ load_driver:
   // In  : esi = ptr to file_name
   // Out : ax  = PID
 loadtask:
-   push ebx;push ecx;push edx;push edi;push esi
+   push es;push ebx;push ecx;push edx;push edi;push esi
 
    // Open file
    ax=0x100;int 0x21;bx=ax
    if (~c){ ax=1;if (bx==2){ax=4} jmp _load_task_err }
 
    // Get task header
-   ax=mem_kernel_data;es=ax
-   edi=task_head;cx=16;ah=3;int 0x21
+   ax=mem_kernel_data;es=ax;edi=task_head;cx=16;ah=3;int 0x21
 
    // Check task
    if (ax!=16||w:task_head.task_sign!='CE'){ ax=2;jmps _load_task_err }
 
    // Allocate memory for main task
-   push ebx;ah=3;int 0x20
-   if (~c){ pop ebx;ax=3;jmps _load_task_err }
-   lldt ax;xor ebx,ebx;bx=w:task_head.task_size
-   ax=0;int 0x20;pop ebx;if (~c){ ax=3;jmps _load_task_err }
+   push ebx;ah=6;xor ebx,ebx;bx=w:task_head.task_size;int 0x20
+   pop ebx;if(~c){ax=3;jmps _load_task_err} push eax
+   xor ecx,ecx;cx=w:task_head.task_stck;push ecx
+   xor ecx,ecx;cx=w:task_head.task_size;shl ecx,12
+   es=ax
 
    // Read task
-   push eax;es=ax;xor edi,edi;xor ecx,ecx
-   ah=3;mov cx,w:task_head.task_size;shl ecx,12;int 0x21
-   ah=2;int 0x21;ax=mem_kernel_data;es=ax
-   pop eax
+   xor edi,edi;ah=3;int 0x21;push eax
+   ah=2;int 0x21
 
-   // set data to code, create main task & clear LDTR
-   dx=ax;ah=0x27;int 0x20;xor ecx,ecx;ah=0x20
-   xor edi,edi;cx=w:cs:task_head.task_stck;int 0x20
-   xor bx,bx;lldt bx
+   // Run task
+   pop ebx;pop ecx;ebx=>>12;inc ebx;push ds;push es;pop ds;ah=0x28;int 0x20;pop ds
+   if (~c){ pop ds;pop edx;ax=3;jmp _load_task_err }
 
-   pop esi;pop edi;pop edx;pop ecx;pop ebx
+   // Restore regs
+   pop edx;push eax;ah=8;int 0x20;pop eax
+   pop esi;pop edi;pop edx;pop ecx;pop ebx;pop es
    ret
 
- // 1 - file not found ; 2 - header ; 3 - memory
+ // 1 - file err ; 2 - header ; 3 - memory ; 4 - file not found
 _load_task_err:
     pop esi;push eax;ah=0x31;int 0x21;pop eax
     if (ax==1){ esi=driver_err_un } if (ax==2){ esi=task_head_err }
@@ -311,7 +309,7 @@ init_drivers:
             if (b:[edi]!=0){
                push esi;esi=edi
 
-               // Prepeare to load ( "," => 0 )
+               // prepare to load ( "," => 0 )
                push esi;al=1;while(al!=0&&al!=','){lodsb}
                dec esi;b:[esi]=0;pop esi
 

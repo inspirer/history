@@ -105,7 +105,7 @@
        { if (ax==w:[esi._task]){ and b:[esi._task],0xF8} esi=+4096;loop ?^0 }
        pop esi
 
-       // Prepeare it
+       // prepare it
        eax=esi>>12;push eax
        ecx=2000 { w:[esi]=0x700;inc esi;inc esi;loop ?^0 }
        w:[~esi.2]=0;w:[~esi.4]=7;str ax;al=&0xF8;inc ax;w:[esi]=ax
@@ -159,7 +159,7 @@
   //  In:  ah = 3
   //  Out: <none>
   refresh_console:
-       push ds;push es;push eax;push esi;push edi;push ecx
+       push ds;push es;push eax;push esi;push edi;push ecx;push ebx
 
        // Refresh screen
        eax=d:cs:scr;ebx=d:cs:mem;es=ax;ds=bx;esi=d:cs:curr<<12
@@ -169,7 +169,7 @@
        push edx;lodsw;cx=ax;cx=>>1;mov dx,0x3D4;mov al,0xE;out dx,al;inc dx;mov al,ch;out dx,al
        mov dx,0x3D4;mov al,0xF;out dx,al;inc dx;mov al,cl;out dx,al;pop edx
 
-       pop ecx;pop edi;pop esi;pop eax;pop es;pop ds
+       pop ebx;pop ecx;pop edi;pop esi;pop eax;pop es;pop ds
        iret
 
   exc20_d1:
@@ -215,6 +215,7 @@
   //       al = char
   //  Out: <none>
   write_char:
+       if (al==13){ iret }
        push ds;push eax;push esi;push ecx;push eax
 
        // Search for current console
@@ -253,6 +254,10 @@
        pop edi;pop ecx;pop esi;pop eax;pop ds
        iret
 
+  exc20_d2:
+       cmp ah,0x6 ; jz gotoxy
+       jmp exc20_d3
+
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 7. GotoXY
   //  In:  ah=6
@@ -276,21 +281,42 @@
        al=160;mul bl;shl bh;bx=>>8;ax=+bx
        w:[esi._cursor]=ax
 
+       // Refresh
+       push eax;ah=3;int 0x23;pop eax
+
        pop ecx;pop esi;pop eax;pop ds
        iret
 
-  exc20_d2:
-       cmp ah,0x6 ; jz gotoxy
+  exc20_d3:
+       cmp ah,0x7 ; jz getxy
        cmp ah,0xC ; jz write_asciiz
-       ax=err_no_support
-  set_cf:
-       push ebp
-       mov ebp,esp
-       or d:[~ebp+12],1
-       pop ebp
+       jmp int23_d4
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 8. Get XY
+  //  In:  ah=7
+  //  Out: CF(err_screen_abs,err_xy_out_of_range) or bh:bl = X:Y
+  getxy:
+       push ds;push eax;push esi;push ecx
+
+       // Search for current console
+       esi=cs:d:mem;ds=si;xor esi,esi
+       str ax;and al,0xF8;inc ax
+       mov ecx,max_screen_num-1
+       { if (ax!=w:[esi._task]){ esi=+4096;loop ?^1 } }
+       if (ax!=w:[esi._task]){
+          pop ecx;pop esi;pop eax;pop ds
+          ax=err_screen_abs;jmp set_cf
+       }
+
+       // Get cursor in BH:BL
+       xor ebx,ebx;bx=w:[esi._cursor];shr ebx;xor eax,eax
+       while(bx=>80){ bx=-80;inc eax} shl bx,8;bl=al
+
+       pop ecx;pop esi;pop eax;pop ds
        iret
 
-  // 8.
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 9.
   // 10.
   // 11.
@@ -310,6 +336,72 @@
          jmps ?^0
        }
        pop esi;pop eax
+       iret
+
+  int23_d4:
+       cmp ah,0xD ; jz write_sys_cons
+       jmp int23_d5
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 14. Write char to system console
+  //  In:  ah = 0xD ; al = char
+  write_sys_cons:
+       check_first_ring();if (~c){ ax=err_access_denied;jmp set_cf }
+       if (al==13){ iret }
+       push ds;push eax;push esi;push ecx;push eax
+
+       // current console = system
+       esi=cs:d:mem;ds=si;xor esi,esi
+
+       // Save character at cursor with needed attr
+       xor eax,eax;ax=w:[_cursor];pop ecx;push edi;edi=esi
+       ifelse (cl==10){
+         xor esi,esi;while(si<=ax){ si=+160 }
+         w:[_cursor]=si
+       } else {
+         esi=+eax;b:[esi]=cl;inc esi;al=b:[_color];b:[esi]=al
+         w:[_cursor]=+2
+       }
+
+       // cursor < 4000 => eat line
+       while (w:[_cursor]=>4000){
+         push es;push edi;push ds;pop es
+         esi=edi+160;ecx=960;push edi;rep movsd;pop esi
+         ah=b:[_color];al=0;ecx=80;rep stosw
+         pop edi;pop es
+         w:[_cursor]=-160
+       }
+
+       // Update screen
+       ah=3;int 0x23
+
+       pop edi;pop ecx;pop esi;pop eax;pop ds
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 15. Write system console string
+  //  In:  ah = 0xE
+  //       ds:esi <- asciiz
+  write_sys_asciiz:
+       push eax;push esi
+       {
+         lodsb
+         cmp al,0
+         jz ?v0
+         ah=0xD;int 0x23
+         jmps ?^0
+       }
+       pop esi;pop eax
+       iret
+
+  int23_d5:
+       cmp ah,0xE ; jz write_sys_asciiz
+       ax=err_no_support
+  set_cf:
+       push ebp
+       mov ebp,esp
+       or d:[~ebp+12],1
+       pop ebp
        iret
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --

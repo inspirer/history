@@ -7,14 +7,14 @@ cd ..
 echo.
 echo  -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 echo.
-echo Building kernel loader ...
-echo.
-F:\SOFT\CHASM\chasm_w.exe source\kernel\chaos.csm
-
-echo.
 echo Building kernel ...
 echo.
 F:\SOFT\CHASM\chasm_w.exe source\kernel\kernel.csm
+
+echo.
+echo Building kernel loader ...
+echo.
+F:\SOFT\CHASM\chasm_w.exe source\kernel\chaos.csm
 
 echo.
 choice Run ChaOS now

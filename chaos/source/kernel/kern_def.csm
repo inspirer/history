@@ -9,8 +9,8 @@
 #shortdef ring1stacksize  4     // Driver's stack
 
 // Kernel stack
-#shortdef dosfstck 1024         // in bytes
-#shortdef stacksize 1024
+#shortdef dosfstck 2048         // in bytes
+#shortdef stacksize 2048
 
 // Drivers
 #shortdef max_driver_size 256   // Max size of driver (in pages) ~1Mb

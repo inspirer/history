@@ -13,6 +13,15 @@
 #shortdef _h_task _h_attr+4
 #shortdef _h_structure _h_task+4
 
+#shortdef _fir_attr 0   // b
+#shortdef _fir_size 4   // 2*d
+#shortdef _fir_time 12   // w
+#shortdef _fir_date 14  // w
+#shortdef _fir_name 16  // [262]
+#shortdef _fir_temp 278 // [262]
+#shortdef _fir_flag 540 // w
+#shortdef _fir_strc 542
+
 #shortdef max_handle_num 100
 #shortdef _driver_mem_end_ max_handle_num*_h_structure+10
 #shortdef driver_mem _driver_mem_end_/4096+2
@@ -21,7 +30,19 @@
 #shortdef err_wrong_info     5
 #shortdef err_access_denied  6
 #shortdef err_file_not_found 0x80
-#shortdef err_no_free_desc 0x81
+#shortdef err_no_free_desc   0x81
+#shortdef err_unkn_file_sys  0x82
+#shortdef err_unkn_read      0x83
+#shortdef err_no_more_files  0x84
+#shortdef err_not_exe        0x85
+
+#shortdef task_sign 0x0
+#shortdef task_name 0x3
+#shortdef task_stck 0xC
+#shortdef task_size 0xE
+
+#shortdef dos_block_read  16384
+#shortdef dos_block_write 16384
 
 #org 0
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -45,28 +66,25 @@
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   int25:
        // Clear CF
-       clc;cld;push ebp
+       clc;cli;cld;push ebp
        mov ebp,esp
        and b:[~ebp+12],0xFE
        pop ebp
-       cmp ah,0x1 ; jz open_file
+       cmp ah,0x0 ; jz create_file
        jmp int25_f0
+
+#shortdef _file_name_full_ _driver_mem_end_+4096
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 1. Create file
-
-
-  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-  // 2. Open file
-  //  In:  ah=1; al=access mode (0-read,1-write,2-r/w)
+  //  In:  ah=0; cx = attr
   //       ds:esi - name
   //  Out: CF or ax=handle
-  open_file:
+  create_file:
        if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
-       push es;push ds;push esi;push edi;push ecx;push ebx;push eax
+       push es;push ds;push esi;push edi;push ecx;push ebx;push ecx
 
        // Copy file name to buffer
-       #shortdef _file_name_full_ _driver_mem_end_+4096
        eax=d:cs:mem;es=ax;edi=_file_name_full_;push edi
        mov eax,'/Roo';stosd;al='t';stosb
        { lodsb;stosb;cmp al,0;jnz ?^0 } push es;pop ds
@@ -93,7 +111,90 @@
 
                  // Redirect to DOS (int 0x21)
                  xor esi,esi;ecx=max_handle_num;xor eax,eax
-                 { if(w:[_h_task]==0){ dec eax;jmp ?v1 } esi=+_h_structure;loop ?^0 }
+                 { if(w:[esi._h_task]==0){ dec eax;jmp ?v1 } esi=+_h_structure;loop ?^0 }
+
+                 // No free handle
+                 if(ax==0){
+                    pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+                    ax=err_no_free_desc;jmp set_cf
+                 }
+
+                 // DS:ESI - block ; ES:EDI - fname ; save fname
+                 push ecx;push esi;push edi;xchg esi,edi;esi=_file_name_full_
+                 { lodsb;stosb;cmp al,0;jnz ?^0 }
+
+                 // Save task ID
+                 pop edi;pop esi;str ax;and al,0xF8;w:[esi._h_task]=ax
+
+                 // Create file & save handle
+                 pop ecx;pop eax;push ecx;ecx=eax;ah=0;push esi;esi=edi;int 0x21
+                 if (~c){
+                   pop esi;w:[esi._h_task]=0;
+                   pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+                   ax=err_file_not_found;jmp set_cf
+                 }
+                 pop esi;w:[esi._h_hand]=ax
+
+              } else {
+
+                 pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+                 ax=err_unkn_file_sys;jmp set_cf
+
+              }
+
+              pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+              iret
+
+           }
+           pop esi;b:[esi]=0x2F
+         }
+         dec esi
+       }
+       pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+       ax=err_file_not_found;jmp set_cf
+
+  int25_f0:
+       cmp ah,0x1 ; jz open_file
+       jmp int25_f1
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 2. Open file
+  //  In:  ah=1; al=access mode (0-read,1-write,2-r/w)
+  //       ds:esi - name
+  //  Out: CF or ax=handle
+  open_file:
+       push eax;ah=0xE;int 0x23;ax=0xD0A;int 0x23;pop eax
+       if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
+       push es;push ds;push esi;push edi;push ecx;push ebx;push eax
+
+       // Copy file name to buffer
+       eax=d:cs:mem;es=ax;edi=_file_name_full_;push edi
+       mov eax,'/Roo';stosd;al='t';stosb
+       { lodsb;stosb;cmp al,0;jnz ?^0 } push es;pop ds
+
+       // set esi to end
+       pop esi;edi=esi { lodsb;cmp al,0;jnz ?^0 } dec esi;dec esi
+
+       // ES:EDI - ptr to start ; DS:ESI to end ; search for last "/"
+       _while(edi<esi){
+         _if (b:[esi]=='/'){
+           push esi;b:[esi]=0;
+           ah=0x42;int 0x20
+           _if (~nc){
+
+              // Copy to >MEM:_driver_mem_end_< full path + name
+              edi=_driver_mem_end_
+              ah=0x43;int 0x20;while(b:[edi]!=0){ inc edi } inc esi
+              { lodsb;stosb;cmp al,0;jnz ?^0 } pop esi
+
+              // Check driver ID
+              esi=_driver_mem_end_
+              _ifelse(d:[esi]=='dos,'){
+                 lodsd;edi=esi
+
+                 // Redirect to DOS (int 0x21)
+                 xor esi,esi;ecx=max_handle_num;xor eax,eax
+                 { if(w:[esi._h_task]==0){ dec eax;jmp ?v1 } esi=+_h_structure;loop ?^0 }
 
                  // No free handle
                  if(ax==0){
@@ -119,6 +220,8 @@
 
               } else {
 
+                 pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+                 ax=err_unkn_file_sys;jmp set_cf
 
               }
 
@@ -134,9 +237,336 @@
        ax=err_file_not_found;jmp set_cf
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 3. Close file
+  //  In:  ah = 2
+  //       bx = handle
+  //  Out: CF
+  close_file:
+       if (ebx>max_handle_num||ebx<0){ ax=err_wrong_info;jmp set_cf }
 
+       push eax;push ebx;push ds;push esi;push ecx;esi=d:cs:mem;ds=si
 
-  int25_f0:
+       // Translate handle to normal_handle
+       ecx=max_handle_num;xor esi,esi
+       while(ecx!=ebx){ ecx=--;esi=+_h_structure }
+       str ax;and al,0xF8
+       if(w:[esi._h_task]!=ax){
+           pop ecx;pop esi;pop ds;pop ebx;pop eax
+           ax=err_access_denied;jmp set_cf
+       }
+       ebx=d:[esi._h_hand]
+       ah=2;int 0x21
+       w:[esi._h_task]=0
+
+       pop ecx;pop esi;pop ds;pop ebx;pop eax
+       iret
+
+  int25_f1:
+       cmp ah,0x2 ; jz close_file
+       cmp ah,0x3 ; jz read_file
+       jmp int25_f2
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 4. Read file
+  // In:  ah  = 3
+  //      bx  = handle
+  //      ecx = bytes
+  //      es:edi = buffer
+  // Out: CF or EAX=BYTES_READ
+  read_file:
+       if (ebx>max_handle_num||ebx<0){ ax=err_wrong_info;jmp set_cf }
+
+       push ecx;push edi;push edx;push ebx
+       edx=ecx
+
+       // Translate handle to normal_handle
+       push ds;push esi;push ecx;esi=d:cs:mem;ds=si
+       ecx=max_handle_num;xor esi,esi
+       while(ecx!=ebx){ ecx=--;esi=+_h_structure }
+       str ax;and al,0xF8
+       if(w:[esi._h_task]!=ax){
+           pop ecx;pop esi;pop ds;pop ebx;pop edx;pop edi;pop ecx
+           ax=err_access_denied;jmp set_cf
+       }
+       ebx=d:[esi._h_hand]
+       pop ecx;pop esi;pop ds
+
+       // Read data
+       while(edx>0){
+          ecx=dos_block_read
+          if (ecx>edx){ ecx=edx }
+          edx=-ecx
+          ah=3;int 0x21
+          if (~c){
+             pop ebx;pop edx;pop edi;pop ecx
+             ax=err_unkn_read;jmp set_cf
+          }
+          eax=&0xFFFF
+          edi=+eax
+          if(eax==0){ jmp ?v1 }
+       }
+       eax=edi
+
+       pop ebx;pop edx;pop edi;pop ecx;eax=-edi
+       iret
+
+  int25_f2:
+       cmp ah,0x9 ; jz find_first
+       jmp int25_f3
+
+ #shortdef _file_info_rec_ _file_name_full_
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 10. FindFirst
+  //   In:  ah  = 9
+  //        ds:esi - filespec ("/temp/*.*")
+  //        es:edi - Place for FileInfoRec
+  //        cx  = attributes
+  //   Out: CF set on error (ax = dos error code)
+  find_first:
+       if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
+       push es;push eax;push edi;push ecx;push ebx;push ds;push esi;
+         push es;push edi;push ecx
+
+       // Copy file name to buffer
+       eax=d:cs:mem;es=ax;edi=_file_name_full_;push edi
+       mov eax,'/Roo';stosd;al='t';stosb
+       { lodsb;stosb;cmp al,0;jnz ?^0 } push es;pop ds
+
+       // set esi to end
+       pop esi;edi=esi { lodsb;cmp al,0;jnz ?^0 } dec esi;dec esi
+
+       // search for last "/"
+       while(b:[esi]!='/'){ dec esi }
+       pop ecx;push ecx;and cl,128;push esi;push edi;b:[esi]=0;
+       ah=0x42;int 0x20
+       _if(~nc&&cl!=0){
+
+         // Get sub key
+         push edx;ax=0x4502;int 0x20;ebx=edx;pop edx;inc esi
+
+         if (ebx==0xFFFFFFFF){ jmp ?v1 }
+         {
+            _search_next_key:
+            edi=_driver_mem_end_;ah=0x46;int 0x20
+
+            // Compare _driver_mem_end_(name,edi) & esi(mask)
+            push esi
+            {
+               if(b:[esi]==0||b:[edi]==0){
+                 cmpsb
+                 if(~z){ clc;jmp ?v2 }
+                 stc;jmp ?v1
+               }
+               if(b:[esi]=='?'){ inc esi;inc edi;jmps ?^1 }
+               if(b:[esi]=='*'){
+                 inc esi;al=b:[esi];
+                 while(b:[edi]!=al&&b:[edi]!=0){ inc edi }
+                 if(b:[edi]==0&&al=='.'){ while(b:[esi]!=0){ inc esi } }
+                 jmps ?^1
+               }
+               cmpsb
+               jz ?^0
+               stc
+            }
+            pop esi
+            if (~nc){
+
+              // found
+              pop edi;pop esi;pop ecx;pop edi;pop es
+
+              // Creating table at ES:EDI
+              w:es:[edi._fir_flag]=1
+              d:es:[~edi._fir_size]=0;d:es:[~edi._fir_size.4]=0
+              d:es:[~edi._fir_time]=0
+              b:es:[~edi._fir_attr]=0x80
+              push edi;esi=_driver_mem_end_;edi=+_fir_name;
+              { lodsb;stosb;cmp al,0;jnz ?^0 } pop edi
+
+              // Creating special info (KEY_ID, ATTR, MASK)
+              d:es:[edi._fir_temp]=ebx;d:es:[edi._fir_temp.4]=ecx;
+              add edi,_fir_temp+8;pop esi;pop ds;push esi
+              { lodsb;stosb;cmp al,0;jnz ?^0 }
+
+              pop esi;pop ebx;pop ecx;pop edi;pop eax;pop es
+              iret
+            }
+
+            // not found (ebx - current), search next
+            clc;ax=0x4501;int 0x20;ebx=eax
+            if (ebx!=0xFFFFFFFF){ jmp _search_next_key }
+         }
+       }
+       pop edi;pop esi;b:[esi]=0x2F
+
+       // ES:EDI - ptr to start ; DS:ESI to end
+       _while(edi<esi){
+         _if (b:[esi]=='/'){
+           push esi;b:[esi]=0;
+           ah=0x42;int 0x20
+           _if (~nc){
+
+              // Copy to >MEM:_driver_mem_end_< full path + name
+              edi=_driver_mem_end_
+              ah=0x43;int 0x20;while(b:[edi]!=0){ inc edi } inc esi
+              { lodsb;stosb;cmp al,0;jnz ?^0 } pop esi
+
+              // Check driver ID
+              esi=_driver_mem_end_
+              _ifelse(d:[esi]=='dos,'){
+                 lodsd
+
+                 // find first
+                 pop ecx;edi=_file_info_rec_;ah=9;int 0x21;pop edi;pop es
+                 if(~c){
+                    pop esi;pop ds;pop ebx;pop ecx;pop edi;pop eax;pop es
+                    ax=err_no_more_files;jmp set_cf
+                 }
+
+                 // Save structure
+                 esi=_file_info_rec_;push edi;push esi;ecx=11;edi=+_fir_temp
+                 rep movsd;pop esi;pop edi
+
+                 // Save other params
+                 al=b:[~esi.0x15];b:es:[~edi._fir_attr]=al
+                 d:es:[~edi._fir_size.4]=0;w:es:[edi._fir_flag]=0
+                 eax=d:[~esi.0x1A];d:es:[~edi._fir_size]=eax
+                 eax=d:[~esi.0x16];d:es:[~edi._fir_time]=eax
+                 edi=+_fir_name;esi=+0x1E;
+                 { lodsb;stosb;cmp al,0;jnz ?^0 }
+
+              } else {
+
+                 pop ecx;pop edi;pop es;pop esi;pop ds;pop ebx;pop ecx;pop edi;pop eax;pop es
+                 ax=err_unkn_file_sys;jmp set_cf
+
+              }
+
+              pop esi;pop ds;pop ebx;pop ecx;pop edi;pop eax;pop es
+              iret
+
+           }
+           pop esi;b:[esi]=0x2F
+         }
+         dec esi
+       }
+       pop ecx;pop edi;pop es;pop esi;pop ds;pop ebx;pop ecx;pop edi;pop eax;pop es
+       ax=err_file_not_found;jmp set_cf
+
+  int25_f3:
+       cmp ah,0xA ; jz find_next
+       jmp int25_f4
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 11. FindNext
+  //   In:  ah  = 10
+  //        ds:esi - previous FileInfoRec
+  //   Out: CF set on error (ax = dos error code)
+  find_next:
+       push es;push edi;push eax;push ebx;push ecx;push ds;push esi
+
+       _ifelse(d:[esi._fir_flag]!=0){
+
+          // Search in registers, _fir_temp=(KEY_ID, ATTR, MASK)
+          ebx=d:[esi._fir_temp];
+          _search_next_reg_: ax=0x4501;int 0x20;ebx=eax
+
+          ifelse(ebx==0xFFFFFFFF){
+
+             // No more in regs => find first (clear search_reg flag)
+             ecx=d:[esi._fir_temp.4];and cl,0x7F;ah=9
+             push ds;pop es;edi=esi;add esi,_fir_temp+8
+             int 0x25
+             if (~c){ pop esi;pop ds;pop ecx;pop ebx;pop edi;pop edi;pop es;jmp set_cf }
+             pop esi;pop ds;pop ecx;pop ebx;pop eax;pop edi;pop es
+             iret
+
+          } else {
+
+             // Setup regs
+             push es;push edi;push esi;edi=d:cs:mem;es=di;edi=_file_name_full_
+             add esi,_fir_temp+8 { lodsb;stosb;cmp al,0;jnz ?^0 } pop esi
+             push ds;push esi;esi=_file_name_full_;push es;pop ds
+
+             // Set esi to start of mask
+             push edi;while(b:[esi]!=0){ if(b:[esi]=='/'){ edi=esi }inc esi }
+             esi=edi;pop edi;esi=++
+
+             // EBX=KEY_ID, ES:,DS: -> driver temp memory
+             {
+                edi=_driver_mem_end_;ah=0x46;int 0x20
+
+                // Compare _driver_mem_end_(name,edi) & esi(mask)
+                push esi
+                {
+                   if(b:[esi]==0||b:[edi]==0){
+                     cmpsb
+                     if(~z){ clc;jmp ?v2 }
+                     stc;jmp ?v1
+                   }
+                   if(b:[esi]=='?'){ inc esi;inc edi;jmps ?^1 }
+                   if(b:[esi]=='*'){
+                     inc esi;al=b:[esi];
+                     while(b:[edi]!=al&&b:[edi]!=0){ inc edi }
+                     if(b:[edi]==0&&al=='.'){ while(b:[esi]!=0){ inc esi } }
+                     jmps ?^1
+                   }
+                   cmpsb
+                   jz ?^0
+                   stc
+                }
+                pop esi
+                if (~nc){
+
+                  // found, restore DS:ESI as ES:EDI
+                  pop edi;pop es;
+
+                  // Creating table at ES:EDI
+                  w:es:[edi._fir_flag]=1
+                  d:es:[~edi._fir_size]=0;d:es:[~edi._fir_size.4]=0
+                  d:es:[~edi._fir_time]=0
+                  b:es:[~edi._fir_attr]=0x80
+                  push edi;esi=_driver_mem_end_;edi=+_fir_name;
+                  { lodsb;stosb;cmp al,0;jnz ?^0 } pop edi
+
+                  // Creating special info (KEY_ID)
+                  d:es:[edi._fir_temp]=ebx
+
+                  pop edi;pop es;pop esi;pop ds;pop ecx;pop ebx;pop eax;pop edi;pop es
+                  iret
+                }
+
+                // not found (ebx - current), search next
+                clc;esp=+16;jmp _search_next_reg_
+             }
+          }
+
+       } else {
+
+          // Normal call to DOS
+          ah=10;edi=esi;esi=+_fir_temp;int 0x21;push ds;pop es
+
+          // Error => exit
+          if(~c){
+             pop esi;pop ds;pop ecx;pop ebx;pop edi;pop edi;pop es
+             jmp set_cf
+          }
+
+          // Save info
+          al=b:[~esi.0x15];b:[~edi._fir_attr]=al
+          d:[~edi._fir_size.4]=0;w:[edi._fir_flag]=0
+          eax=d:[~esi.0x1A];d:[~edi._fir_size]=eax
+          eax=d:[~esi.0x16];d:[~edi._fir_time]=eax
+          edi=+_fir_name;esi=+0x1E;{ lodsb;stosb;cmp al,0;jnz ?^0 }
+
+          pop esi;pop ds;pop ecx;pop ebx;pop eax;pop edi;pop es
+          iret
+
+       }
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  int25_f4:
+       cmp ah,0x10 ; jz execute
        ax=err_no_support
   set_cf:
        push ebp
@@ -144,6 +574,55 @@
        or d:[~ebp+12],1
        pop ebp
        iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 17. Execute
+  //   In:  ah  = 0x10
+  //        ds:esi - file to exec
+  //   Out: AX=PID or CF set on error
+  execute:
+       push es;push ebx;push ecx;push edx;push edi;push esi
+
+       // Open file
+       ax=0x100;int 0x25;ebx=eax
+       if (~c){
+          ax=err_file_not_found;
+         _task_not_loaded:
+          pop esi;pop edi;pop edx;pop ecx;pop ebx;pop es
+          jmp set_cf
+       }
+
+       // Get task header
+       eax=d:cs:mem;es=ax
+       edi=_driver_mem_end_;ecx=16;ah=3;int 0x25
+
+       // Check task
+       if (ax!=16||w:es:_driver_mem_end_.task_sign!='CE'){ ax=err_not_exe;jmps _task_not_loaded }
+
+       // Allocate memory for main task
+       push ebx;ah=6;xor ebx,ebx;bx=w:es:_driver_mem_end_.task_size;int 0x20
+       pop ebx;if(~c){jmps _task_not_loaded} push eax
+       xor ecx,ecx;mov cx,w:es:_driver_mem_end_.task_stck;push ecx
+       xor ecx,ecx;mov cx,w:es:_driver_mem_end_.task_size;shl ecx,12
+       es=ax
+
+       // Read task
+       xor edi,edi;ah=3;int 0x25;push eax
+       ah=2;int 0x25
+
+       // Run task
+       pop ebx;pop ecx;ebx=>>12;inc ebx;push ds;push es;pop ds;ah=0x28;int 0x20;pop ds
+       if (~c){
+          pop edx;ah=8;int 0x20
+          pop esi;pop edi;pop edx;pop ecx;pop ebx;pop es;jmp set_cf
+       }
+
+       // Restore regs
+       pop edx;ah=8;int 0x20
+       pop esi;pop edi;pop edx;pop ecx;pop ebx;pop es
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
 cpr: db "ChaOS File System device driver",13,10,0
 mem: dd 0

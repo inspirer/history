@@ -116,26 +116,11 @@
              ds:esi - Dir name
         Out: CF set on error (ax = dos error code)
 
-      15. Get current directory
+      15. Get free/total space
         In:  ah  = 14
-             dl  = drive number (0 - A; 1 - B;...)
-             es:edi - place for it
-        Out: CF set on error (ax = dos error code)
-
-      16. Get free/total space
-        In:  ah  = 15
              al  = drive number
         Out: ??  = free space
              ??  = total space
-
-      17. Set Default disk
-        In:  ah  = 16
-             al  = New disk (0-A;1-B; etc)
-        Out: CF set on error
-
-      18. Get Default disk
-        In:  ah  = 17
-        Out: al  = Cur disk (0-A;1-B; etc)
 
    컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴
 

@@ -29,7 +29,10 @@
 // keys
 #shortdef ALT_KEY 0x38
 #shortdef CTRLKEY 0x1D
+#shortdef SHIFTKEY 0x2A
+#shortdef SHIFTKEY2 0x36
 #shortdef TAB_KEY 0x0F
+#shortdef DEL_KEY 0x53
 #shortdef ALT_KEY_UP 0x80+ALT_KEY
 #shortdef CTRLKEY_UP 0x80+CTRLKEY
 
@@ -81,7 +84,7 @@
         ax=err_no_console_found;jmp set_cf
       }
 
-      // Prepeare EDI(head) & ESI(tail)
+      // prepare EDI(head) & ESI(tail)
       ebx=esi;edi=ebx+d:[~edi._head];esi=ebx+d:[~esi._tail];xor eax,eax
 
       // Return scancode
@@ -103,6 +106,13 @@
             and b:[~ebx._state],0xFD
           }
         }
+        if (ah==SHIFTKEY||ah==SHIFTKEY2){
+          ifelse(ah==al){
+            or w:[~ebx._state],4
+          } else {
+            and b:[~ebx._state],0xFB
+          }
+        }
         ah=0
       } else {
         pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds
@@ -111,14 +121,35 @@
       pop ebx;pop ebx;pop ecx;pop edi;pop esi;pop ds
       iret
 
+int24_d0:
+      cmp ah,0x1 ; jz read_char_code
+      jmp int24_d1
+
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 2. Read char/code
+  //  In:  ah = 1
+  //  Out: al = char ; ah = code
   read_char_code:
+       {ah=0;int 0x24;if(~c){cmp ax,err_no_console_found;jnz ?^1;jmp set_cf}}
+       ah=al&0x7F;if(al!=ah){ jmps read_char_code }
+       push ebx;push es;ebx=ctable1;and eax,0xFF
+       push eax;ah=2;int 0x24;and al,4;if (al!=0){ ebx=ctable2 } pop eax
+       ebx=+eax;push cs;pop es;ifelse (al>0x53){al=0} else {al=b:es:[ebx]};
+       pop es;pop ebx;if (al==0){ jmps read_char_code }
+       iret
 
-      iret
+  ctable1:
+       db 0,27,"1234567890-+",17,9,"qwertyuiop[]",10,0,"asdfghjkl;",34,'`',0,'\'
+       db "zxcvbnm,./",0,0,0,32,0,[10],0,0,0,0xE0,0,0,0xE1,0,0xE2,0,0,0xE3,0,0,0
+
+  ctable2:
+       db 0,27,"!@#$%^&*()_=",17,9,"QWERTYUIOP{}",10,0,"ASDFGHJKL:",39,'~',0,'|'
+       db "ZXCVBNM<>?",0,0,0,32,0,[10],0,0,0,0xE0,0,0,0xE1,0,0xE2,0,0,0xE3,0,0,0
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 3. Get keyboard shift status
+  //  In:  ah = 2
+  //  Out: ax = state
   get_keyboard_shift:
       push ds;push esi;push eax;push ecx
 
@@ -133,14 +164,22 @@
       }
 
       // Return keyboard shift status
-      ax=w:[~esi._state]
+      ax=w:[~esi._state];ecx=d:[~esi._head];push eax
+      while(ecx!=d:[~esi._tail]){
+        mov al,b:[esi+ecx];ah=al&0x7F
+        if (al==ah){
+          and eax,0x7F;add eax,ctable1;
+          if (b:cs:[eax]!=0){ pop eax;or al,0x80;push eax }
+        }
+        inc ecx;and ecx,0xFFF;if (ecx==0){ ecx=_start }
+      } pop eax
       pop ecx;pop esi;pop esi;pop ds
       iret
 
-int24_d0:
-      cmp ah,0x2 ; jz get_keyboard_shift
+int24_d1:
+      cmp ah,0x2 ; _jz get_keyboard_shift
       cmp ah,0x3 ; jz allocate_console
-      jmp int24_d1
+      jmp int24_d2
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 4. Allocate console
@@ -175,6 +214,7 @@ int24_d0:
       eax=esi>>12;push eax
       str ax;al=&0xF8;inc ax;w:[~esi._task]=ax
       eax=_start;d:[~esi._head]=eax;d:[~esi._tail]=eax
+      w:[~esi._state]=0
 
       // Set as visible console
       ah=2;bx=cx;int 0x23
@@ -214,7 +254,7 @@ int24_d0:
       pop edi;pop ebx;pop eax;pop esi;pop ds
       iret
 
-int24_d1:
+int24_d2:
       cmp ah,0x4 ; jz free_console
       cmp ah,0x5 ; jz change_active_console
 
@@ -257,7 +297,6 @@ int24_d1:
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // Keyboard IRQ handler
   irq1:
-      cli
       push eax;push ds;push esi
       ax=w:cs:sel;ds=ax
       eax=cs:d:curr<<12;esi=eax+d:[~eax._tail]
@@ -265,7 +304,7 @@ int24_d1:
 
       // Save & increment tail
       in al,0x60;ah=al;and ah,0x7F
-      ifelse (ah==ALT_KEY||ah==TAB_KEY||ah==CTRLKEY){
+      ifelse (ah==ALT_KEY||ah==TAB_KEY||ah==CTRLKEY||ah==DEL_KEY){
 
         if (ah==ALT_KEY){
             push eax;push ebx;push edi
@@ -277,7 +316,7 @@ int24_d1:
             }
             edi=altshift;ah=3;int 0x22
             pop edi;pop ebx;pop eax
-            jmps _save_key_in_buffer
+            jmp _save_key_in_buffer
         }
 
         if (ah==CTRLKEY){
@@ -290,6 +329,22 @@ int24_d1:
             }
             edi=altshift;ah=3;int 0x22
             pop edi;pop ebx;pop eax
+            jmp _save_key_in_buffer
+        }
+
+        if (al==DEL_KEY){
+            if(b:cs:altshift==3){
+               // Ctrl-Alt-Del
+               //pop eax;push eax;bx=w:[~eax._task]&0xFFF8
+               //push ebx;bx=w:cs:curr;ah=4;int 0x24;pop ebx
+               //mov al,0x20;out 0x20,al;str ax
+               //ifelse(bx==ax){
+               //  ah=0x21;int 0x20
+               //} else {
+               // ah=0x22;int 0x20
+               //}
+               d:cs:[0]=0
+            }
             jmps _save_key_in_buffer
         }
 
@@ -321,10 +376,17 @@ int24_d1:
       }
 
       pop esi;pop ds
+
+      in  al,0x61
+      mov ah,al
+      or al,0x80
+      out 0x61,al
+      xchg ah,al
+      out 0x61,al
+
       mov al,0x20
       out 0x20,al
       pop eax
-      sti
       iret
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --

@@ -380,7 +380,7 @@ exc20_r4:
           else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}esi=+eax;loop ?^0}
         edi=esi;pop esi
 
-        // prepeare to transmit data
+        // prepare to transmit data
         push esi;push es;ax=ds;es=ax;xor eax,eax
         ax=w:[~esi.x_nsize]+x_size;ecx=d:[~esi.x_dw];esi=+eax
         xchg esi,edi;eax=ecx;ecx=esi-edi-eax;esi=edi+eax
@@ -410,7 +410,7 @@ exc20_r4:
         {ax=w:[~esi.x_attr]&x_attr_type;ifelse (al==0){xor eax,eax;ax=w:[~esi.x_nsize]+x_size;}
           else {xor eax,eax;ax=w:[~esi.x_nsize]+x_size;eax=+d:[~esi.x_dw];}esi=+eax;loop ?^0}
 
-        // Prepeare to move structure
+        // prepare to move structure
         pop ecx;eax=esi-edi;edi=esi+ecx;ecx=eax;edi=--;esi=--;std
 
         rep movsb

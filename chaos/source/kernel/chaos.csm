@@ -29,13 +29,13 @@
   w:stack=sp
   ax=cs;w:oldseg=ax;w:[kernelloader.dos_call_addr]=ax
   movzx eax,ax;eax=<<4
-  d:des_ds+2=|eax;d:des_cs+2=|eax // Prepeare cs,ds
+  d:des_ds+2=|eax;d:des_cs+2=|eax // prepare cs,ds
 
   bx=mgdt;movzx ebx,bx;ebx=+eax
   d:forgdt+2=|ebx                 // Data to load GDT
 
   bx=kernelloader;movzx ebx,bx;ebx=+eax
-  d:kerloader_cs+2=|ebx           // Prepeare kerloader_cs
+  d:kerloader_cs+2=|ebx           // prepare kerloader_cs
   d:kerloader_ds+2=|ebx           //          kerloader_ds
 
   cli
@@ -136,18 +136,21 @@ kernelloader:
    edi=gdt_place
    esi=gdtstart
    ecx=gdt_size
-   rep movsb         // Prepeare GDT
+   rep movsb         // Prepare GDT
 
    lidt  [foridt32]  // Load IDT
 
    edi=kern_place
    esi=kernel32
    ecx=d:kern_size32
-   rep movsb         // Prepeare Kernel
+   rep movsb         // Prepare Kernel
+   //xor edx,edx
+   //{ lodsb;xor al,b:[decode.edx];stosb;inc edx;
+   //   if(edx=>decode_size){xor edx,edx};loop ?^0 }
 
    esi=ret_to_loader
    ecx=ret_to_loader_size
-   rep movsb         // Prepeare return code
+   rep movsb         // Prepare return code
 
    lgdt [forgdt32]
    jmpf 0,0x8
@@ -162,6 +165,10 @@ gdtstart:
 #include source\kernel\gdt.csm
 
 #shortdef gdt_size $-gdtstart
+
+//decode:
+//  #binary source\kernel\_code_.bin
+//#shortdef decode_size $-decode
 
 ret_to_loader:
   jmpf ret_addr,0x18

@@ -118,7 +118,7 @@
         loop ?^0
       }
 
-      // Prepeare values
+      // prepare values
       pop esi;pop ds
       esi=-4096;esi=<<10
       edi=edx;ebx=--;eax=edx+4
@@ -286,7 +286,7 @@ exc20_n1:
          jmp set_cf
       }
 
-      // Else set LDT as Data & get it's size
+       // Else set LDT as Data & get it's size
       ah=0x92;d:[~esi-4]=eax
       xor ecx,ecx;mov cx,w:[~esi-8];ecx=++
       ecx=<<9
@@ -308,12 +308,9 @@ exc20_n1:
           lodsw
         } else {
 
-          lodsb;cl=al&15
+          lodsb;cl=al&15;ch=0
           lodsb;dh=al
           ecx=<16+1;edx=<16>>10 + 4096
-
-          // Free descriptor
-          xor eax,eax;d:[~esi-8]=eax;d:[~esi-4]=eax
 
           // Free pages (ecx = num_of_pages ; edx = location in table)
           push esi;push ds
