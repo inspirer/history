@@ -1,0 +1,282 @@
+
+ // Process manipulation
+  exc20_p0:
+       cmp ah,0x20 ;  jz  create_process
+       jmp exc20_p1
+
+   // 1. Create process
+   //  In:  ah  = 0x20
+   //       LDT = process_ldt
+   //       dx  = CS for new process (in LDT)
+   //       edi = EIP for new process
+   //       ecx = stacksize
+   //  Out: CF set on error
+   //       ax  = PID
+   create_process:
+
+      // Save registers
+      push ds;push esi;push ecx;push edi;push edx;push ebx
+
+      // Allocate memory for TSS
+      ebx=1;ah=6;int 0x20
+      if (~c){
+         ax=err_wrong_info
+        create_process_error:
+         pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+         jmp set_cf
+      }
+
+      // Fill it (Create basic values)
+      push ax;ds=ax;xor esi,esi
+      d:[esi]=esi;esi=+4
+
+      // Get stack for RING0
+      #shortdef ring0stacksizex ring0stacksize*4096
+      ebx=ring0stacksize;xor eax,eax;al=1;int 0x20
+      if (~c){ pop bx;jmp create_process_error}
+      mov d:[esi],ring0stacksizex-1;esi=+4
+      d:[esi]=eax;mov w:[~esi+2],0;esi=+4
+
+      // Get stack for RING1
+      #shortdef ring1stacksizex ring1stacksize*4096
+      ebx=ring1stacksize;xor eax,eax;al=2;int 0x20
+      if (~c){ pop bx;jmp create_process_error}
+      mov d:[esi],ring1stacksizex-1;esi=+4
+      d:[esi]=eax;mov w:[~esi+2],0;esi=+4
+
+      // Stack for RING2 (not needed)
+      xor eax,eax;d:[esi]=eax;esi=+4
+      d:[esi]=eax;esi=+4
+
+      // Save CR3, EIP, EFLAGS
+      eax=cr3;d:[esi]=eax;esi=+4
+      d:[esi]=edi;esi=+4
+      eax=0x3246;d:[esi]=eax;esi=+4
+
+      // Set EAX,ECX,EDX,EBX = 0
+      xor eax,eax;d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // Set ESP & EBP to stack top
+      ecx=<<12--;d:[esi]=ecx;esi=+4;d:[esi]=ecx;esi=+4;ecx=++>>12
+
+      // Set ESI & EDI = 0
+      xor eax,eax;d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // Set ES=0
+      d:[esi]=eax;esi=+4
+
+      // Set CS
+      xor eax,eax;ax=dx;d:[esi]=eax;esi=+4
+
+      // Allocate memory for program stack
+      xor eax,eax;ebx=ecx;int 0x20
+      if (~c){ pop bx;jmp create_process_error}
+      d:[esi]=eax;mov w:[~esi+2],0;esi=+4
+
+      // DS, FS, GS = 0
+      xor eax,eax;d:[esi]=eax;esi=+4;
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // Set LDT
+      xor eax,eax;sldt ax;d:[esi]=eax;esi=+4
+
+      // Base of IOmap = 104
+      eax=104;shl eax,16;d:[esi]=eax
+
+      // Fill IOmap with nulls (and put at end 0xFFFFFFFF)
+      ecx=64;xor eax,eax { esi=+4;d:[esi]=0;loop ?^0 }
+      esi=+4;xor eax,eax;eax=--;d:[esi]=eax
+
+      // Fix in GDT TSS type (0x89)
+      ax=mem_idt_gdt_data;ds=ax
+      xor esi,esi;pop ax;si=ax;esi=+0x805
+      b:[esi]=0x89
+
+      // Clear HIGH_EAX
+      rol eax,16;shr eax,16
+
+      // Add process to process_list (eax=PID)
+      push eax
+      ax=mem_kernel_data;ds=ax
+      esi=process_list
+      ecx=max_process
+      inc w:[tasks]
+      {
+        lodsd
+        if (eax!=0){ loop ?^1 }
+      } esi=-4;
+
+      // No free process entry => free TSS & Ret with err.
+      if (eax!=0){
+        pop eax
+        dx=ax;ah=8;int 0x20
+        pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+        ax=err_too_much_tasks
+        jmp set_cf
+      }
+
+      // Save in list
+      pop eax;ebx=eax;rol ebx,16;bx=default_prior
+      d:[esi]=ebx
+
+      // Restore registers
+      pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+      iret
+
+  exc20_p1:
+       cmp ah,0x24 ;  jz  next_process
+       cmp ah,0x27 ;  jz  set_data_to_code
+       jmp exc20_n0
+
+   // 2. Terminate process (self)
+   //  In:  ah  = 0x21
+   terminate_process:
+
+      iret
+
+   // 3. Kill process
+   //  In:  ah  = 0x22
+   //       bx  = PID
+   //  Out: CF set on error
+   kill_process:
+
+      iret
+
+   // 4. Create child process
+   //  In:  ah  = 0x23
+   //       LDT = process_ldt
+   //       ecx = stack_size
+   //       edx = EIP
+   //  Out: CF set on error
+   create_child:
+
+      iret
+
+   // 5. Next process
+   //  In:  ah  = 0x24
+   next_process:
+
+      push eax;push ds
+      ax=mem_kernel_data;ds=ax
+
+      // search for task
+      push esi;push edi;xor esi,esi
+      si=w:task_no
+      edi=process_list_end
+      {
+         lodsd
+         if(ax!=0){
+           w:task_no=si
+           w:task_lft=ax
+           edi=eax>>16
+           w:task_PID=di
+           jmp ?v1
+         }
+         if (edi==esi){ esi=process_list }
+         jmp ?^0
+      }
+      pop edi;pop esi
+
+      // Switch next (if more then one task)
+      str ax
+      if (w:task_PID!=ax){ jmpf d:[task_no] }
+      pop ds;pop eax
+
+      iret
+
+   // 6. Get priority
+   //  In:  ah  = 0x25
+   //       bx  = PID
+   //  Out: CF set on error
+   //       ax  = priority
+   get_priority:
+
+      iret
+
+   // 7. Set priority
+   //  In:  ah  = 0x26
+   //       bx  = PID
+   //       cx  = priority
+   //  Out: CF set on error
+   set_priority:
+
+      iret
+
+   // 8. Set data seg as code
+   //  In:  ah  = 0x27
+   //       dx  = DataSeg in LDT
+   //  Out: CF set on error
+   set_data_to_code:
+
+      // Save registers
+      push ds;push esi;push ecx;push edi;push edx;push ebx
+
+      // Set LDT as DATA
+      sldt ax;and dx,0xF8
+      if (ax==0){
+         pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+         ax=err_wrong_info
+         jmp set_cf
+      }
+      cx=mem_idt_gdt_data;ds=cx
+      xor esi,esi;si=ax;esi=+0x805
+      b:[esi]=0x92;push esi;push ds
+      ds=ax;xor esi,esi;si=dx;esi=+5
+
+      // If this is Data for ring3 => set it as code for ring3
+      bl=b:[esi]&0xFE;
+      if (bl!=0xF2){
+         pop ds;pop esi;b:[esi]=0x82
+         pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+         ax=err_wrong_info
+         jmp set_cf
+      }b:[esi]=0xFA;
+
+      // Return to LDT her type
+      pop ds;pop esi;b:[esi]=0x82
+
+      // Restore registers
+      pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+      iret
+
+  // Loads task into memory & return PID
+  // In  : esi = ptr to file_name
+  // Out : ax  = PID
+
+tasks:  dw  0
+
+  // ????
+loadtask:
+
+   // Get task header
+   ax=0x100;int 0x21;bx=ax
+   ax=mem_kernel_data;es=ax
+   edi=task_head;cx=16;ah=3;int 0x21
+
+   // Check task
+   if (ax!=16){ ax=1;ret }
+   if (w:task_head.task_sign!='CE'){ ax=2;ret }
+
+   // Allocate memory for main task
+   push ebx;ah=3;int 0x20;lldt ax
+   xor ebx,ebx;bx=w:task_head.task_size
+   ax=0;int 0x20;pop ebx
+
+   // Read task
+   push eax;es=ax;xor edi,edi;xor ecx,ecx
+   ah=3;mov cx,w:task_head.task_size;shl ecx,12;int 0x21
+   ah=2;int 0x21;ax=mem_kernel_data;es=ax
+   pop eax
+
+   // set data to code & create main task
+   dx=ax;ah=0x27;int 0x20;xor ecx,ecx;ah=0x20
+   xor edi,edi;cx=w:cs:task_head.task_stck;int 0x20
+
+   ret
+
+#shortdef task_sign 0x0
+#shortdef task_name 0x3
+#shortdef task_stck 0xC
+#shortdef task_size 0xE
+task_head: db [16]

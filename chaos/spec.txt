@@ -1,0 +1,88 @@
+
+  ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+  ³  Int 0x20 functions:    Memory, Processes & etc.                 ³
+  À¿                                                                 À¿
+   ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+                                                                       SWD
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ3Ä[+++]Ä
+   Allocate memory ³ In:  ah  = 0x00
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      al  = 0 (ring3), 1 (ring0), 2 (ring1)
+                          ebx = Size in pages
+
+     Out: CF(error) or ax=SEG_of_new_block
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ3Ä[+++]Ä
+   Free memory     ³ In:  ah  = 0x01
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      dx  = SEG to Free
+
+     Out: <none>
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ3Ä[---]Ä
+   Resize memory   ³ In:  ah  = 0x02
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      ebx = NewSize
+                          dx  = SEG of block
+
+     Out: CF set on error (not enough memory)
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Allocate LDT    ³ In:  ah  = 0x03
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+     Out: CF set on error (free desc. absent)
+          ax  = LDTNum
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Free LDT        ³ In:  ah  = 0x04
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      bx  = LDTNum
+
+     Out: CF set on error
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Load LDT        ³ In:  ah  = 0x05
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      bx  = LDTNum
+
+     Out: <none>
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Allocate Global ³ In:  ah  = 0x06
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      ebx = size in pages (4096)
+
+     Out: CF set on error (not enough memory, free desc. absent)
+          ax  = SEG of global
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Resize Global   ³ In:  ah  = 0x07
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      ebx = NewSize in pages (4096)
+                          dx  = SEG of global
+
+     Out: CF set on error (not enough memory)
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Free Global     ³ In:  ah  = 0x08
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      dx  = SEG of global
+
+     Out: CF set on error
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ3Ä[---]Ä
+   Defragment      ³ In:  ah  = 0x09
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+   Out: <none>
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ3Ä[+++]Ä
+   Get free info   ³ In:  ah  = 0x0A
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+   Out: edx = free memory
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ1Ä[++-]Ä
+   Create process  ³ In:  ah  = 0x20
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      LDT = process_ldt
+                          dx  = CS for new process (in LDT)
+                          edi = EIP for new process
+                          ecx = stacksize
+
+   Out: CF_set (error) or  ax = PID
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ[+++]Ä
+   Next process    ³ In:  ah  = 0x24
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+    Out: <none>
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ[++-]Ä
+   data -> code    ³ In:  ah  = 0x27
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ      dx  = DataSeg in LDT
+
+    Out: CF set on error
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ[---]Ä
+                   ³
+  ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ

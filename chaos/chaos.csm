@@ -1,5 +1,5 @@
-// ChaOS kernel Loader
-#shortdef nodebug 1
+ // ChaOS kernel Loader
+#shortdef debug_ 1
 #output .com
 #org 0x100
 #code 16
@@ -32,7 +32,7 @@
   ah=0x3E;int 0x21                     // Close
 
   w:stack=sp
-  ax=cs;w:oldseg=ax
+  ax=cs;w:oldseg=ax;w:[kernelloader.dos_call_addr]=ax
   movzx eax,ax;eax=<<4
   d:des_ds+2=|eax;d:des_cs+2=|eax // Prepeare cs,ds
 
@@ -71,16 +71,18 @@ exit:
   db  0xea
   dw  $+4
 oldseg:
-  dw 0                       // Here we save real CS
+  dw 0                       // real CS
 
   sp=cs:w:stack
   ax=cs;ds=ax;ss=ax;es=ax
   lidt [foridt]
 
+  // Dos call?
   cmp bx,0
   jnz dos_call
 
-  mov   al,0xD1                   // Close A20
+  // Close A20
+  mov   al,0xD1
   out   0x64,al
   mov   al,0xDD
   out   0x60,al
@@ -92,6 +94,8 @@ oldseg:
   ret
 
 dos_call:
+
+  sti
 
   // Save ret addr
   w:dos_ret_addr=bx
@@ -126,6 +130,8 @@ dos_call:
   xor ax,ax;if (~c){ dec ax }
   w:dos_bx=ax
 
+  cli
+
   // Prepeare and Return
   lidt [foridt32+kernelloader]
   lgdt [forgdt32+kernelloader]
@@ -134,6 +140,12 @@ dos_call:
   eax=cr0;or eax,0x80000001;cr0=eax
 #shortdef dos_ret_addr $+1
   jmpf  0,0x8
+
+dos_vm_call:
+
+  nop
+  int 0x21
+  int 0xFF
 
 mgdt:
 des_null:
@@ -215,6 +227,12 @@ ret_to_loader:
 forgdt16:
   dw gdt_size_16
   dd 0
+
+dos_call_addr:
+  dw 0
+  dw dos_vm_call
+  dw kernel
+
 #shortdef forgdt forgdt16+kernelloader
 #shortdef ret_to_loader_size $-ret_to_loader
 

@@ -1,0 +1,193 @@
+ // interrupts/exeptions in ChaOS kernel
+
+ show_edx: // Shows EDX  (Used: ECX,EAX)
+   ecx=8
+   { rol edx,4;al=dl&0F+'0';if(al>'9'){al=+7}
+     write_char();loop ?^0 }
+   ret
+
+ exc_08: // Double fault
+   esi=VM_TSS;ecx=26;ax=mem_kernel_data;ds=ax
+   {lodsd;push ecx;edx=eax;show_edx();pop ecx;al=0x2D;write_char();loop ?^0}
+   pop eax;pop ebx;shl ebx,16;mov bx,0x8;ebp=d:cs:[vm_task]
+   jmp debug
+
+ exc_0A: // Wrong TSS
+   pop ebp;pop eax;mov bx,0xA;jmp debug
+
+ exc_0B: // Segment not present
+   pop ebp;pop eax;mov bx,0xB;jmp debug
+
+ exc_0C: // Stack error
+   pop ebp;pop eax;mov bx,0xC;jmp debug
+
+ // GPF reserved for VMM
+
+ exc_0E: // Page fault
+   pop ebp;pop eax;mov bx,0xE;jmp debug
+
+ oth_exc: // Other
+   pop ebp;pop eax;mov bx,0x1111;jmp debug
+
+ debug:
+   xchg eax,ebx
+   dx=mem_kernel_data;ds=dx;es=dx;ss=dx
+   esp=stack
+   esi=ex1;write();edx=eax;show_edx()
+   esi=ex2;write();edx=ebx;show_edx()
+   esi=ex3;write();edx=ebp;show_edx()
+   esi=ex4;write();
+
+   jmp exit
+
+ex1: db "Exeption $";
+ex2: db " at $"
+ex3: db " : $"
+ex4: db " system halted",13,10,'$'
+
+enable_int_system:
+
+   // Master ctrl init
+   mov al,0x11
+   out 0x20,al  // ltime = 0 ; SNLG = 0 ; IC4 = 1
+   mov al,0x78
+   out 0x21,al  // base vect (8-0xFF)
+   mov al,4
+   out 0x21,al  // slave to IRQ 2
+   mov al,1
+   out 0x21,al  // Set system
+
+   // Slave ctrl init
+   mov al,0x11
+   out 0xA0,al
+   mov al,0x70
+   out 0xA1,al
+   mov al,2
+   out 0xA1,al
+   mov al,1
+   out 0xA1,al
+
+   // Set timer
+   al=0x36;out 0x43,al
+   ax=timer;dx=0x40
+   out dx,al;al=ah;out dx,al
+
+   al=0xFC;out 0x21,al
+   al=0xFF;out 0xA1,al
+   sti
+   ret
+
+disable_int_system:
+
+   cli
+
+   // Init master IRQ controller
+   mov al,0x11
+   out 0x20,al  // ltime = 0 ; SNLG = 0 ; ICW4 present
+   mov al,8
+   out 0x21,al  // base vect (0x8-0xFF)
+   mov al,4
+   out 0x21,al  // slave to IRQ 2
+   mov al,1
+   out 0x21,al  // Set system
+
+   // Init Slave IRQ ctrl
+   mov al,0x11
+   out 0xA0,al
+   mov al,0x70
+   out 0xA1,al
+   mov al,2
+   out 0xA1,al
+   mov al,1
+   out 0xA1,al
+
+   // Set timer
+   al=0x36;out 0x43,al
+   ax=0;dx=0x40
+   out dx,al;al=ah;out dx,al
+
+   al=0
+   out 0x21,al
+   out 0xA1,al
+   ret
+
+keyb_int:
+   push eax
+   in ax,0x60
+   mov al,0x20
+   out 0x20,al
+   pop eax
+   d:cs:[0]=0
+   iret
+
+timer_int:
+   push eax
+   mov al,0x20
+   out 0x20,al
+   pop eax
+   iret
+
+   push ds
+   ax=mem_kernel_data;ds=ax
+   dec w:task_lft
+
+   if (w:task_lft==0){
+
+      // search for task
+      push esi;push edi;xor esi,esi
+      si=w:task_no
+      edi=process_list_end
+      {
+         lodsd
+         if(ax!=0){
+           w:task_no=si
+           w:task_lft=ax
+           edi=eax>>16
+           w:task_PID=di
+           jmp ?v1
+         }
+         if (edi==esi){ esi=process_list }
+         jmp ?^0
+      }
+      pop edi;pop esi
+
+      // Switch next (if more then one task)
+      str ax
+      if (w:task_PID!=ax){
+        #ifdef multitasking
+          jmpf d:[task_no]
+        #endif
+      }
+   }
+
+   pop ds;pop eax
+   iret
+
+rtc:
+   push eax
+   mov al,0x20
+   out 0x20,al
+   out 0xA0,al
+   pop eax
+   d:cs:[0]=0
+   iret
+
+brd:
+   d:cs:[0]=0
+
+int76:
+   test b:[esp.8.2],2
+   jz brd
+
+   push ebp
+   push ebp
+   mov ebp,esp
+   push eax
+   push ebx
+   ax=mem_all_data;fs=ax
+   ebx=0x76
+   jmp emulate_int
+
+task_no  : dw process_list+4    // Offset of next task
+task_lft : dw 1                 // Left tics for curr task
+task_PID : dw 0                 // Current task PID

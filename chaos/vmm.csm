@@ -1,0 +1,258 @@
+ // Virtual Mode Menager
+
+// VM Stack
+#shortdef vm_ds 32
+#shortdef vm_ss 24
+#shortdef vm_sp 20
+#shortdef vm_fl 16
+#shortdef vm_cs 12
+#shortdef vm_ip 8
+
+// TSS defs
+#shortdef tss_eax 40
+#shortdef tss_ebx 52
+#shortdef tss_ecx 44
+#shortdef tss_edx 48
+#shortdef tss_edi 68
+#shortdef tss_esi 64
+
+ gpf: // General Protection fault (PM)
+   pop  ebx
+   shl  ebx,16
+   pop  eax
+   pop  ebp
+   mov  bx,0xD
+   jmp  debug
+
+ exc_0D: // GPF => VM or standart
+   test b:[esp.12.2],2
+   jz gpf
+
+   // VM exeption
+   push ebp
+   mov ebp,esp
+   push eax
+   push ebx
+   ax=mem_all_data;fs=ax
+   movzx eax,w:[ebp.vm_cs]   // CS
+   shl eax,4
+   add eax,d:[ebp.vm_ip]     // IP
+   movzx ebx,w:fs:[eax]
+
+   // int_XX cmd?
+   ifelse (bl==0xCD&&bh!=0xFF){
+
+     shr ebx,8
+     add w:[ebp.vm_ip],2     // Skip int_XX
+
+   emulate_int:
+     mov ebx,d:fs:[4*ebx]
+     ax=bx;shr ebx,16
+     xchg bx,w:[ebp.vm_cs]   // Set new CS:IP
+     xchg ax,w:[ebp.vm_ip]
+     shl ebx,16;bx=ax
+     sub w:[ebp.vm_sp],6     // Allocate stack space
+     movzx eax,w:[ebp.vm_ss]
+     shl eax,4
+     add eax,d:[ebp.vm_sp]   // Get stack top
+
+     mov d:fs:[eax],ebx     // Save return addr & flags in stack
+     bx=w:[ebp.vm_fl]
+     w:fs:[eax.4]=bx
+
+     and d:[ebp.vm_fl],0xFFFEFCFF // clear TF, RF, IF
+
+   clear_return:
+     pop ebx                // Clear stack & return
+     pop eax
+     pop ebp
+     esp=+4
+     iret
+
+   } else {
+
+     // Return from VM task to host
+     if (bl==0xCD){
+        pushf
+        pop ecx
+        or ecx,0x4000
+        push ecx
+        popf;pop ebx;pop eax
+        movzx ebx,w:[ebp.vm_fl]
+        iret
+     }
+
+     // Emulate IRET (0xCF)
+     if (bl==0xCF){
+
+        movzx eax,w:[ebp.vm_ss]
+        shl eax,4
+        add eax,d:[ebp.vm_sp]
+        add w:[ebp.vm_sp],6     // Get stack top & set new
+
+        mov ebx,d:fs:[eax]
+        mov w:[ebp.vm_ip],bx    // CS:IP
+        shr ebx,16
+        mov w:[ebp.vm_cs],bx
+        mov bx,w:fs:[eax.4]    // FLAGS
+        and bx,0xFDFF
+        mov w:[ebp.vm_fl],bx
+        jmp clear_return
+     }
+
+     // Cli
+     if (bl==0xFA){
+        add w:[ebp.vm_ip],1
+        and w:[ebp.vm_fl],0xFDFF
+        jmp clear_return
+     }
+
+     // Sti
+     if (bl==0xFB){
+        add w:[ebp.vm_ip],1
+        or w:[ebp.vm_fl],0x200
+        jmp clear_return
+     }
+
+     // Pushf
+     if (bl==0x9C){
+        add w:[ebp.vm_ip],1
+        sub d:[ebp.vm_sp],2     // Get stack top & set new sp
+        movzx eax,w:[ebp.vm_ss]
+        shl eax,4
+        add eax,d:[ebp.vm_sp]
+
+        mov bx,w:[ebp.vm_fl]    // Save flags
+        mov w:fs:[eax],bx
+        jmp clear_return
+     }
+
+     // Popf
+     if (bl==0x9D){
+        add w:[ebp.vm_ip],1
+        movzx eax,w:[ebp.vm_ss]
+        shl eax,4
+        add eax,d:[ebp.vm_sp]
+        add w:[ebp.vm_sp],2     // Get stack top & set new
+
+        mov bx,w:fs:[eax]
+        and bx,0xFDFF
+        mov w:[ebp.vm_fl],bx    // New flags
+        jmp clear_return
+     }
+
+     // BUG in VM (gpf instructions)
+     mov eax,d:[ebp.vm_ip]
+     movzx ebx,w:[ebp.vm_cs]
+     edx=ebx<<4+eax
+     ebp=d:fs:[edx]
+     ebp = 0xFABEA1
+     jmp debug
+
+   }
+
+ // Init main virtual mode task
+init_VM_task:
+
+   push ds;push esi
+
+   // Allocate memory for VM_TSS
+   ebx=1;ah=6;int 0x20
+   _if (~nc){
+
+      // Fill it (Create basic values)
+      push ax;ds=ax;xor esi,esi
+      d:[esi]=esi;esi=+4
+
+      // Stack0
+      eax=dos_func_stack;d:[esi]=eax;esi=+4
+      eax=mem_kernel_data;d:[esi]=eax;esi=+4
+
+      // Stack1/2
+      xor eax,eax
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // CR3, EIP, EFLAGS
+      eax=0x121000;d:[esi]=eax;esi=+4
+      xor eax,eax;ax=w:cs:[dos_vm_call.2];d:[esi]=eax;esi=+4
+      eax=0x20202;d:[esi]=eax;esi=+4
+
+      // eax,ecx,edx,ebx
+      xor eax,eax
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // esp,ebp,esi,edi
+      eax=0xFFFE;d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+      xor eax,eax;d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // es, cs, ss, ds, fs, gs
+      xor eax,eax;ax=w:cs:dos_vm_call
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+      d:[esi]=eax;esi=+4;d:[esi]=eax;esi=+4
+
+      // LDT, IO_BASE
+      xor eax,eax;d:[esi]=eax;esi=+4;
+      eax=0x680000;d:[esi]=eax
+
+      // Fill IOmap with nulls (and put at end 0xFFFFFFFF)
+      ecx=64;xor eax,eax { esi=+4;d:[esi]=0;loop ?^0 }
+      esi=+4;xor eax,eax;eax=--;d:[esi]=eax
+
+      // Save VM TSS
+      ax=mem_kernel_data;es=ax
+      ecx=26;xor esi,esi;edi=VM_TSS;rep movsd
+
+      // Fix in GDT TSS type (0x89)
+      ax=mem_idt_gdt_data;ds=ax
+      xor esi,esi;pop ax;si=ax;esi=+0x805
+      b:[esi]=0x89
+
+      // Clear HIGH_EAX
+      rol eax,16;shr eax,16
+   }
+   pop esi;pop ds
+   w:vm_task.4=ax
+
+   ret
+
+call_VM_task:
+
+   // Set VM TSS as data
+   push es;push ds;push esi;push edi;push ecx
+   ax=mem_idt_gdt_data;ds=ax
+   xor esi,esi;ax=w:cs:vm_task.4;si=ax;esi=+0x805
+   b:[esi]=0x92;push ds;push esi
+
+   // Copy
+   es=ax;ax=mem_kernel_data;ds=ax;inc d:vm_task
+   xor edi,edi;esi=VM_TSS;ecx=26;rep movsd
+
+   // Return TSS type
+   pop esi;pop ds;b:[esi]=0x89
+   ax=mem_kernel_data;es=ax
+
+   // Call VM00
+   sldt ax
+   callf d:cs:[vm_task]
+   lldt ax
+
+   // Set DATA type
+   b:[esi]=0x92;push ds;push esi
+
+   // Get EAX & CF
+   ax=w:cs:vm_task.4;ds=ax
+   eax=d:[tss_eax];ebx=d:[tss_ebx]
+   and ebx,1
+
+   // Restore type
+   pop esi;pop ds;b:[esi]=0x89
+
+   // Restore regs & ret
+   pop ecx;pop edi;pop esi;pop ds;pop es
+   ret
+
+vm_task: dd 0
+         dw 0

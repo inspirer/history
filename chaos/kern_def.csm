@@ -1,0 +1,19 @@
+// MultiTasking
+#shortdef timer 0x4A8
+#shortdef multitasking_ 1
+
+// Processes
+#shortdef max_process 1000
+#shortdef default_prior 3
+#shortdef ring0stacksize  1
+#shortdef ring1stacksize  1
+
+// Kernel stack
+#shortdef dosfstck 999
+#shortdef stacksize 1000
+
+// Debug
+#shortdef show_debug_info_ 0x134000
+
+// Drivers
+#shortdef max_driver_size 256

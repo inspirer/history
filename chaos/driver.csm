@@ -1,0 +1,58 @@
+ // Int 0x22 handler : kernel functions for drivers
+
+exc_22:
+
+   iret
+
+#shortdef driver_sign 0x0
+#shortdef driver_name 0x6
+#shortdef driver_size 0xE
+
+load_driver:
+
+   // Load driver from .bin file
+   ax=0x100;int 0x21
+
+   // File opened
+   _if(~nc){
+
+     bx=ax;edi=drv_head;ax=mem_kernel_data;es=ax
+     ah=3;mov cx,16;int 0x21
+
+     ifelse (d:[drv_head.driver_sign]=='CHAO'){
+
+       // if driver isn't too big => load it
+       ifelse (w:[drv_head.driver_size]<=max_driver_size){
+
+         // Allocate memory for driver
+         push ebx;ah=6;xor ebx,ebx;bx=w:drv_head.driver_size;int 0x20;pop ebx
+
+         // Read it in memory
+         push eax;xor ecx,ecx;cx=w:drv_head.driver_size;cx=<<12
+         es=ax;xor edi,edi;ah=3;int 0x21
+         ah=2;int 0x21;ax=mem_kernel_data;es=ax
+         pop eax
+
+         // set data to code
+         push ds;bx=mem_idt_gdt_data;ds=bx;esi=eax+0x805
+         b:[esi]=0xBA;pop ds
+
+       } else { stc }
+
+     } else { stc }
+
+   }
+
+   ret
+
+  // Initialize drivers
+init_drivers:
+
+   //esi=drv1_name;load_driver()
+
+   //if (~c){ ebp=0xDAE0;jmp debug }
+
+   ret
+
+drv1_name : db "sysdev.bin",0
+drv_head: db [16]

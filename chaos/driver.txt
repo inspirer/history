@@ -1,0 +1,19 @@
+
+          Building ChaOS driver
+
+----------------------------------------
+#code 32
+#output .bin
+
+  db "CHAOS",26    // sign [6]
+  db "SYSDEV",0,0  // Driver name [8]
+  dw 0x1           // Size in pages [2]
+
+#org 0
+
+  // <init_proc>
+
+  // <functions>
+
+  // <data>
+----------------------------------------

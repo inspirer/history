@@ -1,12 +1,13 @@
-// ChaOS kernel v0.99
+ // ChaOS kernel v0.99
 #output .bin
-#shortdef stacksize 100
+#include kern_def.csm
 #code 32
 #org 0
 
-   // -------------------------[ Initialization ]----------------------------
-
-   ax=0x20;ds=ax;ss=ax;fs=ax;gs=ax;ax=0x10;es=ax // ds=Data,es=IDT/GDT,ss=Data
+   // Initialization (ds=Data,es=IDT/GDT,ss=Data)
+   ax=xend
+   ax=mem_kernel_data;ds=ax;ss=ax;fs=ax;gs=ax
+   ax=mem_idt_gdt_data;es=ax
    sp=stack
 
    // Create new IDT
@@ -19,17 +20,22 @@
    d:dos_mem=ebx
 
    // Get memory size (in pages)
-   ecx=d:mem_size;ax=0x28;ds=ax;ebx=ecx<<12
+   ecx=d:mem_size;ax=mem_all_data;ds=ax;ebx=ecx<<12
    while(ebx!=0){
      d:[ebx]=ecx
      ifelse(d:[ebx]!=ecx){ xor ebx,ebx } else { ebx=+4096;ecx=++ }
    }
-   ax=0x20;ds=ax;d:mem_size=ecx
+   ax=mem_kernel_data;ds=ax;d:mem_size=ecx
 
    // Create page catalog (ecx = pages) at 0x121000
    dx=cx&1023    // dx!=0 => need increment
    ebx=ecx>>10;if (dx!=0){ebx=++}  // ebx = num of tables
+
+   // Save size of table
    eax=ebx;edi=0x818;stosw // Descriptor of page catalog
+   eax=+0x122;d:mem_base=eax // Save memory base
+
+   // Fill tables
    esi=1024-ebx  // other we'll fill with nulls
    ax=0x18;es=ax;xor edi,edi
    eax=0x122007  // pointer to first "table of pages"(R/W,Present,User)
@@ -50,20 +56,79 @@
    cr0=eax
    jmpf $+7,0x8
 
-   // kernel ready for work
-   
+   // Load NULL as LDT
+   xor ax,ax;lldt ax
+
+   // Create kernel TSS
+   ah=6;ebx=1;int 0x20;push ds
+   push eax
+
+   // Clear it
+   ds=ax;xor esi,esi;ecx=1024
+   { d:[esi]=0;esi=+4;loop ?^0 }
+   eax=cr3;d:[0x1C]=eax
+   w:[0x66]=104;d:[0x168]=0xFFFFFFFF
+
+   // Set it as Main TSS
+   pop eax;bx=mem_idt_gdt_data;ds=bx;
+   xor esi,esi;si=ax;esi=+0x805
+   b:[esi]=0x89;pop ds;ltr ax
+   w:kernel_PID=ax
+
+   // Clear process_list
+   ecx=max_process
+   esi=process_list
+   { d:[esi]=0;esi=+4;loop ?^0 }
+
+   // registry
+   reg_init()
+
+   // VM00 task
+   init_VM_task()
+
+   // Enable ints
+
+   // drivers
+   init_drivers()
+
+   // Load task
+   esi=xtask_name
+   loadtask()
+   w:[xtask_PID]=ax
+   //ecx=10{push ecx;esi=xtask_name;loadtask();pop ecx;loop ?^0}
+
+   // Enable ints
+   enable_int_system()
+
+   // Call first task
+   callf d:[xtask]
+   //ecx=2000 0000;loop $
+
+   // Show debug
+   #ifdef show_debug_info
+     #include debug.csm
+   #endif
 
    // Exit to DOS
    jmp exit
 
+xtask_name  : db "startup.bin",0
+xtask       : dd 0
+xtask_PID   : dw 0
 
-fname : db "file.txt",0
+#shortdef kernel_switch $-4
+kernel_PID  : dw 0
+
    // ----------------------------[ Drivers ]--------------------------------
 
   #include dos_func.csm
   #include memory.csm
+  #include process.csm
   #include filesyst.csm
-  #include exept.csm
+  #include ints.csm
+  #include driver.csm
+  #include regman.csm
+  #include vmm.csm
 
    // ------------------------------ [ Data ] ------------------------------
 
@@ -72,22 +137,24 @@ fname : db "file.txt",0
      #include idt.csm
    #shortdef idt_size $-idt_place
 
-   mem_size:  // In pages
-     dd 512
-
-   wprot: db "This is just call to DOS.",13,10,"$",0
-
    // ------------------------ [ Return to loader ] ------------------------
 exit:
    xor ebx,ebx
 
 dcall:
 
+   // Disable ints
+   disable_int_system()
+
    // Deinstall page system
    eax=cr0
    eax=<1;al=&0xFE;eax=>1
    cr0=eax
    xor eax,eax;cr3=eax
+
+   // Deinstall task system
+   eax=0x3002;push eax;popf
+   clts
 
    // Load old GDT & return
    lgdt cs:[ret_gdt]
@@ -98,4 +165,21 @@ dcall:
 #shortdef ret_gdt       $+7
   // And here Pointer to old GDT
 
-#shortdef stack     $+13+stacksize
+#shortdef dos_vm_call   $+13
+  // addr of dos_VM_call <w:cs>:<w:ip>:<w:data>
+
+#shortdef stack     $+19+stacksize
+  // Define Stack
+
+#shortdef dos_func_stack stack+dosfstck
+  // Define doscall stack
+
+#shortdef process_list      dos_func_stack+1
+#shortdef process_list_size max_process*4
+  // Define process list position DWORD: <PID(w):PRIOR(w)>
+#shortdef process_list_end process_list_size+process_list
+
+#shortdef VM_TSS process_list_end+4
+  // main VM TSS copy (104 bytes length)
+
+#shortdef xend VM_TSS+104

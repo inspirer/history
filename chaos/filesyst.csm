@@ -1,10 +1,8 @@
-// File system routines
+ // File system routines
 
   exc_21:
-    cmp ah,0
-    jz  CreateFile
-    cmp ah,1
-    jz  OpenFile
+    cmp ah,0 ; jz  CreateFile
+    cmp ah,1 ; jz  OpenFile
     jmp _fs01
 
     // 1. Create file
@@ -13,26 +11,6 @@
     //   Out: CF set on error (ax = dos error code)
     //        ax  = file handle
   CreateFile:
-    push edi;push es;push esi
-
-    ax=0x20;es=ax;edi=d:es:dos_mem;ax=0x28;es=ax // ES:EDI = Dos
-
-    w:es:[~edi.dos_ax]=0x3C00
-    w:es:[~edi.dos_cx]=cx
-    w:es:[~edi.dos_dx]=0xFFFF
-
-    push edi
-
-    // Copy filename to dos buffer
-    edi=+dos_mem1
-    { lodsb;stosb;cmp al,0;jnz ?^0 }
-
-    // Create it
-    dos_call()
-
-    pop edi
-    ax=w:es:[~edi.dos_ax]
-    pop esi;pop es;pop edi
     iret
 
     // 2. Open file
@@ -42,45 +20,56 @@
     //   Out: CF set on error (ax = dos error code)
     //        ax  = file handle
   OpenFile:
-    push edi;push es;push esi
+    push edi;push es;push ebx;push esi
 
-    push ax
-    ax=0x20;es=ax;edi=d:es:dos_mem;ax=0x28;es=ax // ES:EDI = Dos
-    pop ax
+    // prepeare ES:EDI
+    xor edi,edi;di=w:cs:dos_vm_call;edi=<<4
+    movzx esi,w:cs:dos_vm_call.4;add edi,esi
+    si=mem_all_data;es=si
 
-    ah=0x3D;w:es:[~edi.dos_ax]=ax
-    w:es:[~edi.dos_dx]=0xFFFF
-
-    push edi
+    // Prepeare registers
+    push ds;si=mem_kernel_data;ds=si
+    ah=0x3D;w:[VM_TSS.tss_eax]=ax
+    ax=w:[dos_vm_call.4]
+    w:[VM_TSS.tss_edx]=ax
+    pop ds;pop esi;push esi
 
     // Copy filename to dos buffer
-    edi=+dos_mem1
     { lodsb;stosb;cmp al,0;jnz ?^0 }
 
-    // Open it
-    dos_call()
+    // Call it
+    call_VM_task()
 
-    pop edi
-    ax=w:es:[~edi.dos_ax]
-    pop esi;pop es;pop edi
+    if (ebx!=0){
+      pop esi;pop ebx;pop es;pop edi
+      jmp set_cf
+    }
+
+    // Restore
+    pop esi;pop ebx;pop es;pop edi
     iret
+
+_fs01:
+    cmp ah,2 ; jz  CloseFile
+    jmp _fs02
 
     // 3. Close file
     //   In:  ah  = 2 ; bx  = file handle
-    //   Out: CF set on error (ax = dos error code)
+    //   Out: CF set on error (ax = dos error code|ax=undef)
   CloseFile:
-    push edi;push es
+    push ebx;push ds;push es
 
-    ax=0x20;es=ax;edi=d:es:dos_mem;ax=0x28;es=ax // ES:EDI = Dos
+    // Prepeare registers
+    ax=mem_kernel_data;ds=ax;es=ax
+    w:[VM_TSS.tss_eax]=0x3E00
+    w:[VM_TSS.tss_ebx]=bx
+    xor eax,eax
 
-    w:es:[~edi.dos_ax]=0x3E00
-    w:es:[~edi.dos_bx]=bx
+    // Call it
+    call_VM_task()
 
-    // Close
-    dos_call()
-
-    ax=w:es:[~edi.dos_ax]
-    pop es;pop edi
+    // Restore
+    pop es;pop ds;pop ebx
     iret
 
     // 4. Read file
@@ -91,38 +80,53 @@
     //   Out: CF set on error (ax = dos error code)
     //        ax  = bytes actually read
   ReadFile:
-    push ds;push edi;push es
+    push esi;push edi;push ds;push ebx
 
-    ax=0x20;es=ax;edi=d:es:dos_mem;ax=0x28;ds=ax // ES = Kernel ; DS = Dos
-
-    w:[~edi.dos_ax]=0x3F00
-    w:[~edi.dos_bx]=bx
-    w:[~edi.dos_cx]=cx
-    w:[~edi.dos_dx]=0xFFFF
-
-    dos_call()
-
-    esi=edi+dos_mem1
-    pop es;pop edi
-
-    // Copy received string & save result
-    push ecx;rep movsb;pop ecx
-    ax=w:[~edi.dos_ax]
-
-    pop ds
-    iret
-
-  _fs01: // Continue check
-    cmp ah,2
-    jz  CloseFile
-    cmp ah,3
-    jz  ReadFile
-    cmp ah,4
-    jz  WriteFile
-    cmp ah,14
-    jz  GetCurDir
+    // Prepeare registers
+    ax=mem_kernel_data;ds=ax
+    w:[VM_TSS.tss_eax]=0x3F00
+    w:[VM_TSS.tss_ebx]=bx
+    w:[VM_TSS.tss_ecx]=cx
+    ax=w:[dos_vm_call.4]
+    w:[VM_TSS.tss_edx]=ax
     xor eax,eax
+
+    // Call it
+    call_VM_task()
+
+    // All OK?
+    ifelse (ebx==0){
+
+      // Yes
+      push eax;push eax
+
+      // DS:ESI
+      xor esi,esi;si=w:cs:dos_vm_call;esi=<<4
+      movzx eax,w:cs:dos_vm_call.4;add esi,eax
+      ax=mem_all_data;ds=ax
+
+      // Copy received data & save result
+      pop ecx;rep movsb
+
+      // Return OK
+      pop eax
+
+    } else {
+
+      // No => set CF
+      pop ebx;pop ds;pop edi;pop esi
+      jmp set_cf
+    }
+
+    // Restore
+    pop ebx;pop ds;pop edi;pop esi
     iret
+
+  _fs02: // Continue check
+    cmp ah,3  ; jz  ReadFile
+    cmp ah,4  ; jz  WriteFile
+    cmp ah,14 ; jz  GetCurDir
+    jmp _fs03
 
     // 5. Write file
     //   In:  ah  = 4 ;  bx  = file handle
@@ -131,27 +135,6 @@
     //   Out: CF set on error (ax = dos error code)
     //        ax  = bytes actually written
   WriteFile:
-    push edi;push es;push esi
-
-    ax=0x20;es=ax;edi=d:es:dos_mem;ax=0x28;es=ax // ES:EDI = Dos
-
-    w:es:[~edi.dos_ax]=0x4000
-    w:es:[~edi.dos_bx]=bx
-    w:es:[~edi.dos_cx]=cx
-    w:es:[~edi.dos_dx]=0xFFFF
-
-    push edi;push ecx
-
-    // Copy data to dos buffer
-    edi=+dos_mem1;and ecx,0xFFFF
-    rep movsb;pop ecx
-
-    // Create
-    dos_call()
-
-    pop edi
-    ax=w:es:[~edi.dos_ax]
-    pop esi;pop es;pop edi
     iret
 
     // 15. Get current directory
@@ -159,22 +142,18 @@
     //        es:edi - place for it
     //   Out: CF set on error (ax = dos error code)
   GetCurDir:
-    push ds;push edi;push es
+    iret
 
-    ax=0x20;es=ax;edi=d:es:dos_mem;ax=0x28;ds=ax // ES = Kernel ; DS = Dos
+_fs03:
+    cmp ah,187 ; jz display_char
+    xor eax,eax
+    iret
 
-    w:[~edi.dos_ax]=0x4700
-    w:[~edi.dos_si]=0xFFFF
-    w:[~edi.dos_dx]=dx
+  // al = char to display
+  display_char:
 
-    dos_call()
+    push ds;push eax
+    write_char()
+    pop eax;pop ds
 
-    esi=edi+dos_mem1
-    pop es;pop edi
-
-    // Copy received string & save result
-    { lodsb;stosb;cmp al,0;jnz ?^0 }
-    ax=w:[~edi.dos_ax]
-
-    pop ds
     iret

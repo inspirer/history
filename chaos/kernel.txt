@@ -13,62 +13,15 @@
 0x100800 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
          ³      GDT       ³ 8192*8
          ³                ³
-0x110800 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+0x111000 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
          ³     Kernel     ³ 65536
          ³                ³
-0x120800 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
-         ³  Page catalog  ³ 4096
+0x121000 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+         ³  Page catalog  ³ 4096+(memsize/1024)
          ³                ³
          ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
          ³                ³
 
-
-   ÄÄÄÄÄÄ int 0x20 ÄÄÄ Processes and memory spec ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
-
-      1. Allocate memory
-        In:  ah  = 0
-             ebx = Size
-        Out: CF set on error (not enough memory, free desc. absent)
-             ax  = SEG of block
-
-      2. Free memory
-        In:  ah  = 1
-             dx  = SEG to Free
-
-      3. Resize memory
-        In:  ah  = 2
-             ebx = NewSize
-             dx  = SEG of block
-        Out: CF set on error (not enough memory)
-
-      4. Allocate LDT
-        In:  ah  = 3
-        Out: CF set on error (free desc. absent)
-             bx  = LDTNum
-
-      5. Free LDT
-        In:  ah  = 4
-             bx  = LDTNum
-
-      6. Load LDT
-        In:  ah  = 5
-             bx  = LDTNum
-
-      7. Allocate Global
-        In:  ah  = 6
-             ebx = size in pages (4096)
-        Out: CF set on error (not enough memory, free desc. absent)
-             ax  = SEG of global
-
-      8. Resize Global
-        In:  ah  = 7
-             ebx = NewSize in pages (4096)
-             dx  = SEG of global
-        Out: CF set on error (not enough memory)
-
-      9. Free Global
-        In:  ah  = 8
-             dx  = SEG of global
 
    ÄÄÄÄÄÄ int 0x21 ÄÄÄ File system ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
 
@@ -202,3 +155,92 @@
    eax=+edx
 
    jmp debug
+
+  -----------------
+
+Delay 4sec :    ecx=10000 0000;loop $
+
+GDT: (0100800)
+
+00: 0000 000000 0000
+08: C09B 111000 000F
+10: 8093 100000 0010
+18: 8093 121000 0010
+20: 8093 111000 000F
+28: 8F93 000000 FFFF
+30: C08B 132000 0000  BUSY TSS
+38: C082 133000 0000  LDT
+40: C089 136000 0000  TSS
+48:
+
+LDT: (0133000)
+
+00: C0FA 134000 0001
+08: C092 137000 0000
+10: C0B2 138000 0000
+18: C0F2 139000 0000
+
+TSS: (0136000)
+
+00000000-00000FFF  oldsel/esp0
+0000000C-00000FFF  ss0/esp1
+00000015-00000000  ss1/esp2
+00000000-00121000  ss2/cr3
+00000000-00003246  eip/eflags
+00000000-00000000  eax/ecx
+00000000-00000000  edx/ebx
+00000FFF-00000FFF  esp/ebp
+00000000-00000000  esi/edi
+00000000-00000007  es/cs
+0000001F-00000000  ss/ds
+00000000-00000000  fs/gs
+00000038-00680000
+
+------------------
+
+   // Show memory at esi
+   esi=0x135000;ecx=100
+   push ds;ax=mem_all_data;ds=ax
+   {
+     lodsd
+     push ecx;edx=eax
+     show_edx()
+     pop ecx;al=0x2D
+     write_char();
+     loop ?^0
+   }
+   pop ds
+   jmp debug
+
+---------------------------------
+ VM00 TSS
+00000030-00001F3E   oldsel/esp0
+00000020-00000000   ss0/esp1
+00000000-00000000   ss1/esp2
+00000000-00121000   ss2/cr3
+000011D7-00003246   eip/eflags
+00007246-00000000   eax/ecx
+00000000-0000FFCD   edx/ebx
+00001F0A-00001F12   esp/ebp
+00000000-00000370   esi/edi
+00000000-00000008   es/cs
+00000020-00000000   ss/ds
+00000028-00000000   fs/gs
+00000000-00680000
+-----------------------
+
+   // VM-task?
+   test b:[esp.16.2],2
+   jz timer32
+   pop eax
+   push ebp
+   mov ebp,esp
+   push eax
+   push ebx
+   bx=mem_all_data;fs=bx
+   ebx=0x82
+   jmp emulate_int
+
+   // No. i386 task.
+timer32:
+-----------------------

@@ -1,0 +1,22 @@
+ // Task sample
+#code 32
+#output .bin
+
+  db "CE",26       // sign       [3]
+  db "STARTUP",[2] // task name  [9]
+  dw 1             // stack size [2]
+  dw 2             // task size  [2]
+
+#org 0
+
+  // Writes 20 characters, then exit
+  //dh=20{ecx=200 0000;loop $;dh=++;ah=187;al=dh;int 0x21;if (dh!=40){jmp ?^1}}
+
+  edi=str
+  while(b:cs:[edi]!=0){
+    ah=187;al=b:cs:[edi];int 0x21
+    edi=++
+  }
+  iret
+
+str: db "This just a sample task",13,10,0

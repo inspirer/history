@@ -1,0 +1,13 @@
+   // Show memory at esi
+   esi=show_debug_info;ecx=100
+   push ds;ax=mem_all_data;ds=ax
+   {
+     lodsd
+     push ecx;edx=eax
+     show_edx()
+     pop ecx;al=0x2D
+     write_char();
+     loop ?^0
+   }
+   pop ds
+   jmp debug

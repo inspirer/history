@@ -1,0 +1,19 @@
+ // ChaOS registry menager
+
+exc20_r0:
+    //cmp ah,0x40 ; jz create_reg_key
+    jmp exc20_p0
+
+  // 1. Create reg_key
+  // 2. Remove reg_key
+  // 3. Get reg_key
+  // 4. Get reg_key data
+  // 5. Set reg_key data
+  // 6. Get Next reg_key
+  // 7. Get Sub reg_key
+  // 8. Get Root reg_key
+
+ // Registry initialization part
+reg_init:
+
+   ret
