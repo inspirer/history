@@ -6,7 +6,7 @@
 void BSTR_2_char( BSTR b, char *dest, int max ) {
 
 	if( b )
-		WideCharToMultiByte(CP_ACP, 0, b, *(((long *)b)-1), dest, max	, NULL, NULL);
+		WideCharToMultiByte(CP_OEMCP, 0, b, *(((long *)b)-1), dest, max	, NULL, NULL);
 	else
 		*dest = 0;
 }
@@ -21,7 +21,7 @@ BSTR char_2_BSTR( char *src ) {
 	if( !len )
 		return NULL;
 	wc = new wchar_t[len+1];
-	MultiByteToWideChar(CP_ACP, 0, src, len, wc, len+1 );
+	MultiByteToWideChar(CP_OEMCP, 0, src, len, wc, len+1 );
 	ret = SysAllocString(wc);
 	delete[] wc;
 	return ret;

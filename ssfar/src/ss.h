@@ -3,6 +3,8 @@
 #ifndef SS_H_INCLUDED
 #define SS_H_INCLUDED
 
+#define VERSION   "1.01"
+
 #include <windows.h>
 #include <string.h>
 #include "plugin.hpp"
@@ -229,6 +231,7 @@ enum {
 	msg_config_ok,
 	msg_config_can,
 	msg_config_prefix,
+	msg_config_version
 };
 
 

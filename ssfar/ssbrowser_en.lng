@@ -92,3 +92,4 @@
 "&Apply"
 "&Cancel"
 "Command line &prefix:"
+"Version: %s"

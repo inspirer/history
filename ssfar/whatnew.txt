@@ -1,0 +1,14 @@
+
+	MS SourceSafe 6.0 navigator 1.01
+
+[!] Important
+[+] New
+[-] Bugs fixed
+[*] Changes
+
+
+Version 1.01, 09 Apr 2004
+
+[-] Russian filenames support (thx to Max Belugin)
+[+] Configure dialog contains plugins version number
+
