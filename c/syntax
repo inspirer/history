@@ -23,7 +23,7 @@
 .maxtoken    4096
 .class       "Compiler"
 .getsym      "chr = *l++;if( l == end ) fillb()"
-.positioning "full"
+.positioning "line"
 
 
 # identificators and numbers

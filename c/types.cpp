@@ -207,38 +207,42 @@ const char *Type::toString()
 	return buffer;
 }
 
+// definition of basic type information array
 
-static const int type_size[t_basiccnt] = {
-	0,
-	0,  //1 void
-	1,  //2 char
-	1,  //3 signed char
-	1,  //4 unsigned char 
-	2,  //5 short, signed short, short int, or signed short int
-	2,  //6 unsigned short, or unsigned short int
-	4,  //7 int, signed, or signed int
-	4,  //8 unsigned, or unsigned int
-	4,  //9 long, signed long, long int, or signed long int
-	4,  //0 unsigned long, or unsigned long int
-	8,  //1 long long, signed long long, long long int, or signed long long int
-	8,  //2 unsigned long long, or unsigned long long int
-	4,  //3 float
-	8,  //4 double
-	8,  //5 long double
-	1,  //6 _Bool
-	8,  //7 float _Complex
-	16, //8 double _Complex
-	16, //9 long double _Complex
-	4,  //0 float _Imaginary
-	8,  //1 double _Imaginary
-	8,  //2 long double _Imaginary
+#define FD(i,e) ((i<<4) + e)
+
+const struct basic_type_descr tdescr[t_basiccnt] = {
+ {	0,	0,      	0,       },	
+ {	0,	0,			0,		 },	//1 void
+ {	1,	2,			0,		 },	//2 char
+ {	1,	2 | SBIT,	0,       },	//3 signed char
+ {	1,	2,		 	0,		 },	//4 unsigned char 
+ {	2,	3 | SBIT,	0,       },	//5 short, signed short, short int, or signed short int
+ {	2,	3,		 	0,		 },	//6 unsigned short, or unsigned short int
+ {	4,	4 | SBIT,	0,       },	//7 int, signed, or signed int
+ {	4,	4,		 	0,		 },	//8 unsigned, or unsigned int
+ {	4,	5 | SBIT,	0,       },	//9 long, signed long, long int, or signed long int
+ {	4,	5,		 	0,		 },	//0 unsigned long, or unsigned long int
+ {	8,	6 | SBIT,	0,       },	//1 long long, signed long long, long long int, or signed long long int
+ {	8,	6,		 	0,		 },	//2 unsigned long long, or unsigned long long int
+ {	4,	0,		 	FD(0,0), },	//3 float
+ {	8,	0,		 	FD(0,1), },	//4 double
+ {	8,	0,		 	FD(0,2), },	//5 long double
+ {	1,	1,		 	0,		 },	//6 _Bool
+ {	8,	0,		 	FD(2,0), },	//7 float _Complex
+ {	16,	0,		 	FD(2,1), },	//8 double _Complex
+ {	16,	0,		 	FD(2,2), },	//9 long double _Complex
+ {	4,	0,		 	FD(1,0), },	//0 float _Imaginary
+ {	8,	0,		 	FD(1,1), },	//1 double _Imaginary
+ {	8,	0,		 	FD(1,2), },	//2 long double _Imaginary
 };
 
 
+                    
 static void print_type( int ts, Compiler *cc )
 {
 	int wr = 1;
-
+	
 	if( ts & ts_void ) cc->error( " void" + wr ), wr = 0;
 	if( ts & ts_signed ) cc->error( " signed" + wr ), wr = 0;
 	if( ts & ts_unsigned ) cc->error( " unsigned" + wr ), wr = 0;
@@ -380,7 +384,7 @@ void Type::fixup( Compiler *cc )
 	if( (t_mask & specifier) == 0 ) {
 		specifier = validate_type( specifier );
 		ASSERT( BASICTYPE(this) );
-		size = type_size[specifier];
+		size = tdescr[specifier].size;
 	}
 }
 

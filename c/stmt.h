@@ -52,6 +52,7 @@ enum {
 	e_member,					// op1 = structure, restype, base = structure member
 	e_deref,					// op0 = pointer_to_deref (op0->restype->specifier == t_pointer)
 	e_tripl,
+	e_cast,						// restype = cast_type
 };
 
 
@@ -94,6 +95,7 @@ struct Expr {
 
 	// casting
 	Expr *cast_to( Type *t, Place loc, Compiler *cc );
+	Type *usual_conversions( Expr **e1, Expr **t2, Compiler *cc );
 
 	// destructors
 	void free( Compiler *cc );

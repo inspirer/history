@@ -29,6 +29,13 @@
 
    Expressions
 
+= 24 === (04 mar 2004)
+
+    + Expr::usual_conversions
+    + (basic_type_descr) tdescr
+    + Type::integer_promotion
+    - column precision in errors
+
 = 23 === (12 feb 2004)
 
 	+ conv.cpp

@@ -36,10 +36,10 @@
  */
 
 struct Place {
-	int line, column;
+	int line;
 };
 
-#define LOC "%i(%i): "
+#define LOC "%i: "
 
 // compiler-specific types
 typedef unsigned __int64 vlong;

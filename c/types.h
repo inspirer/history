@@ -105,7 +105,7 @@ enum {
 #define STRUCTTYPE(tt) ((tt)->specifier == t_struct || (tt)->specifier == t_union )
 #define VOIDTYPE(tt) ((tt)->specifier == t_void )
 #define PTRTYPE(tt) ((tt)->specifier == t_pointer )
-#define FLOATTYPE(tt) ((tt)->specifier >= t_float && (tt)->specifier <= t_limg )
+#define FLOATTYPE(tt) ((tt)->specifier >= t_float && (tt)->specifier <= t_limg && (tt)->specifier!= t_bool )
 
 	// 6.2.5.18 Integer and floating types are collectively called arithmetic
 	// types. Each arithmetic type belongs to one type domain: the real type domain
@@ -129,6 +129,8 @@ enum {
 
 #define INCOMPLETE(tt) ( (tt)->specifier == t_array && (tt)->ar_size == NULL || \
 	((tt)->specifier == t_union || (tt)->specifier == t_struct) && (tt)->params == NULL )
+
+#define T(tt) (tt)->specifier
 
     /*
 		EG: To simplify the compiler's logic we suppose that 'long _Imaginary' is the
@@ -216,6 +218,9 @@ struct Type {
 		};
 		Expr  *ar_size;			 // t_array (NULL means incompleted)
 		Namespace *enum_members; // t_enum
+		struct {				 // INTTYPE
+			int bitsize, bitstart;
+		};
     };
 
 	// toString operator uses two static buffers
@@ -224,6 +229,7 @@ struct Type {
 	// type conversions
 	int can_convert_to( Type *t, Compiler *cc );
 	static Type *compatible( Type *t1, Type *t2, Compiler *cc );
+	Type *integer_promotion( Compiler *cc );
 
 	// constructors
     static Type *create( int ts, Compiler *cc );
@@ -241,6 +247,26 @@ struct Type {
     void fixup( Compiler *cc );
     static int addqualifier( int list, int one, Place loc, Compiler *cc );
 };
+
+//  Basic type information array declaration.
+
+struct basic_type_descr {
+    int size;				// in bytes
+    int rank;				// type rank
+    int domain;				// only for floating types
+};
+
+// (see 6.3.1.1 Boolean, characters, and integers)
+
+// TODO improve enum_type
+#define INTRANK 4
+#define SBIT 0x1000
+#define RANK(type) ((type)->specifier == t_enum ? INTRANK : tdescr[(type)->specifier].rank&0xff)
+#define SIGNED(type) (tdescr[(type)->specifier].rank&SBIT)
+#define F_DOMAIN(a) ((a) >> 4)
+#define F_TYPE(a) ((a) & 15)
+
+extern const struct basic_type_descr tdescr[t_basiccnt];
 
 /* EG:
 	Sym structure is used to store all symbolic names found in the source file.

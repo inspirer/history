@@ -35,8 +35,6 @@ Expr *Expr::create( int type, Type *restype, Compiler *cc )
 	} else 
 		e = (Expr *)cc->expr_sl.allocate();
 
-	ASSERT(restype);
-
 	e->type = type;
 	e->restype = restype;
 
@@ -374,14 +372,19 @@ Expr *Expr::cast_to( Type *t, Place loc, Compiler *cc )
 	}
 
 	if( !VOIDTYPE( t ) && !SCALAR( t ) ) {
-		cc->error( LOC "cast to non-scalar type is illegal\n", loc );  // TODO
+		cc->error( LOC "cast to '%s' is illegal\n", loc, t->toString() );
 		return NULL;
 	}
 
 	// 6.5.4.3 Conversions that involve pointers, other than where permitted by the
 	// constraints of 6.5.16.1, shall be specified by means of an explicit cast.
+	// .... TODO
 
-	return NULL; // TODO
+
+	Expr *e = create( e_cast, t, cc );
+	e->op[0] = this;
+
+	return e; // TODO
 }
 
 

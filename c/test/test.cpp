@@ -21,7 +21,7 @@ typedef const enum qq { a, } s;
   */
 
 
-void main()
+/*void main()
 {
 	char c;
 	const int i, * volatile const * e;
@@ -46,4 +46,9 @@ void main()
 	e = e << (e ? main : b);
 	e = e << (e ? zx : b);
 
+} */
+
+void main() {
+	void *e;
+   int i = (long()) e;
 }
