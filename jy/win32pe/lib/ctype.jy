@@ -1,0 +1,385 @@
+section .code {
+_isalpha:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,97
+_jl L6
+cmp edi,122
+_jle L7
+L6:
+mov edi,d:[ebp+(20)]
+cmp edi,65
+_jge L7
+cmp edi,90
+_jg L3
+L7:
+mov d:[ebp+(-4)],1
+jmp L4
+L3:
+mov d:[ebp+(-4)],0
+L4:
+mov eax,d:[ebp+(-4)]
+L1:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isdigit:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,48
+_jl L10
+cmp edi,57
+_jg L10
+mov d:[ebp+(-4)],1
+jmp L11
+L10:
+mov d:[ebp+(-4)],0
+L11:
+mov eax,d:[ebp+(-4)]
+L8:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isalnum:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+push edi
+call _isalpha
+add esp,4
+cmp eax,0
+_jne L16
+mov edi,d:[ebp+(20)]
+push edi
+call _isdigit
+add esp,4
+mov edi,eax
+cmp edi,0
+_je L14
+L16:
+mov d:[ebp+(-4)],1
+jmp L15
+L14:
+mov d:[ebp+(-4)],0
+L15:
+mov eax,d:[ebp+(-4)]
+L12:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_iscntrl:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,0
+_jl L22
+cmp edi,31
+_jle L21
+L22:
+cmp d:[ebp+(20)],127
+_jne L19
+L21:
+mov d:[ebp+(-4)],1
+jmp L20
+L19:
+mov d:[ebp+(-4)],0
+L20:
+mov eax,d:[ebp+(-4)]
+L17:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_islower:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,97
+_jl L25
+cmp edi,122
+_jg L25
+mov d:[ebp+(-4)],1
+jmp L26
+L25:
+mov d:[ebp+(-4)],0
+L26:
+mov eax,d:[ebp+(-4)]
+L23:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isupper:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,65
+_jl L29
+cmp edi,90
+_jg L29
+mov d:[ebp+(-4)],1
+jmp L30
+L29:
+mov d:[ebp+(-4)],0
+L30:
+mov eax,d:[ebp+(-4)]
+L27:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_tolower:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+push edi
+call _isupper
+add esp,4
+cmp eax,0
+_je L32
+mov edi,d:[ebp+(20)]
+sub edi,65
+lea eax,[edi+(97)]
+jmp L31
+L32:
+mov eax,d:[ebp+(20)]
+L31:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_toupper:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+push edi
+call _islower
+add esp,4
+cmp eax,0
+_je L35
+mov edi,d:[ebp+(20)]
+sub edi,97
+lea eax,[edi+(65)]
+jmp L34
+L35:
+mov eax,d:[ebp+(20)]
+L34:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isspace:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,9
+_jl L42
+cmp edi,13
+_jle L41
+L42:
+cmp d:[ebp+(20)],32
+_jne L39
+L41:
+mov d:[ebp+(-4)],1
+jmp L40
+L39:
+mov d:[ebp+(-4)],0
+L40:
+mov eax,d:[ebp+(-4)]
+L37:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_ispunct:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,46
+_je L54
+cmp edi,44
+_je L54
+cmp edi,63
+_je L54
+cmp edi,58
+_je L54
+cmp edi,59
+_je L54
+cmp edi,45
+_je L54
+cmp edi,33
+_je L54
+cmp edi,40
+_je L54
+cmp edi,41
+_jne L45
+L54:
+mov d:[ebp+(-4)],1
+jmp L46
+L45:
+mov d:[ebp+(-4)],0
+L46:
+mov eax,d:[ebp+(-4)]
+L43:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isxdigit:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+push edi
+call _isdigit
+add esp,4
+cmp eax,0
+_jne L62
+mov edi,d:[ebp+(20)]
+cmp edi,97
+_jl L61
+cmp edi,102
+_jle L62
+L61:
+mov edi,d:[ebp+(20)]
+cmp edi,65
+_jge L62
+cmp edi,70
+_jg L57
+L62:
+mov d:[ebp+(-4)],1
+jmp L58
+L57:
+mov d:[ebp+(-4)],0
+L58:
+mov eax,d:[ebp+(-4)]
+L55:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isgraph:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,33
+_jl L68
+cmp edi,126
+_jle L69
+L68:
+mov edi,d:[ebp+(20)]
+cmp edi,128
+_jl L70
+cmp edi,175
+_jle L69
+L70:
+mov edi,d:[ebp+(20)]
+cmp edi,225
+_jl L65
+cmp edi,239
+_jg L65
+L69:
+mov d:[ebp+(-4)],1
+jmp L66
+L65:
+mov d:[ebp+(-4)],0
+L66:
+mov eax,d:[ebp+(-4)]
+L63:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_isprint:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+push edi
+call _isgraph
+add esp,4
+mov edi,eax
+L71:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+}

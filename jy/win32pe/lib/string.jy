@@ -1,0 +1,1140 @@
+section .code {
+_memcpy:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,12
+mov d:[ebp+(-4)],0
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-8)],edi
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-12)],edi
+jmp L5
+L2:
+mov edi,d:[ebp+(-8)]
+mov esi,d:[ebp+(-12)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L3:
+add d:[ebp+(-4)],1
+inc d:[ebp+(-8)]
+inc d:[ebp+(-12)]
+L5:
+mov edi,d:[ebp+(28)]
+cmp d:[ebp+(-4)],edi
+_jb  L2
+mov eax,d:[ebp+(20)]
+L1:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strcpy:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+jmp L10
+L7:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(24)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L8:
+inc d:[ebp+(-4)]
+inc d:[ebp+(24)]
+L10:
+mov edi,d:[ebp+(24)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L7
+mov edi,d:[ebp+(-4)]
+mov b:[edi],0
+mov eax,d:[ebp+(20)]
+L6:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strncpy:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,8
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov d:[ebp+(-8)],0
+jmp L15
+L12:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(24)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L13:
+add d:[ebp+(-8)],1
+inc d:[ebp+(-4)]
+inc d:[ebp+(24)]
+L15:
+mov edi,d:[ebp+(28)]
+cmp d:[ebp+(-8)],edi
+_jae L16
+mov edi,d:[ebp+(24)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L12
+L16:
+jmp L20
+L17:
+mov edi,d:[ebp+(-4)]
+mov b:[edi],0
+L18:
+add d:[ebp+(-8)],1
+inc d:[ebp+(-4)]
+L20:
+mov edi,d:[ebp+(28)]
+cmp d:[ebp+(-8)],edi
+_jb  L17
+mov eax,d:[ebp+(20)]
+L11:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strcat:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(-4)]
+push edi
+call _strlen
+add esp,4
+mov esi,d:[ebp+(-4)]
+lea edi,[esi][eax]
+mov d:[ebp+(-4)],edi
+jmp L25
+L22:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(24)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L23:
+inc d:[ebp+(-4)]
+inc d:[ebp+(24)]
+L25:
+mov edi,d:[ebp+(24)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L22
+mov edi,d:[ebp+(-4)]
+mov b:[edi],0
+mov eax,d:[ebp+(20)]
+L21:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_memcmp:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,12
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-8)],edi
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-12)],edi
+mov d:[ebp+(-4)],0
+jmp L30
+L27:
+L28:
+inc d:[ebp+(-8)]
+inc d:[ebp+(-12)]
+add d:[ebp+(-4)],1
+L30:
+mov edi,d:[ebp+(-8)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-12)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jne L31
+mov edi,d:[ebp+(28)]
+cmp d:[ebp+(-4)],edi
+_jb  L27
+L31:
+mov edi,d:[ebp+(28)]
+cmp edi,d:[ebp+(-4)]
+_jne L32
+mov eax,0
+jmp L26
+L32:
+mov edi,d:[ebp+(-8)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-12)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L34
+mov eax,1
+jmp L26
+L34:
+mov eax,-1
+L26:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strcmp:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+jmp L40
+L37:
+L38:
+inc d:[ebp+(20)]
+inc d:[ebp+(24)]
+L40:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_je L41
+mov esi,d:[ebp+(24)]
+movsx esi,b:[esi]
+cmp edi,esi
+_je L37
+L41:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(24)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L42
+mov eax,1
+jmp L36
+L42:
+mov edi,d:[ebp+(24)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(20)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L44
+mov eax,-1
+jmp L36
+L44:
+mov eax,0
+L36:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strncmp:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov d:[ebp+(-4)],0
+jmp L50
+L47:
+L48:
+inc d:[ebp+(20)]
+inc d:[ebp+(24)]
+add d:[ebp+(-4)],1
+L50:
+mov edi,d:[ebp+(28)]
+cmp d:[ebp+(-4)],edi
+_jae L52
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(24)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jne L52
+cmp edi,0
+_jne L47
+L52:
+mov edi,d:[ebp+(28)]
+cmp edi,d:[ebp+(-4)]
+_je L55
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,edi
+_jne L53
+cmp edi,0
+_jne L53
+L55:
+mov eax,0
+jmp L46
+L53:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(24)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L56
+mov eax,1
+jmp L46
+L56:
+mov eax,-1
+L46:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_memchr:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,8
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov d:[ebp+(-8)],0
+jmp L62
+L59:
+L60:
+inc d:[ebp+(-4)]
+L62:
+mov edi,d:[ebp+(28)]
+cmp d:[ebp+(-8)],edi
+_jae L63
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,d:[ebp+(24)]
+_jne L59
+L63:
+mov edi,d:[ebp+(28)]
+cmp edi,d:[ebp+(-8)]
+_jne L64
+mov eax,0
+jmp L58
+L64:
+mov eax,d:[ebp+(-4)]
+L58:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strchr:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+jmp L70
+L67:
+L68:
+inc d:[ebp+(20)]
+L70:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_je L71
+cmp edi,d:[ebp+(24)]
+_jne L67
+L71:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L72
+cmp d:[ebp+(24)],0
+_jne L74
+mov eax,d:[ebp+(20)]
+jmp L66
+L74:
+mov eax,0
+jmp L66
+L72:
+mov eax,d:[ebp+(20)]
+L66:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_memset:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,8
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(28)]
+mov esi,d:[ebp+(20)]
+lea edi,[esi][edi]
+mov d:[ebp+(-8)],edi
+jmp L80
+L77:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(24)]
+mov ebx,esi
+mov b:[edi],bl
+L78:
+inc d:[ebp+(-4)]
+L80:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-8)]
+cmp edi,esi
+_jb L77
+mov eax,d:[ebp+(20)]
+L76:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__strset:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+jmp L85
+L82:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(24)]
+mov ebx,esi
+mov b:[edi],bl
+L83:
+inc d:[ebp+(-4)]
+L85:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L82
+mov eax,d:[ebp+(20)]
+L81:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strlen:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov d:[ebp+(-4)],0
+mov edi,d:[ebp+(20)]
+cmp edi,0
+_jne L92
+mov eax,0
+jmp L86
+L89:
+L90:
+inc d:[ebp+(20)]
+inc d:[ebp+(-4)]
+L92:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L89
+mov edi,d:[ebp+(-4)]
+mov eax,edi
+L86:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__memccpy:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,12
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-8)],edi
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(32)]
+mov esi,d:[ebp+(20)]
+lea edi,[esi][edi]
+mov d:[ebp+(-12)],edi
+jmp L97
+L94:
+mov edi,d:[ebp+(-8)]
+mov esi,d:[ebp+(-4)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L95:
+inc d:[ebp+(-8)]
+inc d:[ebp+(-4)]
+L97:
+mov edi,d:[ebp+(-4)]
+movsx esi,b:[edi]
+cmp esi,d:[ebp+(28)]
+_je L98
+mov esi,d:[ebp+(-12)]
+cmp edi,esi
+_jb L94
+L98:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-12)]
+cmp edi,esi
+_jne L99
+mov eax,0
+jmp L93
+L99:
+mov edi,d:[ebp+(-8)]
+mov esi,d:[ebp+(28)]
+mov ebx,esi
+mov b:[edi],bl
+inc d:[ebp+(-8)]
+mov eax,d:[ebp+(-8)]
+L93:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__memicmp:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,16
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-8)],edi
+mov edi,d:[ebp+(28)]
+mov esi,d:[ebp+(20)]
+lea edi,[esi][edi]
+mov d:[ebp+(-12)],edi
+jmp L105
+L102:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+cmp edi,esi
+_je L106
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,97
+_jle L111
+cmp edi,122
+_jl L110
+L111:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,65
+_jle L108
+cmp edi,90
+_jge L108
+L110:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L112
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+sub edi,97
+lea edi,[edi+(65)]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L114
+mov eax,1
+jmp L101
+L114:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+sub edi,97
+lea edi,[edi+(65)]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jge L109
+mov eax,-1
+jmp L101
+L112:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+sub esi,97
+lea esi,[esi+(65)]
+cmp edi,esi
+_jle L118
+mov eax,1
+jmp L101
+L118:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+sub esi,97
+lea esi,[esi+(65)]
+cmp edi,esi
+_jge L109
+mov eax,-1
+jmp L101
+L108:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(-8)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jle L123
+mov d:[ebp+(-16)],1
+jmp L124
+L123:
+mov d:[ebp+(-16)],-1
+L124:
+mov eax,d:[ebp+(-16)]
+jmp L101
+L109:
+L106:
+L103:
+inc d:[ebp+(-4)]
+L105:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-12)]
+cmp edi,esi
+_jb L102
+mov eax,0
+L101:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_memmove:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,20
+mov edi,d:[ebp+(28)]
+mov esi,d:[ebp+(20)]
+mov ebx,d:[ebp+(24)]
+lea edx,[esi][edi]
+mov ecx,ebx
+cmp edx,ecx
+_jb L128
+lea edi,[ebx][edi]
+cmp edi,esi
+_jae L126
+L128:
+mov edi,d:[ebp+(28)]
+push edi
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+call _memcpy
+add esp,12
+mov edi,eax
+jmp L125
+L126:
+mov edi,d:[ebp+(28)]
+push edi
+call _malloc
+add esp,4
+mov d:[ebp+(-20)],eax
+mov d:[ebp+(-4)],eax
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-12)],edi
+mov edi,d:[ebp+(28)]
+mov esi,d:[ebp+(-4)]
+lea edi,[esi][edi]
+mov d:[ebp+(-16)],edi
+mov edi,d:[ebp+(-20)]
+cmp edi,0
+_jne L134
+mov eax,d:[ebp+(20)]
+jmp L125
+L131:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-12)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L132:
+inc d:[ebp+(-4)]
+inc d:[ebp+(-12)]
+L134:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-16)]
+cmp edi,esi
+_jb L131
+mov edi,d:[ebp+(-20)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-8)],edi
+jmp L138
+L135:
+mov edi,d:[ebp+(-8)]
+mov esi,d:[ebp+(-4)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L136:
+inc d:[ebp+(-4)]
+inc d:[ebp+(-8)]
+L138:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-16)]
+cmp edi,esi
+_jb L135
+mov edi,d:[ebp+(-20)]
+push edi
+call _free
+add esp,4
+mov eax,d:[ebp+(20)]
+L125:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strncat:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,12
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-8)],edi
+mov edi,d:[ebp+(28)]
+mov esi,d:[ebp+(-8)]
+lea edi,[esi][edi]
+mov d:[ebp+(-12)],edi
+jmp L143
+L140:
+L141:
+inc d:[ebp+(-4)]
+L143:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L140
+jmp L147
+L144:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(-8)]
+mov bl,b:[esi]
+mov b:[edi],bl
+L145:
+inc d:[ebp+(-8)]
+inc d:[ebp+(-4)]
+L147:
+mov edi,d:[ebp+(-8)]
+mov esi,edi
+mov ebx,d:[ebp+(-12)]
+cmp esi,ebx
+_jae L148
+movsx edi,b:[edi]
+cmp edi,0
+_jne L144
+L148:
+mov edi,d:[ebp+(-4)]
+mov b:[edi],0
+mov eax,d:[ebp+(20)]
+L139:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strcspn:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,8
+mov d:[ebp+(-8)],0
+jmp L153
+L150:
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-4)],edi
+jmp L157
+L154:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(20)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jne L158
+mov edi,d:[ebp+(-8)]
+mov eax,edi
+jmp L149
+L158:
+L155:
+inc d:[ebp+(-4)]
+L157:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L154
+L151:
+inc d:[ebp+(20)]
+inc d:[ebp+(-8)]
+L153:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L150
+mov edi,d:[ebp+(-8)]
+mov eax,edi
+L149:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strpbrk:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+jmp L164
+L161:
+mov edi,d:[ebp+(24)]
+mov d:[ebp+(-4)],edi
+jmp L168
+L165:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+mov esi,d:[ebp+(20)]
+movsx esi,b:[esi]
+cmp edi,esi
+_jne L169
+mov eax,d:[ebp+(20)]
+jmp L160
+L169:
+L166:
+inc d:[ebp+(-4)]
+L168:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L165
+L162:
+inc d:[ebp+(20)]
+L164:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L161
+mov eax,0
+L160:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strrchr:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+push edi
+call _strlen
+add esp,4
+mov esi,d:[ebp+(20)]
+lea edi,[esi][eax]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(20)]
+lea edi,[edi+(-1)]
+mov d:[ebp+(20)],edi
+jmp L175
+L172:
+mov edi,d:[ebp+(-4)]
+movsx edi,b:[edi]
+cmp edi,d:[ebp+(24)]
+_jne L176
+mov eax,d:[ebp+(-4)]
+jmp L171
+L176:
+L173:
+mov edi,d:[ebp+(-4)]
+lea edi,[edi+(-1)]
+mov d:[ebp+(-4)],edi
+L175:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(20)]
+cmp edi,esi
+_jne L172
+mov eax,0
+L171:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strspn:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov d:[ebp+(-4)],0
+jmp L182
+L179:
+L180:
+inc d:[ebp+(20)]
+inc d:[ebp+(-4)]
+L182:
+mov edi,d:[ebp+(20)]
+movsx edi,b:[edi]
+cmp edi,0
+_je L183
+push edi
+mov edi,d:[ebp+(24)]
+push edi
+call _strchr
+add esp,8
+mov edi,eax
+cmp edi,0
+_jne L179
+L183:
+mov edi,d:[ebp+(-4)]
+mov eax,edi
+L178:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strstr:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(24)]
+push edi
+call _strlen
+add esp,4
+cmp eax,0
+_jne L188
+mov eax,d:[ebp+(20)]
+jmp L184
+L187:
+mov edi,d:[ebp+(24)]
+push edi
+call _strlen
+add esp,4
+push eax
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(-4)]
+push edi
+call _strncmp
+add esp,12
+cmp eax,0
+_jne L190
+mov eax,d:[ebp+(-4)]
+jmp L184
+L190:
+L188:
+mov edi,d:[ebp+(24)]
+movsx edi,b:[edi]
+push edi
+mov edi,d:[ebp+(-4)]
+push edi
+call _strchr
+add esp,8
+mov d:[ebp+(-4)],eax
+mov edi,eax
+cmp edi,0
+_jne L187
+mov eax,0
+L184:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+}
+section .data {
+align 4
+L193: db [4]
+}
+section .code {
+_strtok:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+mov edi,d:[ebp+(20)]
+cmp edi,0
+_je L197
+mov edi,d:[ebp+(20)]
+mov d:[L193],edi
+jmp L197
+L196:
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[L193]
+push edi
+call _strcspn
+add esp,8
+mov d:[ebp+(-4)],eax
+cmp eax,0
+_je L199
+mov edi,d:[ebp+(-4)]
+mov esi,d:[L193]
+mov b:[esi][edi],0
+mov eax,d:[L193]
+jmp L192
+L199:
+inc d:[L193]
+L197:
+mov edi,d:[L193]
+movsx edi,b:[edi]
+cmp edi,0
+_jne L196
+mov eax,0
+L192:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strerror:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+mov eax,d:[__sys_errlist][4*edi]
+L201:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_strrev:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,12
+mov edi,d:[ebp+(20)]
+push edi
+call _strlen
+add esp,4
+mov edi,eax
+mov d:[ebp+(-8)],edi
+mov eax,d:[ebp+(-8)]
+mov edi,2
+cdq
+idiv edi
+mov d:[ebp+(-4)],eax
+jmp L206
+L203:
+mov edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(20)]
+lea ebx,[esi][edi]
+movsx edx,b:[ebx]
+mov d:[ebp+(-12)],edx
+mov edx,d:[ebp+(-8)]
+sub edx,edi
+mov dl,b:[esi][edx]
+mov b:[ebx],dl
+mov edi,d:[ebp+(-8)]
+sub edi,d:[ebp+(-4)]
+mov esi,d:[ebp+(20)]
+mov ebx,d:[ebp+(-12)]
+mov b:[esi][edi],bl
+L204:
+dec d:[ebp+(-4)]
+L206:
+cmp d:[ebp+(-4)],0
+_jg L203
+mov eax,d:[ebp+(20)]
+L202:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+}
+extrn__free = 1
+section .code {
+}
+extrn__malloc = 1
+section .code {
+}
+extrn___sys_errlist = 1
+section .code {
+}

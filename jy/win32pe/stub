@@ -1,0 +1,186 @@
+// win32 PE
+
+file_align = 512
+object_align = 0x1000
+image_base = 0x400000
+_text_section_base = image_base + object_align
+_subsystem = 3
+
+code 16
+org 0
+
+db "MZ"
+dw 0x90
+dw 3             
+dw 0
+dw 4             
+dw 0,0xffff
+dw 0,0xb8        
+dw 0
+dw 0,0           
+dw 0x40,0
+
+align 16
+db "inspired"
+
+align 0x3C
+dd header.PE
+
+org  0
+push cs
+pop  ds
+mov  dx,this_program_etc_message
+mov  ah,9
+int  0x21
+mov  ax,0x4C01
+int  0x21
+
+this_program_etc_message db "This program cannot be run in DOS mode.\r\n$"
+org  0x40 + $
+
+code 32
+align 16
+
+header.PE:
+
+db "PE",0,0
+dw 0x14C
+dw 3                // entries in object table
+dd 0
+dd 0,0
+dw NT_header_size
+dw 0x10f            // load to fixed address
+
+header.NT:
+
+dw 0x10b
+db 1,51
+dd (((_text_real_size+object_align-1)/object_align)*object_align)
+dd (((_data_real_size+object_align-1)/object_align)*object_align) + (((_rdata_real_size+object_align-1)/object_align)*object_align)
+dd 0
+dd _start - image_base
+dd _text_section_base - image_base
+dd _rdata_section_base - image_base
+
+dd image_base
+dd object_align
+dd file_align
+dw 4,0
+dw 0,0
+dw 4,0
+dd 0
+dd image_size
+dd header.end
+dd 0
+dw _subsystem
+dw 0
+dd 0x100000,0x1000	 
+dd 0x100000,0x1000   
+dd 0
+dd 0x10
+dd 0,0              // Export table RVA/data size
+dd import.table - image_base,import.table.size
+dd 0,0              // Resource table RVA/data size
+dd 0,0              // Exception table RVA/data size
+dd 0,0              // Security table RVA/data size
+dd 0,0              // Fixup table RVA/data size
+dd 0,0              // Debug table RVA/data size
+dd 0,0              // Image description table RVA/data size
+dd 0,0              // Machine specific table RVA/data size
+dd 0,0              // TLS table RVA/data size
+dd 0,0              // Load config table RVA/data size
+dd 0,0
+dd 0,0              // unkn table/data size
+dd 0,0,0,0,0,0
+
+[0] NT_header_size = $ - header.NT
+
+db ".code",0,0,0
+dd _text_real_size
+dd _text_section_base - image_base
+dd  (((_text_real_size+file_align-1)/file_align)*file_align)
+dd _text_section
+dd 0,0,0
+dd 0x60000020
+
+db ".rdata",0,0
+dd _rdata_real_size
+dd _rdata_section_base - image_base
+dd  (((_rdata_real_size+file_align-1)/file_align)*file_align)
+dd _rdata_section
+dd 0,0,0
+dd 0x40000040
+
+db ".data",0,0,0
+dd _data_real_size
+dd _data_section_base - image_base
+dd  (((_data_real_size+file_align-1)/file_align)*file_align)
+dd _data_section
+dd 0,0,0
+dd 0xC0000040
+
+align file_align
+[0] header.end = $
+
+_text_section:
+section .code org _text_section_base;
+[0] _text_real_size = $ - _text_section
+[0] _rdata_section_base =  (((_text_section_base+_text_real_size+object_align-1)/object_align)*object_align)
+align file_align
+
+_rdata_section:
+section .rdata org _rdata_section_base;
+[0] _rdata_real_size = $ - _rdata_section
+[0] _data_section_base =  (((_rdata_section_base+_rdata_real_size+object_align-1)/object_align)*object_align)
+align file_align
+
+_data_section:
+section .data org _data_section_base;
+if( !section(.data)){ db "empty data" }
+[0] _data_real_size = $ - _data_section
+[0] image_size =  (((_data_section_base+_data_real_size+object_align-1)/object_align)*object_align) - image_base
+align file_align
+
+section .rdata {
+import.table:
+	section import.table;
+    dd 0,0,0,0,0,0
+[0] import.table.size = $ - import.table
+
+align 4
+section import.table.names;
+align 4
+section import.tables;
+align 4
+section import.func;
+}
+
+section .code {
+_start:
+section .systeminit;
+section .init;
+call _main
+section .finalize;
+push 0
+call d:_ExitProcess
+
+_apicall:
+push esi
+push edi
+push ecx
+push ebp
+mov ebp,esp
+mov ecx,d:ebp+24
+sub esp,ecx
+mov edi,esp
+lea esi,[ebp+28]
+rep movsb
+mov esi,d:ebp+20
+call d:esi
+mov esp,ebp
+pop ebp
+pop ecx
+pop edi
+pop esi
+ret
+}

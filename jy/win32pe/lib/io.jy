@@ -1,0 +1,528 @@
+section .code {
+_open:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,32
+mov edi,d:[ebp+(24)]
+and edi,16
+cmp edi,0
+_je L4
+mov d:[ebp+(-16)],0x80000000
+jmp L5
+L4:
+mov edi,d:[ebp+(24)]
+and edi,1
+cmp edi,0
+_je L6
+mov d:[ebp+(-16)],0x40000000
+jmp L7
+L6:
+mov edi,d:[ebp+(24)]
+and edi,2
+cmp edi,0
+_je L8
+mov d:[ebp+(-16)],0xc0000000
+L8:
+L7:
+L5:
+mov edi,d:[ebp+(24)]
+and edi,256
+cmp edi,0
+_je L10
+mov edi,d:[ebp+(24)]
+and edi,512
+cmp edi,0
+_je L13
+mov d:[ebp+(-20)],2
+jmp L14
+L13:
+mov d:[ebp+(-20)],4
+L14:
+mov edi,d:[ebp+(-20)]
+mov d:[ebp+(-8)],edi
+jmp L11
+L10:
+mov d:[ebp+(-8)],3
+L11:
+mov edi,d:[ebp+(24)]
+and edi,2048
+cmp edi,0
+_je L16
+mov d:[ebp+(-24)],256
+jmp L17
+L16:
+mov d:[ebp+(-24)],128
+L17:
+mov edi,d:[ebp+(-24)]
+mov d:[ebp+(-12)],edi
+push 0
+mov edi,d:[ebp+(-12)]
+push edi
+mov edi,d:[ebp+(-8)]
+push edi
+push 0
+mov edi,d:[ebp+(28)]
+and edi,1
+cmp edi,0
+_je L20
+mov d:[ebp+(-28)],1
+jmp L21
+L20:
+mov d:[ebp+(-28)],0
+L21:
+mov edi,d:[ebp+(28)]
+and edi,2
+cmp edi,0
+_je L22
+mov d:[ebp+(-32)],2
+jmp L23
+L22:
+mov d:[ebp+(-32)],0
+L23:
+mov edi,d:[ebp+(-28)]
+or edi,d:[ebp+(-32)]
+push edi
+mov edi,d:[ebp+(-16)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+push 28
+lea edi,[_CreateFileA]
+push edi
+call _apicall
+add esp,36
+mov d:[ebp+(-4)],eax
+mov edi,d:[ebp+(-4)]
+cmp edi,0xffffffff
+_jne L24
+push 0
+lea edi,[_GetLastError]
+push edi
+call _apicall
+add esp,8
+mov d:[__io_error],eax
+mov d:[ebp+(-4)],0
+jmp L25
+L24:
+mov d:[__io_error],0
+L25:
+mov eax,d:[ebp+(-4)]
+L3:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_read:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+push 0
+lea edi,[ebp+(-4)]
+push edi
+mov edi,d:[ebp+(28)]
+push edi
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+push 20
+lea edi,[_ReadFile]
+push edi
+call _apicall
+add esp,28
+cmp eax,0
+_jne L27
+push 0
+lea edi,[_GetLastError]
+push edi
+call _apicall
+add esp,8
+mov d:[__io_error],eax
+mov d:[ebp+(-4)],0xffffffff
+jmp L28
+L27:
+mov d:[__io_error],0
+L28:
+mov edi,d:[ebp+(-4)]
+mov eax,edi
+L26:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_write:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,4
+push 0
+lea edi,[ebp+(-4)]
+push edi
+mov edi,d:[ebp+(28)]
+push edi
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+push 20
+lea edi,[_WriteFile]
+push edi
+call _apicall
+add esp,28
+cmp eax,0
+_jne L30
+push 0
+lea edi,[_GetLastError]
+push edi
+call _apicall
+add esp,8
+mov d:[__io_error],eax
+mov d:[ebp+(-4)],0
+jmp L31
+L30:
+mov d:[__io_error],0
+L31:
+mov edi,d:[ebp+(-4)]
+mov eax,edi
+L29:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_close:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+push edi
+push 4
+lea edi,[_CloseHandle]
+push edi
+call _apicall
+add esp,12
+cmp eax,0
+_jne L33
+push 0
+lea edi,[_GetLastError]
+push edi
+call _apicall
+add esp,8
+mov d:[__io_error],eax
+mov eax,-1
+jmp L32
+L33:
+mov d:[__io_error],0
+mov eax,0
+L32:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_tell:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+push 1
+push 0
+push 0
+mov edi,d:[ebp+(20)]
+push edi
+push 16
+lea edi,[_SetFilePointer]
+push edi
+call _apicall
+add esp,24
+mov edi,eax
+L35:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+_lseek:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+sub esp,12
+mov edi,d:[ebp+(28)]
+and edi,64
+cmp edi,0
+_je L39
+mov d:[ebp+(-8)],0
+jmp L40
+L39:
+mov edi,d:[ebp+(28)]
+and edi,16
+cmp edi,0
+_je L41
+mov d:[ebp+(-12)],1
+jmp L42
+L41:
+mov d:[ebp+(-12)],2
+L42:
+mov edi,d:[ebp+(-12)]
+mov d:[ebp+(-8)],edi
+L40:
+mov edi,d:[ebp+(-8)]
+mov d:[ebp+(-4)],edi
+mov edi,d:[ebp+(-4)]
+push edi
+push 0
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+push 16
+lea edi,[_SetFilePointer]
+push edi
+call _apicall
+add esp,24
+mov d:[ebp+(-4)],eax
+mov edi,d:[ebp+(-4)]
+cmp edi,0xffffffff
+_jne L43
+push 0
+lea edi,[_GetLastError]
+push edi
+call _apicall
+add esp,8
+mov d:[__io_error],eax
+mov d:[ebp+(-4)],0
+L43:
+mov edi,d:[ebp+(-4)]
+mov eax,edi
+L36:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__get_std_handle:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+cmp edi,0
+_jne L46
+push 0xfffffff6
+push 4
+lea edi,[_GetStdHandle]
+push edi
+call _apicall
+add esp,12
+mov edi,eax
+jmp L45
+L46:
+mov edi,d:[ebp+(20)]
+cmp edi,1
+_jne L48
+push 0xfffffff5
+push 4
+lea edi,[_GetStdHandle]
+push edi
+call _apicall
+add esp,12
+mov edi,eax
+jmp L45
+L48:
+mov edi,d:[ebp+(20)]
+cmp edi,2
+_jne L50
+push 0xfffffff4
+push 4
+lea edi,[_GetStdHandle]
+push edi
+call _apicall
+add esp,12
+mov edi,eax
+jmp L45
+L50:
+mov eax,0
+L45:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__delete_file:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(20)]
+push edi
+push 4
+lea edi,[_DeleteFileA]
+push edi
+call _apicall
+add esp,12
+mov edi,eax
+L52:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__move_file:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+push 8
+lea edi,[_MoveFileA]
+push edi
+call _apicall
+add esp,16
+mov edi,eax
+L53:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__get_last_error:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+push 0
+lea edi,[_GetLastError]
+push edi
+call _apicall
+add esp,8
+mov edi,eax
+L54:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__get_temp_file_name:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+mov edi,d:[ebp+(32)]
+push edi
+mov edi,d:[ebp+(28)]
+push edi
+mov edi,d:[ebp+(24)]
+push edi
+mov edi,d:[ebp+(20)]
+push edi
+push 16
+lea edi,[_GetTempFileNameA]
+push edi
+call _apicall
+add esp,24
+mov edi,eax
+L55:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+__create_tmp_file:
+push ebx
+push esi
+push edi
+push ebp
+mov ebp,esp
+push 0
+push 67109120
+push 1
+push 0
+push 1
+push 0xc0000000
+mov edi,d:[ebp+(20)]
+push edi
+push 28
+lea edi,[_CreateFileA]
+push edi
+call _apicall
+add esp,36
+mov edi,eax
+L56:
+mov esp,ebp
+pop ebp
+pop edi
+pop esi
+pop ebx
+ret
+}
+section .data {
+align 4
+__io_error: db [4]
+}
+extrn__apicall = 1
+section .data {
+}
+extrn__MoveFileA = 1
+section .data {
+}
+extrn__GetTempFileNameA = 1
+section .data {
+}
+extrn__GetStdHandle = 1
+section .data {
+}
+extrn__DeleteFileA = 1
+section .data {
+}
+extrn__SetFilePointer = 1
+section .data {
+}
+extrn__WriteFile = 1
+section .data {
+}
+extrn__ReadFile = 1
+section .data {
+}
+extrn__CloseHandle = 1
+section .data {
+}
+extrn__GetLastError = 1
+section .data {
+}
+extrn__CreateFileA = 1
+section .data {
+}

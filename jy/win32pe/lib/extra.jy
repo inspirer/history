@@ -1,0 +1,33 @@
+section .code {
+__ftol:
+	push ebp
+	mov	ebp,esp
+	sub	esp,12
+	fnstcw	[ebp-4]
+	mov	ax,w:[ebp-4]
+	or	ah,0xc
+	mov	w:[ebp-2],ax
+	fldcw	[ebp-2]
+	fistp	q:[ebp-12]
+	fldcw	[ebp-4]
+	mov	eax,d:[ebp-12]
+	mov	esp,ebp
+	pop	ebp
+	ret
+
+_floor:
+    db 0xc8, 4, 0, 0   // enter	4,0
+	lea	ecx,[ebp+8]
+	sub	edx,edx
+	fnstcw	[ebp-4]
+	mov	ax,w:[ebp-4]
+	and	ah,0x0f3
+	or	ah,4
+	mov	w:[ebp-2],ax
+	fldcw	[ebp-2]
+	fld	q:[ecx]
+	frndint
+	fldcw [ebp-4]
+	leave
+	ret
+}

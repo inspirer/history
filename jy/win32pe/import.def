@@ -1,0 +1,19 @@
+
+kernel32:
+	0x7d, ExitProcess
+    0x0, CreateFileA
+    0x0, GetLastError
+    0x0, CloseHandle
+    0x0, ReadFile
+    0x0, WriteFile
+    0x0, SetFilePointer
+    0x0, DeleteFileA
+    0x0, GetStdHandle
+    0x0, GetTempFileNameA
+    0x0, MoveFileA
+    0x0, VirtualAlloc
+    0x0, VirtualFree
+    0x0, GetSystemInfo
+
+user32:
+	0x1be, MessageBoxA

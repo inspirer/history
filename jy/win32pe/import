@@ -1,0 +1,109 @@
+section import.table {
+	dd import.user32 - image_base,0,0xffffffff,import.user32.name - image_base,import.user32.result - image_base
+	dd import.kernel32 - image_base,0,0xffffffff,import.kernel32.name - image_base,import.kernel32.result - image_base
+}
+
+section import.table.names {
+	import.user32.name db "user32.dll",0
+	align 4
+	import.kernel32.name db "kernel32.dll",0
+	align 4
+}
+
+section import.func {
+	func.MessageBoxA dw 0x1be
+	db "MessageBoxA",0
+	align 4
+	func.ExitProcess dw 0x7d
+	db "ExitProcess",0
+	align 4
+	func.CreateFileA dw 0x0
+	db "CreateFileA",0
+	align 4
+	func.GetLastError dw 0x0
+	db "GetLastError",0
+	align 4
+	func.CloseHandle dw 0x0
+	db "CloseHandle",0
+	align 4
+	func.ReadFile dw 0x0
+	db "ReadFile",0
+	align 4
+	func.WriteFile dw 0x0
+	db "WriteFile",0
+	align 4
+	func.SetFilePointer dw 0x0
+	db "SetFilePointer",0
+	align 4
+	func.DeleteFileA dw 0x0
+	db "DeleteFileA",0
+	align 4
+	func.GetStdHandle dw 0x0
+	db "GetStdHandle",0
+	align 4
+	func.GetTempFileNameA dw 0x0
+	db "GetTempFileNameA",0
+	align 4
+	func.MoveFileA dw 0x0
+	db "MoveFileA",0
+	align 4
+	func.VirtualAlloc dw 0x0
+	db "VirtualAlloc",0
+	align 4
+	func.VirtualFree dw 0x0
+	db "VirtualFree",0
+	align 4
+	func.GetSystemInfo dw 0x0
+	db "GetSystemInfo",0
+	align 4
+}
+
+section import.user32 {
+	dd func.MessageBoxA - image_base
+}
+section import.user32.result {
+	_MessageBoxA dd func.MessageBoxA - image_base
+}
+section import.kernel32 {
+	dd func.ExitProcess - image_base
+	dd func.CreateFileA - image_base
+	dd func.GetLastError - image_base
+	dd func.CloseHandle - image_base
+	dd func.ReadFile - image_base
+	dd func.WriteFile - image_base
+	dd func.SetFilePointer - image_base
+	dd func.DeleteFileA - image_base
+	dd func.GetStdHandle - image_base
+	dd func.GetTempFileNameA - image_base
+	dd func.MoveFileA - image_base
+	dd func.VirtualAlloc - image_base
+	dd func.VirtualFree - image_base
+	dd func.GetSystemInfo - image_base
+}
+section import.kernel32.result {
+	_ExitProcess dd func.ExitProcess - image_base
+	_CreateFileA dd func.CreateFileA - image_base
+	_GetLastError dd func.GetLastError - image_base
+	_CloseHandle dd func.CloseHandle - image_base
+	_ReadFile dd func.ReadFile - image_base
+	_WriteFile dd func.WriteFile - image_base
+	_SetFilePointer dd func.SetFilePointer - image_base
+	_DeleteFileA dd func.DeleteFileA - image_base
+	_GetStdHandle dd func.GetStdHandle - image_base
+	_GetTempFileNameA dd func.GetTempFileNameA - image_base
+	_MoveFileA dd func.MoveFileA - image_base
+	_VirtualAlloc dd func.VirtualAlloc - image_base
+	_VirtualFree dd func.VirtualFree - image_base
+	_GetSystemInfo dd func.GetSystemInfo - image_base
+}
+
+section import.tables {
+	import.user32: section import.user32;
+	dd 0
+	import.user32.result: section import.user32.result;
+	dd 0
+	import.kernel32: section import.kernel32;
+	dd 0
+	import.kernel32.result: section import.kernel32.result;
+	dd 0
+}

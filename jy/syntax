@@ -1,0 +1,537 @@
+#############################################################################
+#  This file is part of the Linker project.
+#  AUTHORS: Eugeniy Gryaznov, 2002, inspirer@inbox.ru
+#
+#  Programming language - JY Linker
+#	  (no conflicts)
+
+.symbols "terms.h"
+.input translation-unit
+.context Linker
+.eoi Leoi
+.syntax error(E_SYNTAX,gg_next.where);return;
+.eoparse error(E_EOPARSE,gg_next.where);return;
+
+#################################
+
+{{
+#define FOLLOW(vr) gg.sym = (void *) vr
+#define PLACE(pl) gg.where = pl
+#define FAULT(info) error(E_NOTIMPLEMENTED,gg.where,info)
+}}
+
+
+translation-unit :: none
+  = statement-seq
+		program = $0;
+;;
+
+# [statement]
+
+statement-seq :: NodeSeq
+  = statement
+		$$->first = $$->last = $0;
+  = statement-seq statement >> none
+		FOLLOW($0);
+		if( $$->first ){
+			$$->last->next = $1;
+			while($$->last->next) $$->last = $$->last->next;
+		} else {
+			$$->first = $$->last = $1;
+		}
+;;
+
+statement :: Node
+  = start-line opcode-ia32
+		$$->type = NODE_OPCODE;
+		$$->op = $1;
+        $$->line = info.get_place(@1)->line;
+        $$->file = current_file;
+  = Lalign constant-expression
+		$$->type = NODE_ALIGN;
+		$$->exp = $1;
+        $$->line = info.get_place(@0)->line;
+        $$->file = current_file;
+  = Lorg constant-expression
+		$$->type = NODE_ORG;
+		$$->exp = $1;
+        $$->line = info.get_place(@0)->line;
+        $$->file = current_file;
+  = Lcode Licon >> none
+		switch(*$1){
+			case 16: codegen.code = 0;break;
+			case 32: codegen.code = 1;break;
+			default: error(E_CODETYPEUNKNOWN,@1);
+		}
+		delete $1;
+  = Lsection Lid new-orgopt ';'
+		$$->type = NODE_SECTION_CALL;
+		$$->id = $1;
+		$$->exp = $2;
+		$$->name = NULL;
+        $$->line = info.get_place(@0)->line;
+        $$->file = current_file;
+  = compound-seq >> none
+		FOLLOW($0);
+  = data-definition >> none
+		FOLLOW($0);
+  = label-statement >> none
+		FOLLOW($0);
+;;
+
+new-org :: Expr
+  = Lorg constant-expression >> none
+		FOLLOW($1);
+;;
+
+compound-seq :: Node
+  = Lsection Lid '{' enter-scope statement-seqopt exit-scope '}'
+		$$->type = NODE_SECTION_DEF;
+		$$->section = $4;
+		$$->id = $1;
+        $$->line = info.get_place(@1)->line;
+        $$->file = current_file;
+
+  = '{' enter-scope statement-seq exit-scope '}'
+		$$->type = NODE_COMPOUND;
+		$$->compound = $2->first;
+		delete $2;
+        $$->line = info.get_place(@0)->line;
+        $$->file = current_file;
+        $$->holder = NULL;
+
+  = Lif '(' constant-expression ')' '{' statement-seq '}'
+		$$->type = NODE_IF;
+		$$->exp = $2;
+		$$->p[0] = $5->first;
+		delete $5;
+		$$->p[1] = NULL;
+        $$->line = info.get_place(@0)->line;
+        $$->file = current_file;
+
+  = Lif '(' constant-expression ')' '{' statement-seq '}' Lelse '{' statement-seq '}'
+		$$->type = NODE_IF;
+		$$->exp = $2;
+		$$->p[0] = $5->first; 
+		delete $5;
+		$$->p[1] = $9->first; 
+		delete $9;
+        $$->line = info.get_place(@0)->line;
+        $$->file = current_file;
+;;
+
+label-statement :: Node
+  = start-line Lid finish-line ':'
+		$$->type = NODE_LABEL;
+		$$->id = $1;
+        $$->line = info.get_place(@1)->line;
+        $$->file = current_file;
+
+  = start-line calculation-timesub Lid finish-line '=' constant-expression
+		$$->type = NODE_EXPRESSION;
+        $$->line = info.get_place(@2)->line;
+		$$->exp = $5;
+		$$->id = $2;
+		$$->time = 0;
+		[1] $$->time = *$1+1; delete $1;
+        $$->file = current_file;
+;;
+
+calculation-time :: ulong
+  = '[' Licon ']' >> none
+		FOLLOW($1);
+		if( *$$ > 31 ){
+			error(E_CALCOUTRANGE,@1,*$$);
+			*$$ = 31;
+		}
+;;
+
+# [opcode]
+
+opcode-ia32 :: IA32opcode
+  = Lprefixsub Lid opcode-start opcode-param-seqopt finish-line terminator >> none
+		iaop.name = $1;
+		iaop.place = gg.where;
+		info.use_place(iaop.place,1);
+		[0] iaop.prefix_present = 1; iaop.prefix = *$0; delete $0;
+		FOLLOW(codegen.AcceptOpcode(&iaop));
+		delete iaop.name;
+;;
+
+opcode-start :: none
+  =
+		iaop.all_flags = 0;
+;;
+
+terminator ::  none
+  = Lnewline
+  = ';'
+;;
+
+opcode-param-seq :: none
+  = opcode-param
+  = opcode-param-seq ',' opcode-param
+;;
+
+opcode-param :: none
+  = param-create register-operand
+  = param-create immediate-operand
+  = param-create memory-reference
+;;
+
+param-create :: none
+  =
+		if( iaop.params == 3) error(E_TOOMUCHPARAMS,gg_next.where);
+			else iapm = &iaop.p[iaop.params++];
+		iapm->place = gg_next.where;
+		info.use_place(iapm->place,1);
+		iapm->all_flags = 0;
+		iapm->expr = NULL;
+		iapm->type = 0;
+;;
+
+register-operand :: none
+  = Lseg
+		iapm->type = IA32::regtab[*$0].reg_type;
+		iapm->flags.reg = IA32::regtab[*$0].reg_num;
+		delete $0;
+  = Lreg
+		iapm->type = IA32::regtab[*$0].reg_type;
+		iapm->flags.reg = IA32::regtab[*$0].reg_num;
+		delete $0;
+;;
+
+immediate-operand :: none
+  = constant-expression
+		iapm->type = (IA32::Imm|IA32::Disp);
+		iapm->expr = $0;
+;;
+
+memory-reference :: none
+  = '~'sub memory-modifier-seq mem-address mem-address-seqopt
+		if( !iapm->type ) iapm->type = IA32::Mem;
+		{0} iapm->flags.disp_style = 2;
+		[0] iapm->flags.disp_style = 1;
+  = '~'sub memory-modifier-seqopt mem-address-seq
+		if( !iapm->type ) iapm->type = IA32::Mem;
+		{0} iapm->flags.disp_style = 2;
+		[0] iapm->flags.disp_style = 1;
+;;
+
+mem-address-seq :: none
+  = '[' mem-address ']'
+  = mem-address-seq '[' mem-address ']'
+;;
+
+memory-modifier-seq :: none
+  = memory-modifier
+  = memory-modifier-seq memory-modifier
+;;
+
+memory-modifier :: none
+  = Lid ':' >> none
+		if( iapm->type ) error(E_2_MEMMOD,@0);
+		if( $0[0]!=0 && $0[1] == 0) switch(*$0){
+			case 'b': iapm->type = IA32::Mem8;break;
+			case 'w': iapm->type = IA32::Mem16;break;
+			case 'd': iapm->type = IA32::Mem32;break;
+			case 'q': iapm->type = IA32::MemFL;break;
+			default: error(E_UNKN_MEMMOD,@0,$0);
+		} else error(E_UNKN_MEMMOD,@0,$0);
+		delete $0;
+  = Lseg ':'
+		if( iaop.segment_present )
+			error(E_SEG_ALR_PRES,@0);
+		else {
+			iaop.segment_present = 1;
+			iaop.segment = IA32::regtab[*$0].reg_num;
+		}
+		delete $0;
+;;
+
+mem-address :: none
+  = mem-address-element
+  = mem-address-element-with-sign
+  = mem-address mem-address-element-with-sign
+;;
+
+mem-address-element :: none
+  = Lreg
+		if(IA32::regtab[*$0].reg_type&IA32::Reg32){
+			if( iaop.mem_addr_size == 1 ) error(E_WRONGMEMADDR,@0);
+			iaop.mem_addr_size = 2;
+
+			if( iapm->flags.base_present ){
+				if( !iapm->flags.index_present ){
+					iapm->flags.index = IA32::regtab[*$0].reg_num;
+					iapm->flags.mult = 0;
+					iapm->flags.index_present = 1;
+				} else error(E_ALR_BASEANDIND,@0);
+			} else {
+				iapm->flags.base = IA32::regtab[*$0].reg_num;
+				iapm->flags.base_present = 1;
+			}
+		} else if(IA32::regtab[*$0].reg_type&IA32::Reg16){
+			if( iaop.mem_addr_size == 2 ) error(E_WRONGMEMADDR,@0);
+			iaop.mem_addr_size = 1;
+
+			switch(IA32::regtab[*$0].reg_num){
+				case 3: 
+					if( iapm->flags.BX ) error(E_SECONDUSE,@0,IA32::regtab[*$0].reg_name);
+					iapm->flags.BX = 1;break;
+				case 5:
+					if( iapm->flags.BP ) error(E_SECONDUSE,@0,IA32::regtab[*$0].reg_name);
+					iapm->flags.BP = 1;break;
+				case 6:
+					if( iapm->flags.SI ) error(E_SECONDUSE,@0,IA32::regtab[*$0].reg_name);
+					iapm->flags.SI = 1;break;
+				case 7:
+					if( iapm->flags.DI ) error(E_SECONDUSE,@0,IA32::regtab[*$0].reg_name);
+					iapm->flags.DI = 1;break;
+				default:
+					error(E_WRONGBASE,@0,IA32::regtab[*$0].reg_name);
+			}
+		} else error(E_WRONGBASE,@0,IA32::regtab[*$0].reg_name);
+		delete $0;
+
+  = Licon '*' Lreg
+		if( iaop.mem_addr_size == 1 ) error(E_WRONGMEMADDR,@0);
+		iaop.mem_addr_size = 2;
+
+		if( iapm->flags.index_present ) error(E_2_INDEXREG,@2);
+		iapm->flags.index_present = 1;
+		iapm->flags.index = IA32::regtab[*$2].reg_num;
+		if( !(IA32::regtab[*$2].reg_type&IA32::Reg32)) error(E_WRONGINDEX,@2,IA32::regtab[*$2].reg_name);
+		switch( *$0 ){
+			case 1: iapm->flags.mult = 0;break;
+			case 2: iapm->flags.mult = 1;break;
+			case 4: iapm->flags.mult = 2;break;
+			case 8: iapm->flags.mult = 3;break;
+			default: error(E_WRONGMULT,@0);
+		}
+		delete $0;
+		delete $2;
+
+  = simple-expression
+		if( iapm->expr ) iapm->expr = Expr::make_tree_expr('+',iapm->expr,$0);
+			else iapm->expr = $0;
+;;
+
+mem-address-element-with-sign :: none
+  = '-' simple-expression
+		if( iapm->expr ) iapm->expr = Expr::make_tree_expr('-',iapm->expr,$1);
+			else iapm->expr = Expr::make_tree_expr(EXP_UNARY,$1);
+  = '+' mem-address-element
+;;
+
+# [data]
+
+data-definition :: Node
+  = start-line Lidopt finish-line data-keyword data-list
+		$$->type = NODE_DATA;
+        $$->line = info.get_place(@1)->line;
+        $$->file = current_file;
+		$$->data = $4->first;
+		delete $4;
+		$$->id = $1;
+;;
+
+data-keyword :: none
+  = Ldata
+		datatype = *$0;
+		delete $0;
+;;
+
+data-list :: IA32dataSeq
+  = data-element
+		$$->first = $$->last = $0;
+  = data-list ',' data-element >> none
+		FOLLOW($0);
+		$$->last->next = $2;
+		while($$->last->next) $$->last = $$->last->next;
+;;
+
+data-element :: IA32data
+  = Lfcon
+		FAULT("float");
+
+  = Lscon
+		$$->type = -1;
+        $$->string = $0;
+
+  = constant-expression
+		$$->type = datatype;
+		$$->expr = $0;
+
+  = '[' constant-expression data-fillopt ']'
+		$$->type = datatype|DT_ARRAY;
+		$$->expr = $1;
+		$$->fill = 0;
+		if( $2 ){ $$->fill = *$2; delete $2; }
+;;
+
+data-fill :: ulong
+  = ':' Licon >> none
+		FOLLOW($1);
+;;
+
+# [expressions]
+
+constant-expression :: Expr
+  = conditional-expression >> none
+		FOLLOW($0);
+;;
+
+simple-expression :: Expr
+  = Lccon
+		$$->type = EXP_CONST;
+		$$->cnst = *$0;
+		delete $0;
+  = Licon
+		$$->type = EXP_CONST;
+		$$->cnst = *$0;
+		delete $0;
+  = Lid
+		$$->type = EXP_ID;
+		$$->id = $0;
+  = '(' constant-expression ')' >> none
+		FOLLOW($1);
+  = '$'
+		$$->type = '$';
+  = '#'
+		$$->type = '#';
+  = Lsection '(' Lid ')'
+		$$->type = EXP_SECTION;
+		$$->id = $2;
+;;
+
+unary-expression :: Expr
+  = simple-expression >> none
+		FOLLOW($0);
+  = '-' unary-expression >> none
+		FOLLOW(Expr::make_tree_expr(EXP_UNARY,$1));
+  = '!' unary-expression >> none
+		FOLLOW(Expr::make_tree_expr('!',$1));
+  = '~' unary-expression >> none
+		FOLLOW(Expr::make_tree_expr('~',$1));
+;;
+
+multiplicative-expression :: Expr
+  = unary-expression >> none
+		FOLLOW($0);
+  = multiplicative-expression '*' unary-expression >> none
+		FOLLOW(Expr::make_tree_expr('*',$0,$2));
+  = multiplicative-expression '/' unary-expression >> none
+		FOLLOW(Expr::make_tree_expr('/',$0,$2));
+  = multiplicative-expression '%' unary-expression >> none
+		FOLLOW(Expr::make_tree_expr('%',$0,$2));
+;;
+
+additive-expression :: Expr
+  = multiplicative-expression >> none
+		FOLLOW($0);
+  = additive-expression '+' multiplicative-expression >> none
+		FOLLOW(Expr::make_tree_expr('+',$0,$2));
+  = additive-expression '-' multiplicative-expression >> none
+		FOLLOW(Expr::make_tree_expr('-',$0,$2));
+;;
+
+shift-expression :: Expr
+  = additive-expression >> none
+		FOLLOW($0);
+  = shift-expression Lshl additive-expression >> none
+		FOLLOW(Expr::make_tree_expr(Lshl,$0,$2));
+  = shift-expression Lshr additive-expression >> none
+		FOLLOW(Expr::make_tree_expr(Lshr,$0,$2));
+;;
+
+relational-expression :: Expr
+  = shift-expression >> none
+		FOLLOW($0);
+  = relational-expression '<' shift-expression >> none
+		FOLLOW(Expr::make_tree_expr('<',$0,$2));
+  = relational-expression '>' shift-expression >> none
+		FOLLOW(Expr::make_tree_expr('>',$0,$2));
+  = relational-expression Lleq shift-expression >> none
+		FOLLOW(Expr::make_tree_expr(Lleq,$0,$2));
+  = relational-expression Lgeq shift-expression >> none
+		FOLLOW(Expr::make_tree_expr(Lgeq,$0,$2));
+;;
+
+equality-expression :: Expr
+  = relational-expression >> none
+		FOLLOW($0);
+  = equality-expression Leq2 relational-expression >> none
+		FOLLOW(Expr::make_tree_expr(Leq2,$0,$2));
+  = equality-expression Lnoteq relational-expression >> none
+		FOLLOW(Expr::make_tree_expr(Lnoteq,$0,$2));
+;;
+
+and-expression :: Expr
+  = equality-expression >> none
+		FOLLOW($0);
+  = and-expression '&' equality-expression >> none
+		FOLLOW(Expr::make_tree_expr('&',$0,$2));
+;;
+
+exclusive-or-expression :: Expr
+  = and-expression >> none
+		FOLLOW($0);
+  = exclusive-or-expression '^' and-expression >> none
+		FOLLOW(Expr::make_tree_expr('^',$0,$2));
+;;
+
+inclusive-or-expression :: Expr
+  = exclusive-or-expression >> none
+		FOLLOW($0);
+  = inclusive-or-expression '|' exclusive-or-expression >> none
+		FOLLOW(Expr::make_tree_expr('|',$0,$2));
+;;
+
+logical-and-expression :: Expr
+  = inclusive-or-expression >> none
+		FOLLOW($0);
+  = logical-and-expression Land2 inclusive-or-expression >> none
+		FOLLOW(Expr::make_tree_expr(Land2,$0,$2));
+;;
+
+logical-or-expression :: Expr
+  = logical-and-expression >> none
+		FOLLOW($0);
+  = logical-or-expression Lor2 logical-and-expression >> none
+		FOLLOW(Expr::make_tree_expr(Lor2,$0,$2));
+;;
+
+conditional-expression :: Expr
+  = logical-or-expression >> none
+		FOLLOW($0);
+  = logical-or-expression '?' constant-expression ':' constant-expression >> none
+		FOLLOW(Expr::make_tree_expr(EXP_CONDITIONAL,$2,$4,$0));
+;;
+
+# [control]
+
+start-line :: none
+  = 
+		lex.wannanewline = 1;
+;;
+
+finish-line :: none
+  = 
+		lex.wannanewline = 0;
+;;
+
+enter-scope :: IA32info
+  =
+		$$->prev = codegen.info_stack;
+		codegen.info_stack = $$;
+		$$->code = codegen.code;
+;;
+
+exit-scope :: none
+  =
+		IA32info *w = codegen.info_stack;
+		codegen.code = w->code;
+		codegen.info_stack = w->prev;
+		delete w;
+;;
