@@ -2,7 +2,7 @@
 .PluginContents=Просмотр SourceSafe-а
 
 @Contents
-$^  #MS SourceSafe 6.0 navigator 1.02#
+$^  #MS SourceSafe 6.0 navigator 1.03#
 $^  #Начало#
 
     С помощью этого модуля вы можете подключаться к базам SourceSafe-а,
@@ -15,7 +15,7 @@ $^  #Начало#
 	~О плагине~@about@
 
 @list
-$^  #MS SourceSafe 6.0 navigator 1.02#
+$^  #MS SourceSafe 6.0 navigator 1.03#
 $^    #Список баз#
 
     Вы можете открыть модуль SourceSafe-а из меню дисков, меню плагинов
@@ -46,7 +46,7 @@ $^    #Список баз#
     ~Начало~@Contents@
 
 @inbase
-$^  #MS SourceSafe 6.0 navigator 1.02#
+$^  #MS SourceSafe 6.0 navigator 1.03#
 $^    #Манипуляции внутри базы#
 
     #Копирование из базы# эквивалентно взятию последней версии. В диалоге можно
@@ -65,8 +65,6 @@ $^    #Манипуляции внутри базы#
   #Enter#-у в неактивной панели курсор позиционируется на локальную копию
   взятого на исправление файла.
 
-	
-
     При #копировании/перемещении файлов в базу# происходит CheckIn в текущую
   директорию. Если файлов в базе не было, то они добавляются, если были,
   но не находились в CheckOut-е, то плагин спросит - нужно ли сначала
@@ -79,9 +77,13 @@ $^    #Манипуляции внутри базы#
     #F7#   New Subproject
     #F8#   Remove objects
 
+    #Alt-F5#     Get Latest version to default subproject's directory
+    #Alt-F6#     CheckOut to default subproject's directory
+
     #Ctrl-F5#    CheckIn current file
     #Ctrl-F6#    UndoCheckOut current file
     #Ctrl-F7#    Information about file (Comment, Version, LastAction,...)
+    #Ctrl-F8#    Set default directory for current subproject
 
     #Enter#      Для взятого на исправление файла показывает в неактивной
                панели его локальную копию.
@@ -92,7 +94,7 @@ $^    #Манипуляции внутри базы#
     ~О плагине~@about@
 
 @about
-$^  #MS SourceSafe 6.0 navigator 1.02#
+$^  #MS SourceSafe 6.0 navigator 1.03#
 $^    #О Плагине#
 
     Плагин использует для работы библиотеку типов SourceSafe-а, поэтому

@@ -75,7 +75,7 @@ SS::SS( int of, int item )
 			MsgBox( "wrong path", (char*)item );
 	}
 	split_cdir();
-	try_to_change = 0;
+	next_dir_is_default = try_to_change = 0;
 	db = NULL;
 }
 
@@ -411,7 +411,7 @@ void SS::GetOpenPluginInfo( struct OpenPluginInfo *info )
 		kb.CtrlTitles[5-1] = MSG(msg_kb_c5);
 		kb.CtrlTitles[6-1] = MSG(msg_kb_c6);
 		kb.CtrlTitles[7-1] = MSG(msg_kb_c7);
-		kb.CtrlTitles[8-1] = "";
+		kb.CtrlTitles[8-1] = MSG(msg_kb_c8);
 
 	} else {
 		info->PanelModesArray = PanelModesArrayRoot;
@@ -517,6 +517,7 @@ enum {
 	ShowComment,
 	AddFile,
 	MakeDir,
+	SetWF,
 };
 
 
@@ -769,6 +770,17 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			return FALSE;
 		}
 
+	} else if( type == SetWF ) {
+
+		l = char_2_BSTR( dest ); 
+		h = item->put_LocalSpec( l );
+		SysFreeString( l );
+		if( FAILED(h) ) {
+			MsgBox( "Set localspec failed", file );
+			item->Release();
+			return FALSE;
+		}
+
 	} else if( type == Destroy ) {
 
 		h = item->raw_Destroy();
@@ -867,6 +879,39 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 }
 
 
+char *SS::get_default_dir_for( char *sspath ) 
+{
+	IVSSItem *item;
+	HRESULT h;
+
+	if( !db_connect() )
+		return "<error connecting to database>";
+
+	BSTR l = char_2_BSTR( sspath );
+	h = db->get_VSSItem( l, false, &item );
+	SysFreeString( l );
+	if( FAILED(h) ) {
+		db_disconnect();
+		return "<item not found>";
+	}
+
+	item->get_LocalSpec( &l );
+	if( FAILED(h) ) {
+		item->Release();
+		db_disconnect();
+		return "<get localspec failed>";
+	}
+
+	BSTR_2_char( l, tmp_dir, MAX_PATH );
+	SysFreeString( l );
+
+	item->Release();
+	db_disconnect();
+
+	return tmp_dir;
+}
+
+
 int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 					int Move, char *DestPath, int OpMode )
 {
@@ -900,8 +945,6 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 	 { DI_BUTTON,     0,6,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_key_cancel, &id_co_cancel },
 	};
 
-    dlg.di = NULL;
-
 	//
 	//   Get/CheckOut Dialog
 	//
@@ -916,7 +959,7 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 				FSF.sprintf( dlg.di[id_co_to].Data, MSG(msg_co_title1), PanelItem[0].FindData.cFileName );
 			else 
 				FSF.sprintf( dlg.di[id_co_to].Data, MSG(msg_co_title2), ItemsNumber );
-			strcpy( dlg.di[id_co_where].Data, DestPath );
+			strcpy( dlg.di[id_co_where].Data, next_dir_is_default ? get_default_dir_for(cpath) : DestPath );
 			GetRegKey( "", "checkout_dontgetlocal", dlg.di[id_co_dontget].Selected, 0 );
 			GetRegKey( "", "checkout_replacewritable", dlg.di[id_co_repl].Selected, 1 );
 
@@ -924,6 +967,7 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 
 			if( ec < 0 || ec == id_co_cancel ) {
 				destroy_fdlg( &dlg );
+				next_dir_is_default = 0;
 				return FALSE;
 			}
 
@@ -937,8 +981,8 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 
 			SetRegKey( "", "checkout_dontgetlocal", dlg.di[id_co_dontget].Selected );
 			SetRegKey( "", "checkout_replacewritable", dlg.di[id_co_repl].Selected );
-			DestPath = dlg.di[id_co_where].Data;
-
+			strcpy( DestPath, dlg.di[id_co_where].Data );
+			destroy_fdlg( &dlg );
 		} else {
 		    //
 		    // Get
@@ -948,7 +992,7 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 				FSF.sprintf( dlg.di[id_get_to].Data, MSG(msg_get_title1), PanelItem[0].FindData.cFileName );
 			else 
 				FSF.sprintf( dlg.di[id_get_to].Data, MSG(msg_get_title2), ItemsNumber );
-			strcpy( dlg.di[id_get_where].Data, DestPath );
+			strcpy( dlg.di[id_get_where].Data, next_dir_is_default ? get_default_dir_for(cpath) : DestPath );
 			GetRegKey( "", "get_recursive", dlg.di[id_get_rec].Selected, 0 );
 			GetRegKey( "", "get_clearro", dlg.di[id_get_clearro].Selected, 1 );
 
@@ -956,6 +1000,7 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 
 			if( ec < 0 || ec == id_get_cancel ) {
 				destroy_fdlg( &dlg );
+				next_dir_is_default = 0;
 				return FALSE;
 			}
 
@@ -965,14 +1010,15 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 			SetRegKey( "", "get_recursive", dlg.di[id_get_rec].Selected );
 			SetRegKey( "", "get_clearro", dlg.di[id_get_clearro].Selected );
 			clearro = dlg.di[id_get_clearro].Selected;
-			DestPath = dlg.di[id_get_where].Data;
+			strcpy( DestPath, dlg.di[id_get_where].Data );
+			destroy_fdlg( &dlg );
 		}
+
+		next_dir_is_default = 0;
 	}
 
-	if( !db_connect() ) {
-		destroy_fdlg( &dlg );
+	if( !db_connect() )
 		return FALSE;
-	}
 
 	for( int i = 0; i < ItemsNumber; i++ ) {
 		char *name = PanelItem[i].FindData.cFileName;
@@ -1012,7 +1058,6 @@ int SS::GetFiles( struct PluginPanelItem *PanelItem, int ItemsNumber,
 
 	db_disconnect();
 
-	destroy_fdlg( &dlg );
 	return retval;
 }
 
@@ -1180,7 +1225,7 @@ int SS::DeleteFiles( struct PluginPanelItem *PanelItem, int ItemsNumber, int OpM
 
 int SS::ProcessKey(int Key,unsigned int ControlState)
 {
-	PanelInfo pi;
+	PanelInfo pi, pa;
 	Info.Control( this, FCTL_GETPANELINFO, &pi );
 
 	// create/modify
@@ -1343,13 +1388,35 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		db_disconnect();
 
 		return TRUE;
+
+	} else if( ControlState == PKF_CONTROL && Key == VK_F8 && strcmp( cdir, "$\\" ) ) {
+
+		Info.Control (this, FCTL_GETANOTHERPANELINFO, &pa );
+
+		const char *items[5] = { MSG(msg_defdir_title), MSG(msg_defdir_msg), NULL, MSG(msg_defdir_to), NULL };
+
+		items[2] = cpath;
+		items[4] = pa.CurDir;
+		int res = Info.Message( Info.ModuleNumber, FMSG_MB_YESNO, NULL, items, 5, 0 );
+
+		if( res != 0 )
+			return TRUE;
+
+		if( !db_connect() )
+			return TRUE;
+
+		FileOp( SetWF, cpath, pa.CurDir, NULL, 0 );
+
+		db_disconnect();
+
+		return TRUE;
+
 	} else if( ControlState == 0 && Key == VK_RETURN && pi.PanelItems[pi.CurrentItem].CustomColumnNumber == 2 &&
 		*pi.PanelItems[pi.CurrentItem].CustomColumnData[1] ) {
 
 		Info.Control( this, FCTL_SETANOTHERPANELDIR, pi.PanelItems[pi.CurrentItem].CustomColumnData[1] );
 		Info.Control( this, FCTL_UPDATEANOTHERPANEL, NULL );
 
-		PanelInfo pa;
 		Info.Control (this, FCTL_GETANOTHERPANELINFO, &pa );
 
 		for( int i = 0; i < pa.ItemsNumber; i++ ) 
@@ -1362,6 +1429,22 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 			}
 		if( i == pi.ItemsNumber )
 			Info.Control( this, FCTL_REDRAWANOTHERPANEL, NULL );
+
+	} else if( ControlState == PKF_ALT && (Key == VK_F6 || Key == VK_F5) ) {
+
+		KeySequence ks;
+		static DWORD kcode[1];
+
+		if( strcmp( pi.PanelItems[pi.CurrentItem].FindData.cFileName, ".." ) ) {
+
+			kcode[0] = Key == VK_F5 ? 0x0174 : 0x0175;  // KEY_F5 | KEY_F6
+			ks.Count = 1;
+			ks.Flags = 0;
+			ks.Sequence = kcode;
+			next_dir_is_default = 1;
+			Info.AdvControl( Info.ModuleNumber, ACTL_POSTKEYSEQUENCE, &ks );
+		}
+		return TRUE;
 	}
 
 	return FALSE;

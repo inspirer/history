@@ -87,9 +87,14 @@
 "ChckIn"
 "UndoCO"
 "Commnt"
+"SetDef"
 
 "Memory blocks allocated: %i"
 "&Apply"
 "&Cancel"
 "Command line &prefix:"
 "Version: %s"
+
+"Set Working folder"
+"Do you wish to set working folder for"
+"to"

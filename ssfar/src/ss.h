@@ -101,6 +101,7 @@ private:
 	// temporary
 	char tmp_dir[MAX_PATH], tmp_dir2[MAX_PATH];
 	struct KeyBarTitles kb;
+	int next_dir_is_default;
 
 public:
     CRITICAL_SECTION cs;
@@ -110,6 +111,7 @@ public:
 private:
 	int db_connect();
 	void db_disconnect();
+	char *get_default_dir_for( char *sspath );
 	void split_cdir( );
 
 public:
@@ -226,12 +228,17 @@ enum {
 	msg_kb_c5,
 	msg_kb_c6,
 	msg_kb_c7,
+	msg_kb_c8,
 
 	msg_config_alloc,
 	msg_config_ok,
 	msg_config_can,
 	msg_config_prefix,
-	msg_config_version
+	msg_config_version,
+
+	msg_defdir_title,
+	msg_defdir_msg,
+	msg_defdir_to,
 };
 
 

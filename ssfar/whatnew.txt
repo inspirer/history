@@ -1,10 +1,15 @@
 
-	MS SourceSafe 6.0 navigator 1.02
+	MS SourceSafe 6.0 navigator 1.03
 
 [!] Important
 [+] New
 [-] Bugs fixed
 [*] Changes
+
+Version 1.03, 12 Apr 2004
+
+[+] Alt-F5/Alt-F6   Get/CO to the current subprojects directory
+[+] Ctrl-F8         Set default directory
 
 Version 1.02, 09 Apr 2004
 
