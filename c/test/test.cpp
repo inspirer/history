@@ -48,7 +48,17 @@ typedef const enum qq { a, } s;
 
 } */
 
+/* Expr::usual_conversions
 void main() {
 	void *e;
-   int i = (long()) e;
+	struct yo { int i; } q3;
+	float q;
+	double e;
+	char c;
+	long long ll;
+	float _Imaginary i;
+	double _Complex q2;
+
+	e ? q2 : q3;
 }
+  */

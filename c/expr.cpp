@@ -376,10 +376,8 @@ Expr *Expr::cast_to( Type *t, Place loc, Compiler *cc )
 		return NULL;
 	}
 
-	// 6.5.4.3 Conversions that involve pointers, other than where permitted by the
-	// constraints of 6.5.16.1, shall be specified by means of an explicit cast.
-	// .... TODO
-
+	if( !restype->can_convert_to( t, cc ) )
+		return NULL;
 
 	Expr *e = create( e_cast, t, cc );
 	e->op[0] = this;
@@ -490,33 +488,75 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 		return NULL;
 	}
 
+	Type *result;
+
 	// 3. One of the following shall hold for the second and third operands:
 	// - both operands have arithmetic type;
+	if( ARITHMETIC(e2->restype) && ARITHMETIC(e3->restype) && (result = Expr::usual_conversions( &e2, &e3, e_tripl, cc )) )
+		// If both the second and third operands have arithmetic type, the result type that would be
+		// determined by the usual arithmetic conversions, were they applied to those two operands,
+		// is the type of the result. 
+       	goto exit;
+
 	// - both operands have compatible structure or union types;
+	if( STRUCTTYPE(e2->restype) && STRUCTTYPE(e3->restype) && (result = Type::compatible( e2->restype, e3->restype, 0, cc )) )
+		// If both the operands have structure or union type, the result has that type.
+		goto exit;
+
 	// - both operands have void type;
-	// - both operands are pointers to qualified or unqualified versions of compatible types;
-	// - one operand is a pointer and the other is a null pointer constant; or
-	// - one operand is a pointer to an object or incomplete type and the other is a pointer to a
-	// qualified or unqualified version of void.
-	if(!(     
-		ARITHMETIC(e2->restype) && ARITHMETIC(e3->restype) || 
-		STRUCTTYPE(e2->restype) && STRUCTTYPE(e3->restype) /* && compatible(e2...,e3..) */ ||  // TODO
-		VOIDTYPE(e2->restype) && VOIDTYPE(e3->restype) || 
-		PTRTYPE(e2->restype) && PTRTYPE(e3->restype) /* && compatible(e2->..,e3->..) */ ||	// TODO
-		// ??? TODO one operand is a pointer and the other is a null pointer constant
-		PTRTYPE(e2->restype) && PTRTYPE(e3->restype) && ( VOIDTYPE(e2->restype->parent) || VOIDTYPE(e3->restype->parent) )
-	)) {
-		cc->error( LOC "?: no conversion from '%s' to '%s'\n", loc, e3->restype->toString(), e2->restype->toString() );
-		return NULL;
+	if( VOIDTYPE(e2->restype) && VOIDTYPE(e3->restype) ) {
+		// If both operands have void type, the result has void type.
+		result = e2->restype;
+		goto exit;
 	}
 
+	// - one operand is a pointer and the other is a null pointer constant;
+	if( PTRTYPE(e2->restype) && NULLCONST(e3) && (result = e2->restype) 
+		|| PTRTYPE(e3->restype) && NULLCONST(e2) && (result = e3->restype) )
+			// if one operand is a null pointer constant, the result has the type of the
+			// other operand;
+			goto exit;
+
+	// - one operand is a pointer to an object or incomplete type and the other is a pointer to a
+	// qualified or unqualified version of void.
+	if( PTRTYPE(e2->restype) && PTRTYPE(e3->restype) && 
+		( VOIDTYPE(e2->restype->parent) && (result = e2->restype) || VOIDTYPE(e3->restype->parent) && (result = e3->restype) ) ) {
+
+		// one operand is a pointer to void or a qualified version of void, in which case the
+		// result type is a pointer to an appropriately qualified version of void.
+		if( Q(e2->restype) != Q(e3->restype) ) {
+			result = result->clone(cc);
+			Q(result) |= Q(e2->restype) | Q(e3->restype);
+		}
+
+		// TODO process inner level qualification
+
+		goto exit;
+	}
+
+	// - both operands are pointers to qualified or unqualified versions of compatible types;
+	if( PTRTYPE(e2->restype) && PTRTYPE(e3->restype) && (result = Type::compatible( e2->restype, e3->restype, 1, cc)) )
+		// If both the second and third operands are pointers or one is a null pointer constant and the
+		// other is a pointer, the result type is a pointer to a type qualified with all the type qualifiers
+		// of the types pointed-to by both operands. Furthermore, if both operands are pointers to
+		// compatible types or to differently qualified versions of compatible types, the result type is
+		// a pointer to an appropriately qualified version of the composite type;
+		goto exit;
+
+	cc->error( LOC "no implicit conversion between '%s' and '%s'\n", loc, e3->restype->toString(), e2->restype->toString() );
 	return NULL;
+
+exit:
+	Expr *e = create( e_tripl, result, cc );
+	e->op[0] = e1;
+	e->op[1] = e2;
+	e->op[2] = e3;
+	#if 1
+	printf( "tripl: common: %s\n", result->toString() );
+	#endif
+	return e;
 }
 
-
-// 6.6 Constant expressions
-
-// void Expr::create_constant( Expr *e, Compiler *cc ) {
 
 //
 //	DESC: moves the expression to free_expr list
@@ -527,6 +567,23 @@ void Expr::free( Compiler *cc )
     cc->free_expr = this;
 }
 
+
+// 6.6 Constant expressions
+
+Expr *Expr::create_constant_expr( Expr *e, Place loc, Compiler *cc ) 
+{
+	if( !e )
+		return NULL;
+
+	// 6.6.3 Constant expressions shall not contain assignment, increment, decrement,
+	//	function-call, or comma operators, except when they are contained within a
+	//	subexpression that is not evaluated.
+
+	// 6.6.4 Each constant expression shall evaluate to a constant that is in the range
+	// of representable values for its type.
+	//TODO();
+	return e;
+}
 
 vlong Expr::calculate( int dest_type, Compiler *cc )
 {

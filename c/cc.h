@@ -50,7 +50,7 @@ typedef unsigned long word;
 #include "stmt.h"
 
 #define ASSERT(x) assert(x)
-
+#define TODO() ASSERT(0);
 
 class Compiler {
 private:

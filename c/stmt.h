@@ -51,7 +51,7 @@ enum {
 	e_array_subscripting,		// op0 = array, op1 = index, restype = element type
 	e_member,					// op1 = structure, restype, base = structure member
 	e_deref,					// op0 = pointer_to_deref (op0->restype->specifier == t_pointer)
-	e_tripl,
+	e_tripl,					// restype = newtype, op0 - expr, op1,2 - variants
 	e_cast,						// restype = cast_type
 };
 
@@ -92,14 +92,23 @@ struct Expr {
 	static Expr *get_type_size( Type *t, Place loc, Compiler *cc );
 	static Expr *create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc );
 	static Expr *create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc );
+	static Expr *create_constant_expr( Expr *e, Place loc, Compiler *cc );
 
 	// casting
 	Expr *cast_to( Type *t, Place loc, Compiler *cc );
-	Type *usual_conversions( Expr **e1, Expr **t2, Compiler *cc );
+	static Type *usual_conversions( Expr **e1, Expr **t2, int action, Compiler *cc );
 
 	// destructors
 	void free( Compiler *cc );
 };
+
+
+// 6.3.2.3.3 An integer constant expression with the value 0, or such an expression cast to type
+// void *, is called a null pointer constant.
+
+#define NULLCONST(ex) ( (ex)->type == e_direct && (ex)->value == 0 || \
+					(ex)->type == e_cast && (ex)->op[0]->type == e_direct && (ex)->op[0]->value == 0 \
+						&& T((ex)->restype) == t_pointer && T((ex)->restype->parent) == t_void )
 
 /*
  *	Node represents an intermediate language construction. Each node

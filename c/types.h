@@ -229,7 +229,7 @@ struct Type {
 
 	// type conversions
 	int can_convert_to( Type *t, Compiler *cc );
-	static Type *compatible( Type *t1, Type *t2, Compiler *cc );
+	static Type *compatible( Type *t1, Type *t2, int qualif, Compiler *cc );
 	Type *integer_promotion( Compiler *cc );
 
 	// constructors

@@ -29,6 +29,12 @@
 
    Expressions
 
+= 25 === (06 mar 2004)
+
+	+ finished Expr::create_conditional
+    + started Expr::create_constant_expr
+    + Type::compatible(pointer,qualification)
+
 = 24 === (04 mar 2004)
 
     + Expr::usual_conversions
