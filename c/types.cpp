@@ -237,6 +237,24 @@ const struct basic_type_descr tdescr[t_basiccnt] = {
  {	8,	0,		 	FD(1,2), },	//2 long double _Imaginary
 };
 
+
+/*
+	DESC: returns the pointer to basic type
+	
+	EG: the type is cached in the Compiler::basic[1..t_basiccnt] variable
+*/
+PType Type::get_basic_type( int spec, Compiler *cc )
+{
+	ASSERT( spec > 0 && spec < t_basiccnt );
+
+	if( cc->basic[spec] == NULL )
+		cc->basic[spec] = create( spec, cc );
+
+	return cc->basic[spec];
+}
+
+// //////////////////////////////////////////////////////////////////////////////////// //
+
                     
 static void print_type( int ts, Compiler *cc )
 {
@@ -389,13 +407,18 @@ int Type::addqualifier( int list, int one, Place loc, Compiler *cc )
 }
 
 
+// //////////////////////////////////////////////////////////////////////////////////// //
+
+
+// creates function type
+
 PType Type::create_function( PSym paramlist, Compiler *cc )
 {
 	Type *t = create( t_func, cc );
 	t->params = paramlist;
-	t->body = NULL;
 	return t;
 }
+
 
 /*  
    DESC: creates Sym and Type. Registers structure in the outer namespace.
@@ -409,21 +432,22 @@ PType Type::create_function( PSym paramlist, Compiler *cc )
    EG: members == NULL means that structure has no definition
 
 */
-PType Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Compiler *cc )
+PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm, Place loc, Compiler *cc )
 {
 	Type *t = NULL;
 	Sym  *s = NULL;
 
 	// try to find out current structure declaration
+	// if we search for 'struct ID' => search in the outer
 	if( name ) {
-		s = SYM(cc->current->search_id( name, type, 0 ));
+		s = SYM(cc->current->search_id( name, agg_type, members == NULL ? 1 : 0 ));
 		if( s )
 			t = TYPE(s->type);
 	}
 
 	// create if not exist
 	if( !t ) {
-		t = Type::create( type, cc );
+		t = Type::create( agg_type, cc );
 		t->params = NULL;
 		t->members = NULL;
 		t->tagname = name;
@@ -433,13 +457,13 @@ PType Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Co
 	if( !s && name ) {
 		s = Sym::create( name, cc );
 		s->type = t;
-		s->ns_modifier = type;
+		s->ns_modifier = agg_type;
 		cc->current->add_item( s );
 	}
 
-	// TODO
+	// 6.7.2.3.1 A specific type shall have its content defined at most once.
 	if( t->params && members ) {
-	  	cc->error( " : error: comparing of two structures is not implemented\n" );
+	  	cc->error( LOC "'%s %s' type redefinition\n", loc, agg_type==t_struct?"struct":"union", t->tagname );
 
 	// add member declarations
 	} else if( members ) {
@@ -448,12 +472,87 @@ PType Type::create_struct( char *name, int type, Sym *members, Namespace *mm, Co
 
 		word size = 0;
 
-		for( PSym s = members; s; s = s->next ) {
-			SYM(s)->loc.offset = type == t_struct ? size : 0;
-			size += s->type->size;
+		for( PSym q = members; q; q = q->next ) {
+			if( GOOD(q) ) {
+				if( agg_type == t_struct ) {
+					SYM(q)->loc.member.offset = size;
+					size += q->type->size;
+				} else {
+					SYM(q)->loc.member.offset = 0;
+					size = (size > q->type->size) ? size : q->type->size;
+				}
+
+				// 6.7.2.1.2 A structure or union shall not contain a member with incomplete
+				// or function type (hence, a structure shall not contain an instance of itself,
+				// but may contain a pointer to an instance of itself), except that the last member
+				// of a structure with more than one named member may have incomplete array type;
+				// such a structure (and any union containing, possibly recursively, a member that
+				// is such a structure) shall not be a member of a structure or an element of an array.
+				if( INCOMPLETE(q->type) ) {
+					if( q->next ) {
+						cc->error( LOC "'%s %s' member cannot have incomplete array type\n", loc, agg_type==t_struct?"struct":"union", t->tagname );
+						makebad(SYM(q));
+						T(t) = t_bad;
+					} else {
+						// check varsizearray
+						TODO();
+					}
+				}
+			} else {
+				T(t) = t_bad;
+			}
 		}
 
 		t->size = size;
+	}
+
+	return t->clone( cc );
+}
+
+/*  
+   DESC: creates Sym and Type. Registers enumeration in the outer namespace.
+   'name' must not be NULL.
+
+   EG: ns == NULL means that enumeration has no definition
+*/
+PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
+{
+	Type *t = NULL;
+	Sym  *s = NULL;
+
+	// try to find out current enum declaration
+	if( name ) {
+		s = SYM(cc->current->search_id( name, t_enum, 0 ));
+		if( s )
+			t = TYPE(s->type);
+	}
+
+	// create if not exist
+	if( !t && ns ) {
+		t = Type::create( t_enum, cc );
+		t->enum_members = ns;
+		t->tagname = name;
+
+	} else if( t && ns ) {
+		cc->error( LOC "'enum %s' type redifinition\n", loc, name );
+
+	} else if( !t /* && !ns */ ) {
+		// 6.7.2.3.2 A type specifier of the form 'enum identifier' without an enumerator
+		// list shall only appear after the type it specifies is completed.
+		cc->error( LOC "'enum %s': unknown type\n", loc, name );
+		t = Type::create( t_bad, cc );
+	}
+
+	// add structure to the outer namespace
+	if( !s && name ) {
+		s = Sym::create( name, cc );
+		s->type = t;
+		M(s) = (T(t) == t_bad) ? t_bad : t_enum;
+		cc->current->add_item( s );
+
+	// export enumerators of unnamed enumeration
+	} else if( !name /* && ns */ ) {
+		ns->export_outer();
 	}
 
 	return t->clone( cc );
@@ -465,82 +564,14 @@ PType Type::create_array( int tqualifier, Expr *expr, Compiler *cc )
 	Type *t = create( t_array, cc );
 
 	if( expr ) {
+		t->ar_size_val = -1;
 		t->ar_size = expr;
 		t->qualifier = tqualifier;
 
 	} else {
 		t->ar_size = NULL;
+		t->ar_size_val = 0;
 	}
 
 	return t;
-}
-
-/*
-	DESC: returns the pointer to "unsigned int" imm type
-	
-	EG: the type is cached in the Compiler::basic[0] variable
-*/
-PType Type::get_enum_type( Compiler *cc )
-{
-	if( cc->basic[0] == NULL )
-		cc->basic[0] = create( t_uint, cc );
-
-	return cc->basic[0];
-}
-
-
-/*
-	DESC: returns the pointer to basic type
-	
-	EG: the type is cached in the Compiler::basic[1..t_basiccnt] variable
-*/
-PType Type::get_basic_type( int spec, Compiler *cc )
-{
-	ASSERT( spec > 0 && spec < t_basiccnt );
-
-	if( cc->basic[spec] == NULL )
-		cc->basic[spec] = create( spec, cc );
-
-	return cc->basic[spec];
-}
-
-
-/*  
-   DESC: creates Sym and Type. Registers enumeration in the outer namespace.
-   'name' must not be NULL.
-
-   EG: ns == NULL means that enumeration has no definition
-*/
-PType Type::create_enum( char *name, Namespace *ns, Compiler *cc )
-{
-	Type *t = NULL;
-	Sym  *s = NULL;
-
-	// try to find out current enum declaration
-	s = SYM(cc->current->search_id( name, t_enum, 0 ));
-	if( s )
-		t = TYPE(s->type);
-
-	// create if not exist
-	if( !t && ns ) {
-		t = Type::create( t_enum, cc );
-		t->enum_members = ns;
-		t->tagname = name;
-
-		if( s )
-			s->type = t;
-
-	} else if( t && ns ) {
-		cc->error( " : error: 'enum %s' type redifinition\n", name );
-	}
-
-	// add structure to the outer namespace
-	if( !s ) {
-		s = Sym::create( name, cc );
-		s->type = t;
-		s->ns_modifier = t_enum;
-		cc->current->add_item( s );
-	}
-
-	return t->clone( cc );
 }

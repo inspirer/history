@@ -29,6 +29,17 @@
 
    Expressions
 
+= 28 === (10 mar 2004)
+
+	+ initializers logic reviewed
+    + Sym::symbol_created introduced
+    + bitfields
+    + structure creation improved
+    + enumerations improved
+    + Namespace::export_outer
+    ! struct ID in function fail
+    TODO struct a *yo; struct a { ... };
+
 = 27 === (09 mar 2004)
 
 	+ improved scs_*, storage is moved to Sym

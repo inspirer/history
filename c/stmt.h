@@ -130,7 +130,7 @@ enum {
 };
 
 enum {
-	cl_binop  = 1,		  // res = arg1(reg,imm) op arg2(reg,imm)
+	cl_binop  = 1,			// res = arg1(reg,imm) op arg2(reg,imm)
 	cl_unop   = 2,			// res = op arg1(reg,imm)
 	cl_assign = 3,			// arg1(mem,reg) = arg2(mem,reg,imm,addr)
 	cl_if_x_rel_y = 4,		// if( arg1(reg,imm) rel arg2(reg,imm) ) goto res(addr)

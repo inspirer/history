@@ -386,20 +386,25 @@ declaration_specifier_notype (int) ::
 		$declaration_specifier_notype = mod_func | $function_specifier;
 ;
 
-init_declarator_list (Node *) ::
-  = init_declarator
-		$init_declarator->fixtype( $#, this );
-		$init_declarator_list = $init_declarator->register_self( PLACE(@0), this );
+#   Some HACK: lapg allows to use $# only in actions at the end of rule.
+#              We substitute $# directly. Do not forget to fix it if
+#              something change.
+#   /*DANGEROUS*/
 
-  = init_declarator_list ',' init_declarator
-		$init_declarator->fixtype( $#, this );
-		$init_declarator_list = $init_declarator->register_self( PLACE(@2), this );
+init_declarator_list (Node *) ::
+  = declarator { $declarator->symbol_created( (PType)/*DANGEROUS*/lapg_m[lapg_head-1].sym, func ? fix_infunc : fix_global, PLACE(@0), this ); } initopt
+		$$ = NULL;
+
+  = init_declarator_list ',' declarator { $declarator->symbol_created( (PType)/*DANGEROUS*/lapg_m[lapg_head-3].sym, func ? fix_infunc : fix_global, PLACE(@2), this ); } initopt
+		$$ = NULL; // $$ = Node::combine( $init_declarator_list, ?? );
 ;
 
-init_declarator (Sym *) ::
-  = declarator
-  = declarator '=' initializer
-		$declarator->init = $initializer;
+#	Some HACK: 
+#		Our Sym is '(PType)lapg_m[lapg_head-2].sym'
+#	/*DANGEROUS*/
+
+init ::
+  = '=' { TODO();$$ = (Sym *)/*DANGEROUS*/lapg_m[lapg_head-2].sym; } initializer
 ;
 
 storage_class_specifier (int) ::
@@ -429,15 +434,15 @@ type_specifier2 (Type *) ::
   = struct_or_union_specifier
   = enum_specifier
   = typename
-		$type_specifier2 = (*(Type **)($typename-sizeof(PType)))->clone( this );
+		$type_specifier2 = (*(PType*)($typename-sizeof(PType)))->clone( this );
 ;
 
 struct_or_union_specifier (Type *) ::
   = struct_or_union IDopt '{' new_ns struct_declaration_list close_ns '}'
-		$struct_or_union_specifier = (Type *)Type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, this );
+		$struct_or_union_specifier = (Type *)Type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, PLACE(@1), this );
 
   = struct_or_union ID
-		$struct_or_union_specifier = (Type *)Type::create_struct( $ID, $struct_or_union, NULL, NULL, this );
+		$struct_or_union_specifier = (Type *)Type::create_struct( $ID, $struct_or_union, NULL, NULL, PLACE(@1), this );
 ;
 
 struct_or_union (int) ::
@@ -479,39 +484,40 @@ specifier_qualifier_list1 (Type *) ::
 
 struct_declarator_list (Sym *) ::
   = struct_declarator
-		$struct_declarator->fixtype( $#, this );
-		$struct_declarator->register_self( PLACE(@0), this );
+		$struct_declarator->symbol_created( $#, fix_member, PLACE(@0), this );
 
   = struct_declarator_list ',' struct_declarator
-		$struct_declarator->fixtype( $#, this );
+		$struct_declarator->symbol_created( $#, fix_member, PLACE(@2), this );
 		$struct_declarator_list#1->addnext( $struct_declarator );
-		$struct_declarator->register_self( PLACE(@2), this );
 ;
 
 struct_declarator (Sym *) ::
   = declarator
+		$declarator->loc.member.bitsize = -1;
+
   = ':' constant_expression
-		TODO();
+		$struct_declarator = Sym::create( NULL, this );
+		($struct_declarator)->loc.member.bitsize = $constant_expression->calculate(t_int, this);
 
   = declarator ':' constant_expression
-		TODO();
+		$declarator->loc.member.bitsize = $constant_expression->calculate(t_int, this);
 ;
 
 enum_specifier (PType) ::
-  = Lenum '{' enumerator_list ',' '}'
-		TODO();
+  = Lenum '{' new_ns enumerator_list ',' close_ns '}'
+		$enum_specifier = Type::create_enum( NULL, $new_ns, PLACE(@0), this );
 
-  = Lenum '{' enumerator_list '}'
-		TODO();
+  = Lenum '{' new_ns enumerator_list close_ns '}'
+		$enum_specifier = Type::create_enum( NULL, $new_ns, PLACE(@0), this );
 
   = Lenum ID '{' new_ns enumerator_list ','  close_ns '}'
-		$enum_specifier = Type::create_enum( $ID, $new_ns, this );
+		$enum_specifier = Type::create_enum( $ID, $new_ns, PLACE(@1), this );
 
   = Lenum ID '{' new_ns enumerator_list close_ns '}'
-		$enum_specifier = Type::create_enum( $ID, $new_ns, this );
+		$enum_specifier = Type::create_enum( $ID, $new_ns, PLACE(@1), this );
 
   = Lenum ID
-		$enum_specifier = Type::create_enum( $ID, NULL, this );
+		$enum_specifier = Type::create_enum( $ID, NULL, PLACE(@1), this );
 ;
 
 # EG: current enumeration value is stored as $enumerator_list
@@ -528,15 +534,11 @@ enumerator_list (unsigned int) ::
 
 enumerator (Sym *) ::
   = ID
-		$enumerator = Sym::create( $ID, this );
-		($enumerator)->type = Type::get_enum_type( this );
-		($enumerator)->loc.value = (int)$#;
+		$enumerator = Sym::create_imm( $ID, Type::get_basic_type(t_int,this), (int)$#, this );
 		current->add_item( $enumerator );
 
   = ID '=' constant_expression
-		$enumerator = Sym::create( $ID, this );
-		($enumerator)->type = Type::get_enum_type( this );
-		($enumerator)->loc.value = $constant_expression->calculate(($enumerator)->type->specifier, this);
+		$enumerator = Sym::create_imm( $ID, Type::get_basic_type(t_int,this), $constant_expression->calculate(t_int, this), this );
 		current->add_item( $enumerator );
 ;
 
@@ -705,25 +707,25 @@ parameter_list (Sym *) ::
 parameter_declaration (Sym *) ::
   = declaration_specifiers parm_declarator
 		$parameter_declaration = $parm_declarator;
-		$parm_declarator->fixtype( $declaration_specifiers, this );
+		$parm_declarator->symbol_created( $declaration_specifiers, fix_param, PLACE(@1), this );
 
   = declaration_specifiers parm_declarator_notype
 		$parameter_declaration = $parm_declarator_notype;
-		$parm_declarator_notype->fixtype( $declaration_specifiers, this );
+		$parm_declarator_notype->symbol_created( $declaration_specifiers, fix_param, PLACE(@1), this );
 
   = declaration_specifiers abstract_declarator
 		$parameter_declaration = $abstract_declarator;
-		$abstract_declarator->fixtype( $declaration_specifiers, this );
+		$abstract_declarator->symbol_created( $declaration_specifiers, fix_param, PLACE(@1), this );
 
   = declaration_specifiers
 		$parameter_declaration = Sym::create( NULL, this );
-		($parameter_declaration)->fixtype( $declaration_specifiers, this );
+		($parameter_declaration)->symbol_created( $declaration_specifiers, fix_param, PLACE(@0), this );
 ;
 
 type_name (PType) ::
   = specifier_qualifier_list
   = specifier_qualifier_list abstract_declarator
-		$abstract_declarator->fixtype( $specifier_qualifier_list, this );
+		$abstract_declarator->symbol_created( $specifier_qualifier_list, fix_none, PLACE(@1), this );
 		$type_name = $abstract_declarator->type;  // TODO check
 ;
 
@@ -934,8 +936,7 @@ function_definition ::
 new_func (Sym *) ::
   = declaration_specifiers declarator new_ns
 		$new_func = $declarator;
-		$declarator->fixtype( $declaration_specifiers, this );
-		$declarator->declare_function( NULL, current->parent, PLACE(@1), this );
+		$declarator->symbol_created( $declaration_specifiers, fix_func, PLACE(@1), this );
 		func = current;
 ;
 

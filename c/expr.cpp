@@ -46,9 +46,9 @@ Expr *Expr::create( int type, PType restype, Compiler *cc )
 	parses string in the following regular expression and returns the 
 	corresponding Expr structure: 
 
-    ([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?
+	([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?
 
-    TODO: fix overflow
+	TODO: fix overflow
 */
 Expr *Expr::create_icon_from_string( const char *s, Place loc, Compiler *cc )
 {
@@ -82,13 +82,13 @@ Expr *Expr::create_icon_from_string( const char *s, Place loc, Compiler *cc )
 	// unsigned
 	if( *s == 'u' || *s == 'U' ) {
 		s++;
-        if( *s == 'l' || *s == 'L' ) {
-        	if( s[1] == s[0] )
-        		type = t_ullong;
-        	else
-        		type = t_ulong;
-        } else 
-        	type = t_uint;
+		if( *s == 'l' || *s == 'L' ) {
+			if( s[1] == s[0] )
+				type = t_ullong;
+			else
+				type = t_ulong;
+		} else 
+			type = t_uint;
 
 	// long
 	} else if( *s == 'l' || *s == 'L' ) {
@@ -155,7 +155,7 @@ static int escape_seq( const char * &s, Place loc, Compiler *cc ) {
 	parses string in the following regular expression and returns the 
 	corresponding Expr structure: 
 
-    L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'
+	L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'
 */
 Expr *Expr::create_ccon_from_string( const char *s, Place loc, Compiler *cc )
 {
@@ -250,7 +250,6 @@ Expr *Expr::create_array_subscripting( Expr *arr, Expr *index, Place loc, Compil
 
 Expr *Expr::create_struct_member( Expr *str_or_un, char *membername, Place loc, Compiler *cc )
 {
-
 	// 6.5.2.3.1 The first operand of the . operator shall have a qualified or unqualified
 	// structure or union type, and the second operand shall name a member of that type.
 
@@ -606,7 +605,7 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 		// If both the second and third operands have arithmetic type, the result type that would be
 		// determined by the usual arithmetic conversions, were they applied to those two operands,
 		// is the type of the result. 
-       	goto exit;
+	   	goto exit;
 
 	// - both operands have compatible structure or union types;
 	if( STRUCTTYPE(e2->restype) && STRUCTTYPE(e3->restype) && (result = Type::compatible( e2->restype, e3->restype, 0, cc )) )
@@ -682,7 +681,7 @@ exit:
 void Expr::free( Compiler *cc )
 {
 	next_free = cc->free_expr;
-    cc->free_expr = this;
+	cc->free_expr = this;
 }
 
 
@@ -696,6 +695,7 @@ Expr *Expr::create_constant_expr( Expr *e, Place loc, Compiler *cc )
 	// 6.6.3 Constant expressions shall not contain assignment, increment, decrement,
 	//	function-call, or comma operators, except when they are contained within a
 	//	subexpression that is not evaluated.
+	ASSERT( e->type == e_direct );
 
 	// 6.6.4 Each constant expression shall evaluate to a constant that is in the range
 	// of representable values for its type.
@@ -705,9 +705,8 @@ Expr *Expr::create_constant_expr( Expr *e, Place loc, Compiler *cc )
 
 vlong Expr::calculate( int dest_type, Compiler *cc )
 {
-	if( type == e_direct /* && sub == dest_type */ ) {
-    	return value;
-	}
+	if( type == e_direct )
+		return value;
 
 	cc->error( "expression is not constant\n" ); // TODO
 	return 0;

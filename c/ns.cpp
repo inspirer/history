@@ -24,7 +24,7 @@
 
 #include "cc.h"
 
-enum { HASH_SIZE = 1023 };
+enum { HASH_SIZE = 127 };
 
 static inline unsigned get_hash( const char *name )
 {
@@ -90,6 +90,21 @@ void Namespace::newns( Compiler *cc )
 void Namespace::close_ns( Compiler *cc )
 {
 	cc->current = cc->current->parent;
+}
+
+void Namespace::export_outer()
+{
+	PSym s, next;
+
+	ASSERT( parent );
+	for( int i = 0; i < HASH_SIZE; i++ ) {
+		for( s = hash[i]; s; s = next ) {
+			next = s->hashed;
+			SYM(s)->hashed = parent->hash[i];
+		    parent->hash[i] = SYM(s);
+		}
+		hash[i] = NULL;
+	}
 }
 
 

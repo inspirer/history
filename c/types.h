@@ -21,7 +21,7 @@
 #ifndef types_h_included
 #define types_h_included
 
-#define DEBUG_TREE
+//#define DEBUG_TREE
 
 #define TYPE(tt) ((Type *)(tt))
 typedef const struct Type *PType;
@@ -31,22 +31,12 @@ typedef const struct Sym *PSym;
 
 #define POINTER_SIZE 4
 
-// Sym: storage class specifiers
-enum {
-    scs_none     = 0,
-    scs_extern   = 1, 
-    scs_static   = 2, 
-    scs_auto     = 3, 
-    scs_register = 4, 
-    scs_typedef  = 5,
-	// extra
-    scs_global   = 6,
-    scs_imm      = 7, 
-	scs_bitfield = 8,
-	scs_member   = 9,
-	scs_arg      = 10,
-	scs_label	 = 11,
-};
+#define SUBSET(a,b) (((a)|(b))==(b))
+
+#define T(tt) (tt)->specifier
+#define Q(tt) (tt)->qualifier
+#define M(ss) (ss)->ns_modifier
+
 
 // type qualifiers
 enum {
@@ -55,8 +45,6 @@ enum {
     tq_volatile = 2,
     tq_restrict = 4,
 };
-
-#define SUBSET(a,b) (((a)|(b))==(b))
 
 // function specifiers
 enum {
@@ -137,14 +125,10 @@ enum {
 	// type. It is completed, for all declarations of that type, by declaring the
 	// same structure or union tag with its defining content later in the same scope.
 
-#define INCOMPLETE(tt) ( (tt)->specifier == t_array && (tt)->ar_size == NULL || \
+#define INCOMPLETE(tt) ( (tt)->specifier == t_array && (tt)->ar_size_val == 0 || \
 	((tt)->specifier == t_union || (tt)->specifier == t_struct) && (tt)->params == NULL )
 
-#define VARSIZE(tt) ( (unsigned)(tt)->ar_size > 1 )
-#define CONSTSIZE (Expr *)1
-
-#define T(tt) (tt)->specifier
-#define Q(tt) (tt)->qualifier
+#define VARSIZE(tt) ( (unsigned)(tt)->ar_size_val == -1 )
 
     /*
 		EG: To simplify the compiler's logic we suppose that 'long _Imaginary' is the
@@ -204,9 +188,9 @@ class Compiler;
 
 /* EG:
 	size member declares the number of bytes needed to hold the variable
-	of such Type in memory. 
-		size = 0 for function and void types.
-		size = -1 for variable sizes: see var_size
+	of such Type in memory. size = 0 for function and void types.
+
+	ar_size_val = -1 for variable sizes: see ar_size, VARSIZE
 
 	structure stores its members in 'params' list, but for fast access we
 	use 'members' namespace (each structure has its own namespace).
@@ -216,13 +200,13 @@ class Compiler;
 	! qualifier for functions stores function_specifier
 */
 
+
 struct Type {
     int    specifier, qualifier;	// see T(), Q()
 	word   size;
-	Expr   *var_size;
 	char   *tagname;				// t_struct, t_union, t_enum
 	union {
-	    PType parent, return_value;
+		PType parent, return_value;
 	};
 
     // compiler's stages dependent vars
@@ -235,14 +219,11 @@ struct Type {
 	// specifier dependent vars
     union {
 		struct {				// t_func, t_struct, t_union
-        	PSym params;		// for t_struct, t_union NULL means incompleted
-        	union {
-				Node *body;		// for t_func NULL means incompleted
-                Namespace *members; // members structure is fast access to params
-        	};			
+			PSym params;		// for t_struct, t_union NULL means incompleted
+			Namespace *members; // members structure is fast access to params
 		};
-		struct {				// t_array (NULL means incompleted)
-			Expr  *ar_size;
+		struct {				// t_array (ar_size_val == 0 means incompleted)
+			Expr  *ar_size;		//						== -1 means variable
 			int ar_size_val;
 		};
 		Namespace *enum_members; // t_enum
@@ -255,16 +236,17 @@ struct Type {
 	int can_convert_to( PType t, Compiler *cc ) const;
 	PType integer_promotion( Compiler *cc ) const;
 
+	// utilities
 	static PType compatible( PType t1, PType t2, int qualif, Compiler *cc );
 
 	// constructors
-    static Type   *create( int ts, Compiler *cc );
-	Type		  *clone( Compiler *cc ) const;
+    static Type *create( int ts, Compiler *cc );
+	Type *clone( Compiler *cc ) const;
+
     static PType create_function( PSym paramlist, Compiler *cc );
-    static PType create_struct( char *name, int type, Sym *members, Namespace *mm, Compiler *cc );
-    static PType create_enum( char *name, Namespace *ns, Compiler *cc );
+    static PType create_struct( char *name, int agg_type, Sym *members, Namespace *mm, Place loc, Compiler *cc );
+    static PType create_enum( char *name, Namespace *ns, Place loc, Compiler *cc );
     static PType create_array( int tqualifiers, Expr *expr, Compiler *cc );
-    static PType get_enum_type( Compiler *cc );
 	static PType get_basic_type( int spec, Compiler *cc );
 
     // grammar-based operations
@@ -297,11 +279,11 @@ extern const struct basic_type_descr tdescr[t_basiccnt];
 /* EG:
 	Sym structure is used to store all symbolic names found in the source file.
 	Be careful, we also store typenames/struct/enums here. ns_modifier represents the
-	type of symbol. Logic of detecting that symbol is typedefed has been moved to ns.cpp.
+	type of symbol.
 
-	type_tail member is used only during syntax analysis, the type of symbol
+	st1.type_tail member is used only during syntax analysis, the type of symbol
 	is constructed step by step, adding the new information to the end of 
-	'Type list'. see Sym::fixtype and Sym::addtype functions
+	'Type list'. see Sym::symbol_created and Sym::addtype functions
 
 	name member can be NULL, it means abstract declarator
 
@@ -311,6 +293,8 @@ extern const struct basic_type_descr tdescr[t_basiccnt];
  */
 
 /* EG: To combine several namespaces in one, we use ns_modifier member of Sym structure.
+
+	0 - usual, t_struct, t_union, t_enum, t_typename, t_label, t_bad
 
 	 6.2.3 Name spaces of identifiers (ns_modifier)
 	  1. ..., there are separate name spaces for various categories of identifiers,
@@ -323,27 +307,66 @@ extern const struct basic_type_descr tdescr[t_basiccnt];
 		   declarators or as enumeration constants). (ns_modifier=0)
 */
 
+
+// storage class specifiers
+enum {
+    scs_none     = 0,
+    scs_extern   = 1, 
+    scs_static   = 2, 
+    scs_auto     = 3, 
+    scs_register = 4, 
+    scs_typedef  = 5,
+	// extra
+    scs_imm      = 7, 
+	scs_bitfield = 8,
+	scs_member   = 9,
+	scs_arg      = 10,
+	scs_arg_reg  = 11,
+	scs_label	 = 12,
+	scs_code	 = 13,
+};
+
+
+/* 
+    symbol_created is the end of Symbol creation mechanism, it accepts
+    fix argument:
+*/
+
+enum {
+	fix_none   = 0,
+	fix_global = 1,
+	fix_infunc = 2,
+	fix_member = 3,
+	fix_param  = 4,
+	fix_func   = 5
+};
+
 struct Sym {
     char *name;
-    int storage, ns_modifier;     // 0 - usual, t_struct, t_union, t_enum, t_typename, t_label, t_bad
+    int storage, ns_modifier;
     PType type;
     PSym next, hashed;
-    Init *init;
 
 	// storage dependent vars
     union {
 		char *exportname;	// scs_extern
-    	unsigned lblnum;	// scs_static
+    	Init *init;			// scs_static, scs_global
 
-    	int offset;			// ns_modifier == 0, -1 if not in (structure, union, params)
     	vlong value;		// scs_imm
     	Node *label_node;	// scs_label
+    	
+    	struct {			// scs_arg, scs_arg_reg
+			int offset;
+			vlong def;
+    	} arg;
 
-    	struct {
-			PSym container;		// scs_member, scs_bitfield, scs_arg
-			int bitsize, bitstart;  // INTTYPE
+    	struct {			// scs_member, scs_bitfield
+			PSym container;		
+			int bitsize, bitstart;  // bitsize = -1 for usual types
 			int offset;
 		} member;
+
+		Node *body;			// scs_code
     } loc;
 
     // compiler's stages dependent vars
@@ -356,13 +379,14 @@ struct Sym {
 
 	// constructors
     static Sym *create( char *s, Compiler *cc );
+    static Sym *create_imm( char *s, PType t, vlong value, Compiler *cc );
 
 	// registers Sym in the outer namespace, returns INIT Nodes
     Node *register_self( Place loc, Compiler *cc );
 	void declare_function( Node *statement, Namespace *outer, Place loc, Compiler *cc );
 
     // grammar-based operations
-    void fixtype( PType t, Compiler *cc );
+    void symbol_created( PType t, int fix, Place loc, Compiler *cc );
     void addtype( PType t );
     void addnext( Sym *s );
 };
@@ -395,6 +419,7 @@ struct Namespace {
     void *operator new( unsigned int size, void *place ) { return place; }
     void newns( Compiler *cc );
     static void close_ns( Compiler *cc );
+    void export_outer();
 };
 
 

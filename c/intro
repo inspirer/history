@@ -33,7 +33,16 @@
 	NULL. If even one of subexpressions is NULL, the whole expression must be NULL.
 	restype member of Expr must always be not NULL.
 
-	3) Coding style
+	3) Errors in Type
+
+	T() == t_bad
+
+	4) Errors in Sym
+
+	GOOD/BAD(sym)
+	makebad(sym)
+
+	5) Coding style
 
 	tab = 4 spaces
 	

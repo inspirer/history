@@ -1,6 +1,11 @@
 // Test of (expr.cpp -> Expr::create_binary)
 // Test of (expr.cpp -> Expr::get_type_size)
 
+enum a {
+	a, b,c
+
+};
+
 void main( register int a) {
 
 	char c;
