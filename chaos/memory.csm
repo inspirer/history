@@ -1,0 +1,15 @@
+// Memory functions
+
+   mem_alloc:
+
+      ret
+
+   mem_free:
+
+      ret
+
+   exc_20:
+      esi=mc1
+      int 0x21
+      iret
+   mc1: db "Memory call",13,10,36,0

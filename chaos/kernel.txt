@@ -1,0 +1,204 @@
+
+                      CHAOS KERNEL SPEC.
+
+   ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+         ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+         ³                ³
+         ³     1st        ³
+         ³       MB       ³
+         ³                ³
+0x100000 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+         ³      IDT       ³ 256*8
+0x100800 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+         ³      GDT       ³ 8192*8
+         ³                ³
+0x110800 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+         ³     Kernel     ³ 65536
+         ³                ³
+0x120800 ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+         ³  Page catalog  ³ 4096
+         ³                ³
+         ³ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ³
+         ³                ³
+
+
+   ÄÄÄÄÄÄ int 0x20 ÄÄÄ Processes and memory spec ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+      1. Allocate memory
+        In:  ah  = 0
+             ebx = Size
+        Out: CF set on error (not enough memory, free desc. absent)
+             ax  = SEG of block
+
+      2. Free memory
+        In:  ah  = 1
+             dx  = SEG to Free
+
+      3. Resize memory
+        In:  ah  = 2
+             ebx = NewSize
+             dx  = SEG of block
+        Out: CF set on error (not enough memory)
+
+      4. Allocate LDT
+        In:  ah  = 3
+        Out: CF set on error (free desc. absent)
+             bx  = LDTNum
+
+      5. Free LDT
+        In:  ah  = 4
+             bx  = LDTNum
+
+      6. Load LDT
+        In:  ah  = 5
+             bx  = LDTNum
+
+      7. Allocate Global
+        In:  ah  = 6
+             ebx = size in pages (4096)
+        Out: CF set on error (not enough memory, free desc. absent)
+             ax  = SEG of global
+
+      8. Resize Global
+        In:  ah  = 7
+             ebx = NewSize in pages (4096)
+             dx  = SEG of global
+        Out: CF set on error (not enough memory)
+
+      9. Free Global
+        In:  ah  = 8
+             dx  = SEG of global
+
+   ÄÄÄÄÄÄ int 0x21 ÄÄÄ File system ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+      1. Create file
+        In:  ah  = 0
+             ds:esi - Name (ASCIIZ)
+             cx  = File attribute (R/O,Hidden,System,Volume,subDir,arch)
+        Out: CF set on error (ax = dos error code)
+             ax  = file handle
+
+      2. Open file
+        In:  ah  = 1
+             al  = access mode (0-read, 1-write, 2-r/w)
+             ds:esi - Name (ASCIIZ)
+        Out: CF set on error (ax = dos error code)
+             ax  = file handle
+
+      3. Close file
+        In:  ah  = 2
+             bx  = file handle
+        Out: CF set on error (ax = dos error code)
+
+      4. Read file
+        In:  ah  = 3
+             bx  = file handle
+             cx  = bytes to read
+             es:edi - buffer
+        Out: CF set on error (ax = dos error code)
+             ax  = bytes actually read
+
+      5. Write file
+        In:  ah  = 4
+             bx  = file handle
+             cx  = bytes to write (0-truncate)
+             ds:esi - buffer
+        Out: CF set on error (ax = dos error code)
+             ax  = bytes actually written
+
+      6. Delete file
+        In:  ah  = 5
+             ds:esi - FileName (ASCIIZ)
+        Out: CF set on error (ax = dos error code)
+
+      7. Query/Set file attributes
+        In:  ah  = 6
+             al  = (0-query / 1-set)
+             ds:esi - FileName (ASCIIZ)
+             cx  = attributes (set al=1)
+        Out: CF set on error (ax = dos error code)
+             cx  = attributes (query al=0)
+
+      8. Query/Set file Date/Time
+        In:  ah  = 7
+             al  = (0-query / 1-set)
+             bx  = handle
+             cx  = FileTime (set)
+             dx  = FileDate (set)
+        Out: CF set on error (ax = dos error code)
+             cx  = FileTime (query)
+             dx  = FileDate (query)
+
+      9. Rename/Move file
+        In:  ah  = 8
+             ds:esi  -  source name
+             es:edi  -  dest   name
+        Out: CF set on error (ax = dos error code)
+
+      10. FindFirst
+        In:  ah  = 9
+             ds:esi - filespec
+             es:edi - Place for FileInfoRec
+             cx  = attributes
+        Out: CF set on error (ax = dos error code)
+
+      11. FindNext
+        In:  ah  = 10
+             ds:esi - previous FileInfoRec
+        Out: CF set on error (ax = dos error code)
+
+      12. Make dir
+        In:  ah  = 11
+             ds:esi - Dir name
+        Out: CF set on error (ax = dos error code)
+
+      13. Remove dir
+        In:  ah  = 12
+             ds:esi - Dir name
+        Out: CF set on error (ax = dos error code)
+
+      14. Change dir
+        In:  ah  = 13
+             ds:esi - Dir name
+        Out: CF set on error (ax = dos error code)
+
+      15. Get current directory
+        In:  ah  = 14
+             dl  = drive number (0 - A; 1 - B;...)
+             es:edi - place for it
+        Out: CF set on error (ax = dos error code)
+
+      16. Get free/total space
+        In:  ah  = 15
+             al  = drive number
+        Out: ??  = free space
+             ??  = total space
+
+      17. Set Default disk
+        In:  ah  = 16
+             al  = New disk (0-A;1-B; etc)
+        Out: CF set on error
+
+      18. Get Default disk
+        In:  ah  = 17
+        Out: al  = Cur disk (0-A;1-B; etc)
+
+   ÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ
+
+   // Test of page memory organization
+   esi=0x123456
+
+   ax=0x28;ds=ax
+   edx=esi&4095;esi=>>12
+
+   ebx=esi&0x3FF<<2;esi=>>10<<2
+   eax=cr3;and eax,-4096;esi=+eax
+   lodsd
+   and eax,-4096
+   esi=eax+ebx
+   lodsd
+   and eax,-4096
+   eax=+edx
+
+   jmp debug

@@ -1,0 +1,101 @@
+// ChaOS kernel v0.99
+#output .bin
+#shortdef stacksize 100
+#code 32
+#org 0
+
+   // -------------------------[ Initialization ]----------------------------
+
+   ax=0x20;ds=ax;ss=ax;fs=ax;gs=ax;ax=0x10;es=ax // ds=Data,es=IDT/GDT,ss=Data
+   sp=stack
+
+   // Create new IDT
+   xor edi,edi
+   esi=idt_place
+   ecx=idt_size
+   rep movsb
+
+   // Save dos memory pointer
+   d:dos_mem=ebx
+
+   // Get memory size (in pages)
+   ecx=d:mem_size;ax=0x28;ds=ax;ebx=ecx<<12
+   while(ebx!=0){
+     d:[ebx]=ecx
+     ifelse(d:[ebx]!=ecx){ xor ebx,ebx } else { ebx=+4096;ecx=++ }
+   }
+   ax=0x20;ds=ax;d:mem_size=ecx
+
+   // Create page catalog (ecx = pages) at 0x121000
+   dx=cx&1023    // dx!=0 => need increment
+   ebx=ecx>>10;if (dx!=0){ebx=++}  // ebx = num of tables
+   eax=ebx;edi=0x818;stosw // Descriptor of page catalog
+   esi=1024-ebx  // other we'll fill with nulls
+   ax=0x18;es=ax;xor edi,edi
+   eax=0x122007  // pointer to first "table of pages"(R/W,Present,User)
+   while(ebx>0){ stosd;eax=+0x1000;ebx=-- }
+   xor eax,eax;while(esi>0){ stosd;esi=-- }
+
+   // Create page tables (ecx = pages;edi = pointer to first table)
+   dx=cx&1023;eax=7 // pointer to first page (R/W,Present,User)
+   ebx=ecx;{ stosd;eax=+0x1000;loop ?^0 }
+   cx=(1024-dx)&1023;xor eax,eax
+   while(ecx>0){ stosd;ecx=-- }
+   ax=0x10;es=ax
+
+   // install PAGES
+   eax=0x121000;cr3=eax
+   eax=cr0
+   eax=|0x80000000
+   cr0=eax
+   jmpf $+7,0x8
+
+   // kernel ready for work
+   
+
+   // Exit to DOS
+   jmp exit
+
+
+fname : db "file.txt",0
+   // ----------------------------[ Drivers ]--------------------------------
+
+  #include dos_func.csm
+  #include memory.csm
+  #include filesyst.csm
+  #include exept.csm
+
+   // ------------------------------ [ Data ] ------------------------------
+
+    // Interrupt descriptor table
+   idt_place:
+     #include idt.csm
+   #shortdef idt_size $-idt_place
+
+   mem_size:  // In pages
+     dd 512
+
+   wprot: db "This is just call to DOS.",13,10,"$",0
+
+   // ------------------------ [ Return to loader ] ------------------------
+exit:
+   xor ebx,ebx
+
+dcall:
+
+   // Deinstall page system
+   eax=cr0
+   eax=<1;al=&0xFE;eax=>1
+   cr0=eax
+   xor eax,eax;cr3=eax
+
+   // Load old GDT & return
+   lgdt cs:[ret_gdt]
+
+#shortdef ret_to_loader $
+  // Here loader places code to return (far jump)
+
+#shortdef ret_gdt       $+7
+  // And here Pointer to old GDT
+
+#shortdef stack     $+13+stacksize

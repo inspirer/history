@@ -1,0 +1,59 @@
+// exeptions in ChaOS kernel
+
+ show_edx: // EDX -> at EDI,  Used: ECX,EAX
+   xor ecx,ecx
+   while(ecx<8){
+     rol edx,4
+     al=dl&0F+'0'
+     if(al>'9'){al=+7}
+     stosb;edi=++
+     ecx=++
+   }
+   ret
+
+ exc_0A: // Wrong TSS
+   pop  eax
+   pop  eax
+   mov  bx,0xA
+   jmp  debug
+
+ exc_0B: // Segment not present
+   pop  eax
+   pop  eax
+   mov  bx,0xB
+   jmp  debug
+
+ exc_0C: // Stack error
+   pop  eax
+   pop  eax
+   mov  bx,0xC
+   jmp  debug
+
+ exc_0D: // General Protection fault
+   pop  eax
+   pop  eax
+   mov  bx,0xD
+   jmp  debug
+
+ exc_0E: // Page fault
+   pop  eax
+   pop  eax
+   mov  bx,0xE
+   jmp  debug
+
+ oth_exc: // Other
+   pop  eax
+   pop  eax
+   mov  bx,0x1111
+   jmp  debug
+
+ debug:
+   edx=eax;edi=1600
+   ax=0x30;es=ax
+   show_edx()
+
+   edx=ebx;edi=1760
+   show_edx()
+   ax=0x10;es=ax
+
+   jmp exit

@@ -1,0 +1,34 @@
+// Global descriptor table for ChaOS kernel
+
+  // Null (0x0)
+  dd 0,0
+
+  // Kernel code32/65536/at 0x111000/Present/ReadEnable  (0x8)
+  dw 15,0x1000
+  db 0x11,0x9A,0xC0,0
+
+  // IDT/GDT data/0x11000/at 0x100000/Present/WriteEnable (0x10)
+  dw 16,0
+  db 0x10,0x92,0x80,0
+
+  // Page catalog data/~/at 0x121000/Present/WriteEnable (0x18)
+  dw 0,0x1000
+  db 0x12,0x92,0x80,0
+
+  // Kernel data/0x10000/at 0x111000/Present/WriteEnable (0x20)
+  dw 15,0x1000
+  db 0x11,0x92,0x80,0
+
+  // memory data/0xFFFFFFFF/at 0/Present/WriteEnable (0x28)
+  dw 0xFFFF,0
+  db 0,0x92,0x8F,0
+
+  // ----------------------------------------------------------------------
+
+  // Screen data/0x1000/0xB8000/at 0xB800/Present/WriteEnable (0x30)
+  dw 0,0x8000
+  db 0xB,0x92,0x80,0
+
+  // For DOS (0x38)
+  dw 0xFFFF,0
+  db 0,0x92,0,0

@@ -1,0 +1,46 @@
+// dos_call support
+
+ dos_call:
+   pusha // Save all registers + SegReg
+   push ds;push es;push fs;push gs
+   ax=0x20;ds=ax
+   ebx=dos_ret
+   ax=ss;w:dos_stack_ss=ax    // Save stack pointer
+   d:dos_stack_sp=esp
+   jmp dcall
+
+  dos_ret:
+   ax=cs:w:dos_stack_ss;ss=ax // Restore stack pointer
+   esp=cs:d:dos_stack_sp
+   pop gs;pop fs;pop es;pop ds
+   popa  // Restore all registers + SegReg
+   ret
+
+ dos_stack_sp: dd 0
+ dos_stack_ss: dw 0
+ dos_mem:   dd 0
+
+ #shortdef dos_ax   0
+ #shortdef dos_bx   2
+ #shortdef dos_cx   4
+ #shortdef dos_dx   6
+ #shortdef dos_si   8
+ #shortdef dos_di   10
+ #shortdef dos_mem1 12
+ #shortdef dos_mem2 128
+
+  // Writeln string from DS:ESI - string
+  write:
+    push es;ax=0x28;es=ax;edi=d:dos_mem
+
+    w:es:[~edi.dos_ax]=0x900
+    w:es:[~edi.dos_dx]=0xFFFF
+    edi=+dos_mem1
+
+    { lodsb;stosb;cmp al,'$';jnz ?^0 }
+
+    dos_call()
+    edi=d:dos_mem
+    ax=w:es:[~edi.dos_ax]
+    pop es
+    ret

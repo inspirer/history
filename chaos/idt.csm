@@ -1,0 +1,137 @@
+// Interrupt descriptor table for ChaOS kernel
+
+ // Exc00 : Division by zero
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc01 : Debug exeption
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc02 : NMI
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc03 : Break point
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc04 : Overflow
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc05 : BOUND error
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc06 : Invalide opcode
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc07 : Device not ready
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc08 : Double fault
+ dw oth_exc,8
+ db 0,0x8F,0,0
+
+ // Exc09 : (reserved)
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc0A : Wrong TSS
+ dw exc_0A,8
+ db 0,0x8F,0,0
+
+ // Exc0B : Segment not present
+ dw exc_0B,8
+ db 0,0x8F,0,0
+
+ // Exc0C : Stack fault
+ dw exc_0C,8
+ db 0,0x8F,0,0
+
+ // Exc0D : GPF
+ dw exc_0D,8
+ db 0,0x8F,0,0
+
+ // Exc0E : Page fault
+ dw exc_0E,8
+ db 0,0x8F,0,0
+
+ // Exc0F : (reserved)
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc10 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc11 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc12 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc13 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc14 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc15 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc16 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc17 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc18 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc19 : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc1A : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc1B : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc1C : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc1D : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc1E : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc1F : ???
+ dw 0,0
+ db 0,0,0,0
+
+ // Exc20 : kernel functions
+ dw exc_20,8
+ db 0,0x8F,0,0
+
+ // Exc21 : File system functions
+ dw exc_21,8
+ db 0,0x8F,0,0

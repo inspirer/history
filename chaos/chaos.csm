@@ -1,0 +1,245 @@
+// ChaOS kernel Loader
+#shortdef nodebug 1
+#output .com
+#org 0x100
+#code 16
+  #ifdef debug
+     jmp start
+     #include $crt.ch
+     start:
+  #endif
+
+  !cpr:db 13,10,"Starting ChaOS/alpha ...",13,10,36
+  ah=9;dx=cpr;int 0x21                 // Show copyright
+
+  !kern:db "kernel.bin",0
+  ax=0x3D00;dx=kern;int 0x21;bx=ax     // Open kernel
+
+  if (~c){
+    !error:db "ERROR: kernel file not found",13,10,36
+    ah=9;dx=error;int 0x21
+    ret
+  }
+
+  ah=0x3F;cx=50000;dx=kernel;int 0x21  // Read kernel
+  w:kern_size16=ax
+
+  if (~c||ax<5){
+    !error2:db "ERROR: kernel file damaged",13,10,36
+    ah=9;dx=error2;int 0x21
+    ret
+  }
+  ah=0x3E;int 0x21                     // Close
+
+  w:stack=sp
+  ax=cs;w:oldseg=ax
+  movzx eax,ax;eax=<<4
+  d:des_ds+2=|eax;d:des_cs+2=|eax // Prepeare cs,ds
+
+  bx=mgdt;movzx ebx,bx;ebx=+eax
+  d:forgdt+2=|ebx                 // Data to load GDT
+
+  bx=kernelloader;movzx ebx,bx;ebx=+eax
+  d:kerloader_cs+2=|ebx           // Prepeare kerloader_cs
+  d:kerloader_ds+2=|ebx           //          kerloader_ds
+
+  ebx=kernel;movzx ebx,bx;ebx=+eax
+
+  cli
+  lgdt  [forgdt]                  // Load GDT
+
+  mov   al,0xD1                   // Open A20
+  out   0x64,al
+  mov   al,0xDF
+  out   0x60,al
+
+  mov   eax,cr0
+  or    al,1
+  mov   cr0,eax                   // Switch PM
+
+  jmpf  $+5,0x8
+
+  ax=0x10;ds=ax;ss=ax
+
+  jmpf  0,0x18
+
+exit:
+
+  mov eax,cr0
+  and al,0xfe
+  mov cr0,eax                     // Switch to Real
+  db  0xea
+  dw  $+4
+oldseg:
+  dw 0                       // Here we save real CS
+
+  sp=cs:w:stack
+  ax=cs;ds=ax;ss=ax;es=ax
+  lidt [foridt]
+
+  cmp bx,0
+  jnz dos_call
+
+  mov   al,0xD1                   // Close A20
+  out   0x64,al
+  mov   al,0xDD
+  out   0x60,al
+
+  !cpr2:db "ChaOS/alpha finished",13,10,36
+  ah=9;dx=cpr2;int 0x21
+
+  sti
+  ret
+
+dos_call:
+
+  // Save ret addr
+  w:dos_ret_addr=bx
+
+  // Prepeare (dx,si - 1 ; di - 2 ; ax,bx,cx - init)
+  dx=dos_mem;si=dx;di=dos_mem2
+  ax=w:dos_ax;bx=w:dos_bx;cx=w:dos_cx
+  if (w:dos_dx!=0xFFFF){dx=w:dos_dx}
+  clc
+
+  #ifdef debug
+    jnc _notcarry1
+    write("C: ")
+  _notcarry1:
+    pushf
+    printf("REG: \h \h \h \h \h \h SEG: \h \h FL: \h \n",ax,bx,cx,dx,si,di,ds,es)
+  #endif
+
+  // Dos call
+  int 0x21
+
+  #ifdef debug
+    jnc _notcarry2
+    write("C: ")
+  _notcarry2:
+    pushf
+    printf("OUT: \h \h \h \h \h \h SEG: \h \h FL: \h \n",ax,bx,cx,dx,si,di,ds,es)
+  #endif
+
+  // Save ax & flags
+  w:dos_ax=ax;
+  xor ax,ax;if (~c){ dec ax }
+  w:dos_bx=ax
+
+  // Prepeare and Return
+  lidt [foridt32+kernelloader]
+  lgdt [forgdt32+kernelloader]
+  eax=0x121000;cr3=eax
+
+  eax=cr0;or eax,0x80000001;cr0=eax
+#shortdef dos_ret_addr $+1
+  jmpf  0,0x8
+
+mgdt:
+des_null:
+  dd 0,0
+des_cs:
+  dw 0FFFF,0,0x9A00,0
+des_ds:
+  dw 0FFFF,0,0x9200,0
+kerloader_cs:
+  dw 0FFFF,0,0x9A00,0x40
+kerloader_ds:
+  dw 0FFFF,0,0x9200,0        // Data
+kerloader_es:
+  dw 255,0,0x9210,0x80       // Memory (at 1Mb, size: 1Mb)
+ //kerloader_sc:
+ //  dw 4095,0x8000,0x920B,0    // Screen
+
+#shortdef gdt_size_16 $-mgdt-1
+
+foridt:
+  dw 4*256-1
+  dd 0
+
+stack:
+  dw 0
+
+#data
+
+kernelloader:
+#org 0
+#code 32
+
+#shortdef gdt_place  0x800
+#shortdef kern_place 0x11000 // After IDT & GDT
+
+   ax=0x20;ds=ax
+   ax=0x28;es=ax
+
+   // ds - data ; es - memory for kernel ; !!! stack not defined !!!
+
+   xor edi,edi
+   xor eax,eax
+   ecx=0x10800
+   rep stosb         // Clear
+
+   edi=gdt_place
+   esi=gdtstart
+   ecx=gdt_size
+   rep movsb         // Prepeare GDT
+
+   lidt  [foridt32]  // Load IDT
+
+   edi=kern_place
+   esi=kernel32
+   ecx=d:kern_size32
+   rep movsb         // Prepeare Kernel
+
+   esi=ret_to_loader
+   ecx=ret_to_loader_size
+   rep movsb         // Prepeare return code
+
+   lgdt [forgdt32]
+   jmpf 0,0x8
+
+   // end
+ret_addr:
+
+   jmpf exit,0x8
+
+gdtstart:
+
+#include gdt.csm
+
+#shortdef gdt_size $-gdtstart
+
+ret_to_loader:
+  jmpf ret_addr,0x18
+
+forgdt16:
+  dw gdt_size_16
+  dd 0
+#shortdef forgdt forgdt16+kernelloader
+#shortdef ret_to_loader_size $-ret_to_loader
+
+foridt32:
+  dw 2047
+  dd 0x100000
+
+forgdt32:
+  dw 0xFFFF
+  dd 0x100800
+
+kern_size32:
+  dd 0
+#shortdef kern_size16 kern_size32+kernelloader
+
+// Here we load kernel
+#shortdef kernel   kernelloader+$
+#shortdef kernel32 $
+
+// Dos Call
+#shortdef dos_ax   kernel
+#shortdef dos_bx   kernel+2
+#shortdef dos_cx   kernel+4
+#shortdef dos_dx   kernel+6
+#shortdef dos_si   kernel+8
+#shortdef dos_di   kernel+10
+#shortdef dos_mem  kernel+12
+#shortdef dos_mem2 dos_mem+128
