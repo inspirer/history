@@ -318,7 +318,7 @@ oneexpr (Expr *) ::
 conditional_expression (Expr *) ::
   = oneexpr
   = oneexpr '?' expression ':' conditional_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_conditional( $oneexpr, $expression, $conditional_expression#1, PLACE(@1), this );
 ;
 
 assignment_expression (Expr *) ::
@@ -857,6 +857,7 @@ block_item (Node *) ::
 		$$ = NULL;	// TODO
 
   = statement
+		$$ = NULL;	// TODO
 ;
 
 expression_statement (Node *) ::

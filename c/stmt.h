@@ -32,7 +32,7 @@
  *	needs code generation we generate a code for it (Node list).
  *
  *  !! We handle bad subexpressions as NULLs, i.e. if there was some syntax
- *	 or semantic error in expression. All create_* functions that create a new
+ *	 or semantic error in expression. All create_* functions which create a new
  *	 expression verify that subexpressions are not NULL.
  */
 
@@ -90,6 +90,7 @@ struct Expr {
 	static Expr *create_struct_member_ptr( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
 	static Expr *get_type_size( Type *t, Place loc, Compiler *cc );
 	static Expr *create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc );
+	static Expr *create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc );
 
 	// casting
 	Expr *cast_to( Type *t, Place loc, Compiler *cc );

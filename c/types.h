@@ -94,12 +94,15 @@ enum {
     t_limg   = 22,     // long double _Imaginary
     t_basiccnt = 23,
 
+#define BASICTYPE(tt) ( (tt)->specifier > 0 && (tt)->specifier < t_basiccnt )
+
 	// 6.2.5.17 The type char, the signed and unsigned integer types, and the
 	// enumerated types are collectively called integer types.
 
 #define INTTYPE(tt) ((tt)->specifier >= t_char && (tt)->specifier <= t_ullong ||\
 	(tt)->specifier == t_enum )
 
+#define STRUCTTYPE(tt) ((tt)->specifier == t_struct || (tt)->specifier == t_union )
 #define VOIDTYPE(tt) ((tt)->specifier == t_void )
 #define PTRTYPE(tt) ((tt)->specifier == t_pointer )
 #define FLOATTYPE(tt) ((tt)->specifier >= t_float && (tt)->specifier <= t_limg )
@@ -191,11 +194,14 @@ class Compiler;
 	use 'members' namespace (each structure has its own namespace).
 
 	enumeration has a pointer to its members - enum_members
+
+	! qualifier for functions stores function_specifier
 */
 
 struct Type {
     int    specifier, storage, qualifier;
 	word   size;
+	char   *tagname;				// t_struct, t_union, t_enum
 	union {
 	    Type *parent, *return_value;
 	};
@@ -211,6 +217,13 @@ struct Type {
 		Expr  *ar_size;			 // t_array (NULL means incompleted)
 		Namespace *enum_members; // t_enum
     };
+
+	// toString operator uses two static buffers
+	const char *toString();
+
+	// type conversions
+	int can_convert_to( Type *t, Compiler *cc );
+	static Type *compatible( Type *t1, Type *t2, Compiler *cc );
 
 	// constructors
     static Type *create( int ts, Compiler *cc );
@@ -231,18 +244,31 @@ struct Type {
 
 /* EG:
 	Sym structure is used to store all symbolic names found in the source file.
-    Be careful, we also store typenames/struct/enums here. ns_modifier represents the
-    type of symbol. Logic of detecting that symbol is typedefed has been moved to ns.cpp.
+	Be careful, we also store typenames/struct/enums here. ns_modifier represents the
+	type of symbol. Logic of detecting that symbol is typedefed has been moved to ns.cpp.
 
-    type_tail member is used only during syntax analysis, the type of symbol
-    is constructed step by step, adding the new information to the end of 
-    'Type list'. see Sym::fixtype and Sym::addtype functions
+	type_tail member is used only during syntax analysis, the type of symbol
+	is constructed step by step, adding the new information to the end of 
+	'Type list'. see Sym::fixtype and Sym::addtype functions
 
-    name member can be NULL, it means abstract declarator
+	name member can be NULL, it means abstract declarator
 
-    the structure is initialized in Sym::create function
+	the structure is initialized in Sym::create function
 
-    type_tail is NULL by default, while next_tail point out the current Symbol (by default)
+	type_tail is NULL by default, while next_tail point out the current Symbol (by default)
+ */
+
+/* EG: To combine several namespaces in one, we use ns_modifier member of Sym structure.
+
+	 6.2.3 Name spaces of identifiers (ns_modifier)
+	  1. ..., there are separate name spaces for various categories of identifiers,
+	  as follows:
+		 - label names (t_label)
+	     - the tags of structures, unions, and enumerations (t_enum, t_struct, t_union)
+	     - the members of structures or unions; each structure or union has a separate name
+			space for its members (separate ns)
+		 - all other identifiers, called ordinary identifiers (declared in ordinary
+		   declarators or as enumeration constants). (ns_modifier=0)
 */
 
 struct Sym {

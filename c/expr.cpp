@@ -390,9 +390,11 @@ Expr *Expr::cast_to( Type *t, Place loc, Compiler *cc )
 //
 Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 {
+	// we return BAD expression if we have BAD subexpressions
+	if( !e1 || !e2 )
+		return NULL;
 
 	// error checking switch, return NULL on error
-
 	switch( op ) {
 
 		// 6.5.5.2 Each of the operands shall have arithmetic type. The operands of
@@ -449,10 +451,64 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 				return NULL;
 			}
 			break;
+
+		// 6.5.7.2, 6.5.10.2, 6.5.11.2, 6.5.12.2
+		// Each of the operands shall have integer type.
+		case e_shl: case e_shr:
+		case e_and: case e_or: case e_xor:
+			if(!( INTTYPE(e1->restype) && INTTYPE(e2->restype) )) {
+				cc->error( LOC "%s: illegal, each of the operands shall have integer type\n", loc,
+					op == e_shl ? "<<" : op == e_shr ? ">>" : op == e_and ? "&" : op == e_or ? "|" : "^" );
+				return NULL;
+			}
+			break;
+
+		default:
+			ASSERT(0);
 	}
 	return NULL;
 }
 
+
+//
+//	6.5.15 Conditional operator
+//
+Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc )
+{
+	// we return BAD expression if we have BAD subexpressions
+	if( !e1 || !e2 || !e3 )
+		return NULL;
+
+	// Constraints
+	
+	// 2. The first operand shall have scalar type.
+	if( !SCALAR( e1->restype ) ) {
+		cc->error( LOC "?: the first operand shall have scalar type\n", loc );
+		return NULL;
+	}
+
+	// 3. One of the following shall hold for the second and third operands:
+	// - both operands have arithmetic type;
+	// - both operands have compatible structure or union types;
+	// - both operands have void type;
+	// - both operands are pointers to qualified or unqualified versions of compatible types;
+	// - one operand is a pointer and the other is a null pointer constant; or
+	// - one operand is a pointer to an object or incomplete type and the other is a pointer to a
+	// qualified or unqualified version of void.
+	if(!(     
+		ARITHMETIC(e2->restype) && ARITHMETIC(e3->restype) || 
+		STRUCTTYPE(e2->restype) && STRUCTTYPE(e3->restype) /* && compatible(e2...,e3..) */ ||  // TODO
+		VOIDTYPE(e2->restype) && VOIDTYPE(e3->restype) || 
+		PTRTYPE(e2->restype) && PTRTYPE(e3->restype) /* && compatible(e2->..,e3->..) */ ||	// TODO
+		// ??? TODO one operand is a pointer and the other is a null pointer constant
+		PTRTYPE(e2->restype) && PTRTYPE(e3->restype) && ( VOIDTYPE(e2->restype->parent) || VOIDTYPE(e3->restype->parent) )
+	)) {
+		cc->error( LOC "?: no conversion from '%s' to '%s'\n", loc, e3->restype->toString(), e2->restype->toString() );
+		return NULL;
+	}
+
+	return NULL;
+}
 
 //
 //	DESC: moves the expression to free_expr list

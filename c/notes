@@ -29,7 +29,24 @@
 
    Expressions
 
-= 19 === (3 feb 2004)
+= 23 === (12 feb 2004)
+
+	+ conv.cpp
+    + type_rank[]
+
+= 22 === (9 feb 2004)
+
+	+ toString_helper
+    + Type::toString done (shows function parameters and enum tag)
+
+= 21 === (8 feb 2004)
+
+	+ create_binary (&|^<<>> checks)
+	+ create_conditional (checks only)
+	! several expressions BUG
+	+ Type::toString
+
+= 20 === (3 feb 2004)
 
 	+ Expr::create_binary (+-/*% checks)
 	+ file: intro
