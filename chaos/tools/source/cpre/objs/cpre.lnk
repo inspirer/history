@@ -1,0 +1,12 @@
+option stub=wstub
+libpath %WATCOM%\lib386
+libpath %WATCOM%\lib386\dos
+format os2 le
+name cpre
+
+file objs\cc.obj
+file objs\error.obj
+file objs\file.obj
+file objs\directiv.obj
+file objs\defs.obj
+file objs\ident.obj

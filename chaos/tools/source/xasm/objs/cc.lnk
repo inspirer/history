@@ -1,0 +1,15 @@
+option stub=wstub
+option stack=16k
+libpath %WATCOM%\lib386
+libpath %WATCOM%\lib386\dos
+format os2 le
+name xasm
+
+file objs\xasm.obj
+file objs\error.obj
+file objs\file.obj
+file objs\directiv.obj
+file objs\defs.obj
+file objs\ident.obj
+file objs\i386ins.obj
+file objs\i386.obj

@@ -1,0 +1,6 @@
+#code 32
+
+ //add esp,0
+ mov eax,0
+ shl eax,1
+ nop
