@@ -1,0 +1,956 @@
+#   syntax
+#
+#   ANSI C Phrase structure grammar ( A.2 )  ISO/IEC 9899:1999
+#
+#   C Compiler project (cc)
+#   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov@front.ru)
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+ 
+.maxtoken    4096
+.class       "Compiler"
+.getsym      "chr = *l++;if( l == end ) fillb()"
+.positioning "full"
+
+
+# identificators and numbers
+typename(char*):
+Lid(char*): /[a-zA-Z_][a-zA-Z_0-9]*/ -1  \ @ = identifier( token, &$$, $typename );
+Licon(Expr*):  /([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?/ 
+	\ @ = Expr::create_icon_from_string(token,this);
+
+# Floating point constant
+Lfcon:		/([0-9]*\.[0-9]+|[0-9]+\.)([eE][+-]?[0-9]+)?[flFL]?/
+Lfcon:		/[0-9]+[eE][+-]?[0-9]+[flFL]?/
+Lfcon:		/0[xX]([0-9a-fA-F]*\.[0-9a-fA-F]+|[0-9a-fA-F]+\.?)[pP][+-]?[0-9]+[flFL]?/
+
+# Strings and Chars
+Lscon:      /L?"([^"\\]|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))*"/
+Lccon(Expr*):/L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'/
+	\ @ = Expr::create_ccon_from_string(token,this);
+
+# Non-terminal, skip
+_skip:      /\/\/.*/
+_skip:      /[\t\r\n ]+/    \ continue;
+
+# keywords
+Lsizeof:    /sizeof/
+Ltypedef:   /typedef/
+Lextern:    /extern/
+Lstatic:    /static/
+Lauto:      /auto/
+Lregister:  /register/
+Lchar:      /char/
+Lshort:     /short/
+Lint:       /int/
+Llong:      /long/
+Lsigned:    /signed/
+Lunsigned:  /unsigned/
+Lfloat:     /float/
+Ldouble:    /double/
+L_Bool:     /_Bool/
+L_Complex:  /_Complex/
+L_Imaginary:/_Imaginary/
+Lconst:     /const/
+Lvolatile:  /volatile/
+Lrestrict:  /restrict/
+Linline:    /inline/
+Lvoid:      /void/
+Lstruct:    /struct/
+Lunion:     /union/
+Lenum:      /enum/
+'...':      /\.\.\./
+
+Lcase:      /case/
+Ldefault:   /default/
+Lif:        /if/
+Lelse:      /else/
+Lswitch:    /switch/
+Lwhile:     /while/
+Ldo:        /do/
+Lfor:       /for/
+Lgoto:      /goto/
+Lcontinue:  /continue/
+Lbreak:     /break/
+Lreturn:    /return/
+
+# punctuators
+'->':	/->/
+'++':	/\+\+/
+'--':	/--/
+'<<':	/<</
+'>>':	/>>/
+'<=':	/<=/
+'>=':	/>=/
+'==':	/==/
+'!=':	/!=/
+'&&':	/&&/
+'||':	/\|\|/
+'*=':	/\*=/
+'/=':	/\/=/
+'%=':	/%=/
+'+=':   /+=/
+'-=':	/-=/
+'<<=':	/<<=/
+'>>=':	/>>=/
+'&=':	/&=/
+'^=':	/^=/
+'|=':	/\|=/
+
+'(':	/\(/
+')':	/\)/
+'[':	/\[/
+']':	/\]/
+'.':	/\./
+',':	/,/
+'&':	/&/
+'*':	/*/
+'+':	/+/
+'-':	/-/
+'~':	/~/
+'!':	/!/
+'/':	/\//
+'%':	/%/
+'<':	/</
+'>':	/>/
+'^':	/^/
+'|':	/\|/
+'?':	/?/
+':':	/:/
+'=':	/=/
+';':	/;/
+'{':	/{/
+'}':	/}/
+
+'/*':   /\/\*/          { group = @1;continue; }
+[1]
+anysym1: /[\t \r\n]+/	{ continue; }
+anysym1: /[^*\t \r\n]+/ -1
+anysym1: /*/
+anysym2: /TODO[^*\n]*/  { printf( "%s\n", token ); continue; }
+'*/':    /\*\//         { group = @0;continue; }
+
+
+error:
+
+# Attributes
+
+[ 
+declaration_specifiers -> init_declarator_list,
+specifier_qualifier_list -> struct_declarator_list,
+enumerator,
+new_func -> declaration_list
+]
+
+# A.2.1  Expressions
+
+# Here Lid and typename are combined. To distinguish them later you
+# can analyze the pointer which is placed just before the string: *(Sym **)(s-4)
+# if it is zero => Lid, else => typename
+
+ID (char *) ::= Lid | typename ;
+
+
+constant (Expr *) ::
+  = Licon
+  = Lccon
+  = Lfcon
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+primary_expression (Expr *) ::
+  = Lid
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = constant
+  = Lscon
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '(' expression ')'
+		$primary_expression = $expression;
+;
+
+postfix_expression (Expr *) ::
+  = primary_expression
+  = postfix_expression '[' expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = postfix_expression '(' ')'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = postfix_expression '(' argument_expression_list ')'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = postfix_expression '.' ID
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = postfix_expression '->' ID
+		error("not implemented yet at %i\n", __LINE__ );
+  
+  = postfix_expression '++'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = postfix_expression '--'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '(' type_name ')' '{' initializer_list '}'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '(' type_name ')' '{' initializer_list ',' '}'
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+argument_expression_list ::
+  = assignment_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = argument_expression_list ',' assignment_expression
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+unary_expression (Expr *) ::
+  = postfix_expression
+  = '++' unary_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '--' unary_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = unary_operator cast_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lsizeof unary_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lsizeof '(' type_name ')'
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+unary_operator (int) ::= '&' | '*' | '+' | '-' | '~' | '!' ;
+
+cast_expression (Expr *) ::
+  = unary_expression
+  = '(' type_name ')' cast_expression
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+%left  '||' ;
+%left  '&&';
+%left  '|';
+%left  '^';
+%left  '&';
+%left  '==' '!=';
+%left  '>=' '<=' '<' '>';
+%left  '<<' '>>';
+%left  '+' '-';
+%left  '*' '/' '%';
+
+oneexpr (Expr *) ::
+  = cast_expression
+  = oneexpr '*'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '/'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '%'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '+'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '-'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '<<' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '>>' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '<'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '>'  oneexpr
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '<=' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '>=' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '==' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '!=' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '&'  oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '^'  oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '|'  oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '&&' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = oneexpr '||' oneexpr 
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+conditional_expression (Expr *) ::
+  = oneexpr
+  = oneexpr '?' expression ':' conditional_expression
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+assignment_expression (Expr *) ::
+  = conditional_expression
+  = unary_expression assignment_operator assignment_expression
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+assignment_operator (int) ::= '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=' ;
+
+expression (Expr *) ::
+  = assignment_expression
+  = expression ',' assignment_expression
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+constant_expression (Expr *) ::
+  = conditional_expression
+;
+
+# A.2.2  Declarations
+
+#  EG: declaration symbol contains the pointer to the first Node of
+#      variables initializers
+
+declaration (Node *) ::
+  = declaration_specifiers ';'
+		$declaration = NULL;
+
+  = declaration_specifiers init_declarator_list ';'
+		$declaration = $init_declarator_list;
+;
+
+#  EG: declaration_specifiers1 contains type and notype_specifiers from the right of it,
+#      declaration_specifiers adds notype_specifiers to the left
+
+declaration_specifiers (Type *) ::
+  = declaration_specifier_notype declaration_specifiers
+		$declaration_specifiers#1->add_modifier( $declaration_specifier_notype, this );
+		$declaration_specifiers#0 = $declaration_specifiers#1;
+
+  = declaration_specifiers1
+		$declaration_specifiers1->fixup( this );
+;
+
+declaration_specifiers1 (Type *) ::
+  = type_specifier
+		$declaration_specifiers1 = Type::create( $type_specifier, this );
+
+  = type_specifier2
+  = declaration_specifiers1 type_specifier
+		$declaration_specifiers1#1->add( $type_specifier, this );
+
+  = declaration_specifiers1 declaration_specifier_notype
+		$declaration_specifiers1#1->add_modifier( $declaration_specifier_notype, this );
+;
+
+declaration_specifier_notype (int) ::
+  = storage_class_specifier
+		$declaration_specifier_notype = mod_storage | $storage_class_specifier;
+  = type_qualifier
+		$declaration_specifier_notype = mod_qual | $type_qualifier;
+  = function_specifier
+		$declaration_specifier_notype = mod_func | $function_specifier;
+;
+
+init_declarator_list (Node *) ::
+  = init_declarator
+		$init_declarator->fixtype( $#, this );
+		$init_declarator_list = $init_declarator->register_self( this );
+
+  = init_declarator_list ',' init_declarator
+		$init_declarator->fixtype( $#, this );
+		$init_declarator_list = $init_declarator->register_self( this );
+;
+
+init_declarator (Sym *) ::
+  = declarator
+  = declarator '=' initializer
+		$declarator->init = $initializer;
+;
+
+storage_class_specifier (int) ::
+  = Ltypedef	\ $storage_class_specifier = scs_typedef;
+  = Lextern		\ $storage_class_specifier = scs_extern;
+  = Lstatic		\ $storage_class_specifier = scs_static;
+  = Lauto		\ $storage_class_specifier = scs_auto;
+  = Lregister	\ $storage_class_specifier = scs_register;
+;
+
+type_specifier (int) ::
+  = Lvoid		\ $type_specifier = ts_void;
+  = Lchar		\ $type_specifier = ts_char;
+  = Lshort		\ $type_specifier = ts_short;
+  = Lint		\ $type_specifier = ts_int;
+  = Llong		\ $type_specifier = ts_long;
+  = Lfloat		\ $type_specifier = ts_float;
+  = Ldouble		\ $type_specifier = ts_double;
+  = Lsigned		\ $type_specifier = ts_signed;
+  = Lunsigned	\ $type_specifier = ts_unsigned;
+  = L_Bool		\ $type_specifier = ts__Bool;
+  = L_Complex	\ $type_specifier = ts__Complex;
+  = L_Imaginary	\ $type_specifier = ts__Imaginary;
+;
+
+type_specifier2 (Type *) ::  
+  = struct_or_union_specifier
+  = enum_specifier
+  = typename
+		$type_specifier2 = (*(Type **)($typename-sizeof(Type*)))->clone( this );
+;
+
+struct_or_union_specifier (Type *) ::
+  = struct_or_union IDopt '{' new_ns struct_declaration_list close_ns '}'
+		$struct_or_union_specifier = Type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, this );
+
+  = struct_or_union ID
+		$struct_or_union_specifier = Type::create_struct( $ID, $struct_or_union, NULL, NULL, this );
+;
+
+struct_or_union (int) ::
+  = Lstruct		\ $struct_or_union = t_struct;
+  = Lunion		\ $struct_or_union = t_union;
+;
+
+struct_declaration_list (Sym *) ::
+  = struct_declaration
+  = struct_declaration_list struct_declaration
+		$struct_declaration_list#1->addnext( $struct_declaration );
+;
+
+struct_declaration (Sym *) ::
+  = specifier_qualifier_list struct_declarator_list ';'
+		$struct_declaration = $struct_declarator_list;
+;
+
+specifier_qualifier_list (Type *) ::
+  = type_qualifier specifier_qualifier_list
+		$specifier_qualifier_list#1->add_modifier( mod_qual | $type_qualifier, this );
+		$specifier_qualifier_list#0 = $specifier_qualifier_list#1;
+
+  = specifier_qualifier_list1
+		$specifier_qualifier_list1->fixup( this );
+;
+
+specifier_qualifier_list1 (Type *) ::
+  = type_specifier
+		$specifier_qualifier_list1 = Type::create( $type_specifier, this );
+
+  = type_specifier2
+  = specifier_qualifier_list1 type_qualifier
+		$specifier_qualifier_list1#1->add_modifier( mod_qual | $type_qualifier, this );
+
+  = specifier_qualifier_list1 type_specifier
+		$specifier_qualifier_list1#1->add( $type_specifier, this );
+;
+
+struct_declarator_list (Sym *) ::
+  = struct_declarator
+		$struct_declarator->fixtype( $#, this );
+
+  = struct_declarator_list ',' struct_declarator
+		$struct_declarator->fixtype( $#, this );
+		$struct_declarator_list#1->addnext( $struct_declarator );
+;
+
+struct_declarator (Sym *) ::
+  = declarator
+  = ':' constant_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = declarator ':' constant_expression
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+enum_specifier ::
+  = Lenum '{' enumerator_list ',' '}'
+  = Lenum '{' enumerator_list '}'
+  = Lenum ID '{' new_ns enumerator_list ','  close_ns '}'
+		$enum_specifier = Type::create_enum( $ID, $new_ns, this );
+
+  = Lenum ID '{' new_ns enumerator_list close_ns '}'
+		$enum_specifier = Type::create_enum( $ID, $new_ns, this );
+
+  = Lenum ID
+		$enum_specifier = Type::create_enum( $ID, NULL, this );
+;
+
+# EG: current enumeration value is stored as $enumerator_list
+
+enumerator_list (unsigned int) ::
+  = { *(int *)&$$ = 0; } enumerator
+		$enumerator_list = $enumerator->value;
+
+  = enumerator_list ',' { *(int *)&$$ = $enumerator_list + 1; } enumerator
+		$enumerator_list = $enumerator->value;
+;
+
+# EG: next enumeration value is stored in L-attrib
+
+enumerator (Sym *) ::
+  = ID
+		$enumerator = Sym::create( $ID, this );
+		($enumerator)->type = Type::get_enum_type( this );
+		($enumerator)->value = (int)$#;
+		current->add_item( $enumerator );
+
+  = ID '=' constant_expression
+		$enumerator = Sym::create( $ID, this );
+		($enumerator)->type = Type::get_enum_type( this );
+		($enumerator)->value = $constant_expression->calculate(($enumerator)->type->specifier, this);
+		current->add_item( $enumerator );
+;
+
+type_qualifier (int) ::
+  = Lconst		\ $type_qualifier = tq_const;
+  = Lvolatile	\ $type_qualifier = tq_volatile;
+  = Lrestrict	\ $type_qualifier = tq_restrict;
+;
+
+function_specifier (int) ::
+  = Linline		\ $function_specifier = fs_inline;
+;
+
+declarator (Sym *) ::
+  = pointer direct_declarator
+		$declarator = $direct_declarator;
+		($direct_declarator)->addtype( $pointer );
+
+  = direct_declarator
+;
+
+direct_declarator (Sym *) ::
+  = ID
+		$direct_declarator = Sym::create( $ID, this );
+
+  = '(' declarator ')'
+		$direct_declarator = $declarator;
+
+  = direct_declarator '[' type_qualifier_listopt assignment_expressionopt ']'
+		($direct_declarator)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
+
+  = direct_declarator '[' Lstatic type_qualifier_listopt assignment_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = direct_declarator '[' type_qualifier_list Lstatic assignment_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = direct_declarator '[' type_qualifier_listopt '*' ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = direct_declarator '(' parameter_type_list ')'
+		($direct_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+
+  = direct_declarator '(' Lid_ID_list ')'
+		($direct_declarator)->addtype( Type::create_function( $Lid_ID_list, this ) );
+
+  = direct_declarator '(' ')'
+		($direct_declarator)->addtype( Type::create_function( NULL, this ) );
+;
+
+parm_declarator (Sym *) ::
+  = pointer parm_direct_declarator
+		$parm_declarator = $parm_direct_declarator;
+		($parm_direct_declarator)->addtype( $pointer );
+
+  = parm_direct_declarator
+;
+
+parm_direct_declarator (Sym *) ::
+  = typename
+		$parm_direct_declarator = Sym::create( $typename, this );
+
+  = parm_direct_declarator '[' type_qualifier_listopt assignment_expressionopt ']'
+		($parm_direct_declarator)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
+
+  = parm_direct_declarator '[' Lstatic type_qualifier_listopt assignment_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = parm_direct_declarator '[' type_qualifier_list Lstatic assignment_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = parm_direct_declarator '[' type_qualifier_listopt '*' ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = parm_direct_declarator '(' parameter_type_list ')'
+		($parm_direct_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+
+  = parm_direct_declarator '(' Lid_ID_list ')'
+		($parm_direct_declarator)->addtype( Type::create_function( $Lid_ID_list, this ) );
+
+  = parm_direct_declarator '(' ')'
+		($parm_direct_declarator)->addtype( Type::create_function( NULL, this ) );
+;
+
+parm_declarator_notype (Sym *) ::
+  = pointer parm_direct_declarator_notype
+		$parm_declarator_notype = $parm_direct_declarator_notype;
+		($parm_direct_declarator_notype)->addtype( $pointer );
+
+  = parm_direct_declarator_notype
+;
+
+parm_direct_declarator_notype (Sym *) ::
+  = Lid
+		$parm_direct_declarator_notype = Sym::create( $Lid, this );
+
+  = '(' parm_declarator_notype ')'
+		$parm_direct_declarator_notype = $parm_declarator_notype;
+
+  = parm_direct_declarator_notype '[' type_qualifier_listopt assignment_expressionopt ']'
+		($parm_direct_declarator_notype)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
+
+  = parm_direct_declarator_notype '[' Lstatic type_qualifier_listopt assignment_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = parm_direct_declarator_notype '[' type_qualifier_list Lstatic assignment_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = parm_direct_declarator_notype '[' type_qualifier_listopt '*' ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = parm_direct_declarator_notype '(' parameter_type_list ')'
+		($parm_direct_declarator_notype)->addtype( Type::create_function( $parameter_type_list, this ) );
+
+  = parm_direct_declarator_notype '(' Lid_ID_list ')'
+		($parm_direct_declarator_notype)->addtype( Type::create_function( $Lid_ID_list, this ) );
+
+  = parm_direct_declarator_notype '(' ')'
+		($parm_direct_declarator_notype)->addtype( Type::create_function( NULL, this ) );
+;
+
+Lid_ID_list (Sym *) ::
+  = Lid
+		$Lid_ID_list = Sym::create( $Lid, this );
+
+  = Lid_ID_list ',' ID
+		($Lid_ID_list)->addnext( Sym::create( $ID, this ) );
+;
+
+pointer (Type *) ::
+  = '*'
+		$pointer = Type::create( t_pointer, this );
+
+  = '*' type_qualifier_list
+		$pointer = Type::create( t_pointer, this );
+		($pointer)->qualifier = $type_qualifier_list;
+
+  = pointer '*'
+		$pointer = Type::create( t_pointer, this );
+		($pointer)->parent = $pointer#1;
+
+  = pointer '*' type_qualifier_list
+		$pointer = Type::create( t_pointer, this );
+		($pointer)->qualifier = $type_qualifier_list;
+		($pointer)->parent = $pointer#1;
+;
+
+type_qualifier_list (int) ::
+  = type_qualifier
+  = type_qualifier_list type_qualifier
+		$type_qualifier_list = Type::addqualifier( $type_qualifier_list#1, $type_qualifier, this );
+;
+
+parameter_type_list (Sym *) ::
+  = parameter_list
+  = parameter_list ',' '...'
+		($parameter_list)->addnext( Sym::create( "...", this ) );  // TODO
+;
+
+parameter_list (Sym *) ::
+  = parameter_declaration
+  = parameter_list ',' parameter_declaration
+		($parameter_list)->addnext( $parameter_declaration );
+;
+
+parameter_declaration (Sym *) ::
+  = declaration_specifiers parm_declarator
+		$parameter_declaration = $parm_declarator;
+		$parm_declarator->fixtype( $declaration_specifiers, this );
+
+  = declaration_specifiers parm_declarator_notype
+		$parameter_declaration = $parm_declarator_notype;
+		$parm_declarator_notype->fixtype( $declaration_specifiers, this );
+
+  = declaration_specifiers abstract_declarator
+		$parameter_declaration = $abstract_declarator;
+		$abstract_declarator->fixtype( $declaration_specifiers, this );
+
+  = declaration_specifiers
+		$parameter_declaration = Sym::create( NULL, this );
+		($parameter_declaration)->fixtype( $declaration_specifiers, this );
+;
+
+type_name (Type *) ::
+  = specifier_qualifier_list
+  = specifier_qualifier_list abstract_declarator
+		$abstract_declarator->fixtype( $specifier_qualifier_list, this );
+		$type_name = $abstract_declarator->type;  // TODO check
+;
+
+abstract_declarator (Sym *) ::
+  = pointer
+		$abstract_declarator = Sym::create( NULL, this );
+		($abstract_declarator)->addtype( $pointer );
+
+  = direct_abstract_declarator
+  = pointer direct_abstract_declarator
+		$abstract_declarator = $direct_abstract_declarator;
+		($abstract_declarator)->addtype( $pointer );
+;
+
+direct_abstract_declarator (Sym *) ::
+  = '(' abstract_declarator ')'
+		$direct_abstract_declarator = $abstract_declarator;
+
+  = '[' ']'
+		$direct_abstract_declarator = Sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( Type::create_array( 0, NULL, this ) );
+
+  = '[' assignment_expression ']'
+		$direct_abstract_declarator = Sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( Type::create_array( 0, $assignment_expression, this ) );
+
+  = direct_abstract_declarator '[' ']'
+		($direct_abstract_declarator)->addtype( Type::create_array( 0, NULL, this ) );
+
+  = direct_abstract_declarator '[' assignment_expression ']'
+		($direct_abstract_declarator)->addtype( Type::create_array( 0, $assignment_expression, this ) );
+
+  = '[' '*' ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = direct_abstract_declarator '[' '*' ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '(' ')'
+		$direct_abstract_declarator = Sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( Type::create_function( NULL, this ) );
+
+  = '(' parameter_type_list ')'
+		$direct_abstract_declarator = Sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+
+  = direct_abstract_declarator '(' ')'
+		($direct_abstract_declarator)->addtype( Type::create_function( NULL, this ) );
+
+  = direct_abstract_declarator '(' parameter_type_list ')'
+		($direct_abstract_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+;
+
+initializer (Init *) ::
+  = assignment_expression
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '{' initializer_list '}'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '{' initializer_list ',' '}'
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+initializer_list (Init *) ::
+  = designationopt initializer
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = initializer_list ',' designationopt initializer
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+designation ::
+  = designator_list '='
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+designator_list ::
+  = designator
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = designator_list designator
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+designator (Designator) ::
+  = '[' constant_expression ']'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = '.' ID
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+# A.2.3  Statements (TODO)
+
+statement (Node *) ::
+  = labeled_statement
+  = compound_statement
+  = expression_statement
+  = selection_statement
+  = iteration_statement
+  = jump_statement
+;
+
+labeled_statement (Node *) ::
+  = ID ':' statement
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lcase constant_expression ':' statement
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Ldefault ':' statement
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+compound_statement (Node *) ::
+  = '{' '}'
+		$$ = NULL;
+
+  = '{' new_ns block_item_list close_ns '}'
+		$$ = $block_item_list;
+;
+
+block_item_list (Node *) ::
+  = block_item
+  = block_item_list block_item
+		$block_item_list#0 = Node::combine( $block_item_list#1, $block_item ); 
+;
+
+block_item (Node *) ::
+  = declaration
+		$$ = NULL;	// TODO
+
+  = statement
+;
+
+expression_statement (Node *) ::
+  = ';'
+		$expression_statement = NULL;
+
+  = expression ';'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = error ';'
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+selection_statement (Node *) ::
+  = Lif '(' new_ns expression ')' statement close_ns
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lif '(' new_ns expression ')' statement Lelse statement close_ns
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lswitch '(' new_ns expression ')' statement close_ns
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+iteration_statement (Node *) ::
+  = Lwhile '(' new_ns expression ')' statement close_ns
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Ldo new_ns statement Lwhile '(' expression ')' close_ns ';'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lfor '(' new_ns expression_statement expressionopt ';' expressionopt ')' statement close_ns
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lfor '(' new_ns declaration expressionopt ';' expressionopt')' statement close_ns
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+jump_statement (Node *)::
+  = Lgoto ID ';'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lcontinue ';'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lbreak ';'
+		error("not implemented yet at %i\n", __LINE__ );
+
+  = Lreturn expressionopt ';'
+		error("not implemented yet at %i\n", __LINE__ );
+;
+
+# A.2.4  External definitions
+
+input ::
+  = external_declaration
+  = input external_declaration
+;
+
+external_declaration ::
+  = function_definition
+  = declaration
+;
+
+function_definition ::
+  = new_func compound_statement close_func
+		$new_func->declare_function( $compound_statement, NULL, this );
+
+  = new_func declaration_list compound_statement close_func
+		error("not implemented yet (at %i): old-style function declaration\n", __LINE__ );
+;
+
+new_func (Sym *) ::
+  = declaration_specifiers declarator new_ns
+		$new_func = $declarator;
+		$declarator->fixtype( $declaration_specifiers, this );
+		$declarator->declare_function( NULL, current->parent, this );
+		func = current;
+;
+
+close_func ::= close_ns { func = NULL; } ;
+
+declaration_list ::
+  = declaration
+  = declaration_list declaration
+;
+
+# Namespaces
+
+new_ns (Namespace *) ::= 
+	{ current->newns( this ); $new_ns = current;  } ;
+
+close_ns ::=
+	{ Namespace::close_ns( this ); } ;
+
+%%
+
+//#define DEBUG_syntax
+
+#include "cc.h"
+#include "types.h"
+#include "stmt.h"
+

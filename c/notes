@@ -1,0 +1,88 @@
+#   notes
+#
+#   C Compiler project (cc)
+#   Copyright (C) 2002-03  Eugeniy Gryaznov (gryaznov@front.ru)
+#
+#   This program is free software; you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation; either version 2 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program; if not, write to the Free Software
+#   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+
+= check examples ====
+
+= 16 === (11 jan 2004)
+
+	+ Node quadruple (op,res,arg1,arg2)
+	+ Expr::create_ccon_from_string
+
+= 15 === (31 dec 2003)
+
+	+ Type::clone()  
+	+ Sym::declare_function (2 of 4 constraints)
+	+ BAD/GOOD symbols, makebad() macro
+
+= 14 === (24 dec 2003)
+
+    + function parameter declaration
+    + variables registration
+    + DEBUG_TREE
+    + debug_show_namespace/debug_show_sym/debug_show_type
+    + abstract decl
+    + started: struct Init
+
+= 12 === (19 dec 2003)
+
+    + Node::next_free / free_node
+    + create_continue begins
+
+= 11 === (21 nov 2003)
+
+    - removed func_circle, func_switch
+    + Namespace::associated -> Node
+    + Expr::next_free / free_expr
+
+= 10 === (20 nov 2003)
+
+    + statements
+    + labels (function scope): register_label, create_goto
+    + Node::create etc...
+    + Node::register_function started
+    + namespace pointers: func, func_circle, func_switch
+
+= 09 === (14 nov 2003)
+
+    + distinguish typename and Lid
+
+= 08 === (10 nov 2003)
+
+    + abstract_declarator
+    + enumerations
+    + expr.cpp
+    + icon regexp parsing
+    + not implemented for all rules
+    + Namespace::add_item fixes typedef declarations
+    + Expr::destroy and free_expr pool logic
+
+= 07 === (06 nov 2003)
+
+    + adding (struct xxx { }; struct xxx;) to namespace (Type::create_struct)
+    + build.bat {clean|test}
+    + Namespace::newns
+    * Namespace::searchid
+
+= 06 === (05 nov 2003)
+
+    + addtype function (function declarator)
+    + structure definitions (+members)
+    
+
