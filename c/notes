@@ -41,6 +41,8 @@
     + sizeof(basictype) from Backend, +align
     + il.cpp, il_ops.h
     + il_conv.pl, generates il
+	_2
+	! valid_op
 
 = 29 === (20 mar 2004)
 

@@ -182,7 +182,7 @@ int valid_op( int op, Backend *be )
 	}
 	
 	for( i = 0; valid_ops[i].op_spec; i++ )
-		if( valid_ops[i].op_spec == specific(op) )
+		if( valid_ops[i].op_spec == specific(op) && ( !size || (valid_ops[i].sizes&size) ) )
 			return 1;
 	return 0;
 }
