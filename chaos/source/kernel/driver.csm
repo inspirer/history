@@ -1,11 +1,11 @@
  // Int 0x22 handler : kernel functions for drivers
 
 // Driver exit code
-#shortdef drv_ld_ok 0
-#shortdef drv_ld_error 1
-#shortdef drv_ld_irq_abs 2
-#shortdef drv_ld_int_abs 3
-#shortdef drv_ld_dev_abs 4
+#shortdef drv_ld_ok         0
+#shortdef drv_ld_error      1
+#shortdef drv_ld_irq_abs    2
+#shortdef drv_ld_int_abs    3
+#shortdef drv_ld_dev_abs    4
 #shortdef drv_ld_port_confl 5
 
 int_22:
@@ -14,9 +14,11 @@ int_22:
    and b:[~ebp+12],0xFE
    pop ebp
 
-   cmp ah,0x0 ; jz set_return_code
-   cmp ah,0x1 ; jz allocate_soft_int
-   jmp int22_d0
+   cmp ah,0x0 ; _jz set_return_code
+   cmp ah,0x1 ; _jz allocate_soft_int
+   cmp ah,0x2 ; _jz allocate_hrdw_irq
+   cmp ah,0x3 ; _jz write_code_seg
+   iret
 
    // 1. Set driver return code
    // In: ah  =  0x0
@@ -87,11 +89,6 @@ int_22:
    d:[esi]=eax
 
    pop ds;pop esi;pop eax;pop ebp
-   iret
-
- int22_d0:
-   cmp ah,0x2 ; jz allocate_hrdw_irq
-   cmp ah,0x3 ; jz write_code_seg
    iret
 
    // 4. Write to code segment
@@ -180,7 +177,7 @@ load_driver:
       // create task to call int80
       ah=6;ebx=1;int 0x20;push eax
       push ds;ds=ax;d:[0]=0xCF80CD
-      ecx=1;ebx=ecx;ah=0x28;int 0x20
+      ecx=1;ebx=ecx;ah=0x20;int 0x20
       pop ds;pop edx;push eax;ah=8;int 0x20;pop eax
 
       // Call task
@@ -248,15 +245,15 @@ loadtask:
    push ebx;ah=6;xor ebx,ebx;bx=w:task_head.task_size;int 0x20
    pop ebx;if(~c){ax=3;jmps _load_task_err} push eax
    xor ecx,ecx;cx=w:task_head.task_stck;push ecx
-   xor ecx,ecx;cx=w:task_head.task_size;shl ecx,12
+   xor ecx,ecx;cx=w:task_head.task_size;push ecx;shl ecx,12
    es=ax
 
    // Read task
-   xor edi,edi;ah=3;int 0x21;push eax
+   xor edi,edi;ah=3;int 0x21
    ah=2;int 0x21
 
    // Run task
-   pop ebx;pop ecx;ebx=>>12;inc ebx;push ds;push es;pop ds;ah=0x28;int 0x20;pop ds
+   pop ebx;pop ecx;push ds;push es;pop ds;ah=0x20;int 0x20;pop ds
    if (~c){ pop ds;pop edx;ax=3;jmp _load_task_err }
 
    // Restore regs

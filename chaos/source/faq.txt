@@ -1,69 +1,163 @@
-   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
- INT 0x20: (memory)
+ FILE: kernel.bin
 
-  1. Allocate memory
-     In:  ah  = 0x00;al  = 0 (ring3), 1 (ring0), 2 (ring1);ebx=Size in pages
+ kernel functions (INT 0x20)
+
+ (memory)
+
+  Allocate memory in LDT
+     ah=0;ebx=(Size in pages)
+     memory for : al=0(ring3), 1(ring0), 2(ring1)   (1&2 only for ring1)
      Out: CF(error) or ax=SEG_of_new_block
-  2. Free memory
-     In:  ah  = 0x01;dx  = SEG to Free
+  Free memory
+     ah=1 ; dx  = SEG to Free
      Out: CF(error)
-  ?? not ready yet ?? 3. Resize memory
-     In:  ah  = 0x02;ebx = NewSize;dx  = SEG of block (in LDT)
+  Resize memory
+     ah=2;ebx = NewSize;dx = SEG of block (in LDT)
      Out: CF(error)
-  4. Allocate LDT
-     In:  ah  = 0x03
-     Out: CF(error) or ax=LDTNum
-  5. Free LDT
-     In:  ah  = 0x04;bx  = LDTNum
-     Out: CF(error)
-  6. Load LDT
-     In:  ah  = 0x05;bx  = LDTNum
-     Out: CF(error)
-  7. Allocate Global
-     In:  ah  = 0x06;ebx = size in pages (4096)
+  Allocate Global (ring1)
+     ah=6;ebx = size in pages (4096)
      Out: CF set on err (not enough mem, free desc. absent);ax=SEG of global
-  8. Resize Global
-     In:  ah  = 0x07;ebx = NewSize in pages (4096);dx  = SEG of global
+  Resize Global (ring1)
+     ah=7;ebx = NewSize in pages (4096);dx  = SEG of global
      Out: CF(error)
-  9. Free Global
-     In:  ah  = 0x08;dx  = SEG of global
+  Free Global (ring1)
+     ah=8;dx  = SEG of global
      Out: CF(error)
-  ?? not ready yet ?? 10. Defragment
-     In:  ah  = 0x09
+  Defragment
+     ah=9
      Out: <none>
-  11. Get free memory info
-     In:  ah  = 0x0A
+  Get free memory info
+     ah=0xA
      Out: edx = free memory
-  12. Map global
-     In:  ah  = 0x0B;ebx = memory_to_MAP address;dx  = global selector
-     Out: CF(impossible)
+  Map global (ring1)
+     ah=0xB;ebx = memory_to_MAP address;dx  = global selector
+     Out: CF(if impossible)
+
+ (process)
+
+  Start task (ring1)
+     ah=0x28 ; ds=global_segment_with_data
+     ecx = task_stacksize ; ebx = memory_size_for_task
+     Out: CF set on error
+
+  Terminate process (self)
+     ah=0x21
+
+  Kill process
+     ah=0x22;bx  = PID
+     Out: CF set on error
+
+  Next process
+     ah=0x24
+
+  Get priority
+     ah=0x25 ; bx=PID
+     Out: CF set on error (ax=error) or ax=priority
+
+  Set priority
+     ah=0x26 ; bx=PID
+     dx=priority
+     Out: CF set on error
+
+ (registers)
+
+  Create reg_key
+     ah=0x40 ; al=rights ; ebx = base_ID ; ds:esi <- keyname
+     Out: CF on error
+
+  Remove reg_key
+     ah=0x41 ; ebx = key_id
+     Out: CF on error
+
+  Get reg_key
+     ah=0x42 ; es:edi <- keyname
+     Out: ebx=ID
+
+  Get reg_key data
+     ah=0x43 ; ebx=ID
+     Out:  CF or { 0 : EAx = dword , 1 : ES:EDI <- buffer, eax = size }
+
+  Set reg_key data
+     ah=0x44 ; al = 0(dw) or 1(dat) ; ebx = ID
+     switch(al){ case 0 : EDI <- dword ; case 1: DS:ESI <- buffer, cx = size }
+     Out: CF
+
+  Get next/sub/up reg_key
+     ah=0x45 ; al= +1(next),+2(sub),+4(up) ; ebx = ID
+     Out: CF or { eax = Next, edx = sub, edi = up }
+
+  Get register key name
+     ah=0x46 ; ebx = ID
+     Out: CF or ES:EDI <- buffer, eax = size
+
+ kernel functions (INT 0x21) (ring1)
+
+ (file system) (ring1)
+
+  Create file
+     ah=0 ; cx=file_attribute ; ds:esi - Name (ASCIIZ)
+     Out: CF (ax = dos error code) or { ax=file_handle }
+
+  Open file
+     ah=1 ; al=access mode (0-read, 1-write, 2-r/w) ; ds:esi - Name (ASCIIZ)
+     Out: CF (ax = dos error code) or { ax=file_handle }
+
+  Close file
+     ah=2 ; bx=file handle
+     Out: CF (ax = dos error code|ax=undef)
+
+  Read file
+    ah=3 ; bx=file_handle ; cx=bytes_to_read ; es:edi - buffer
+    Out: CF (ax = dos error code) or { ax=bytes_actually_readed }
+
+  Write file
+    ah=4 ; bx=file_handle ; cx=bytes_to_write(0-truncate) ; ds:esi - buffer
+    Out: CF (ax=dos_error_code) or { ax=bytes_actually_written }
+
+  Move file pointer
+    ah=5 ; bx=file handle ; ecx=distance to move ; al=subfun (start/curr/end)
+    Out: CF (ax = dos error code)
+
+  Find First File
+    ah=9 ; ds:esi - filespec ; es:edi - place_for_FileInfoRec ; cx = attributes
+    Out: CF (ax = dos error code)
+
+  Find Next File
+    ah  = 10 ; ds:esi - previous_FileInfoRec
+    Out: CF (ax = dos error code)
+
+ (screen) (ring1)
+
+  Display character
+    ah=0x30 ; al=char_to_display
+
+  Display string from DS:ESI
+    ah=0x31 ; DS:ESI - ptr to ASCIIZ (without '$')
+
+ kernel functions (INT 0x22)
+
+ (communication with drivers) (ring1)
+
+  Set driver return code (load)
+    ah=0 ; al=ret_code
+                
+  Allocate software interrupt (load)
+    ah=1 ; al=intnumber ; CS:EDX = ptr to handler
+    Out: CF (if used)
+
+  Allocate hardware interrupt (load)
+    ah=2 ; al=IRQ(0-15) ; CS:EDX = ptr to handler
+    Out: CF (if used)
+
+  Write to code segment
+    ah=3 ; write EBX as dword at CS:EDI
 
    -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
- INT 0x20: (process)
+ FILE: display.bin
 
-   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-
- INT 0x20: (registers)
-
-   1. Create reg_key          ah=0x40;al=rights;            CF
-                              ebx=base_ID;ds:esi<-keyname
-   2. Remove reg_key          ah=0x41;ebx=key_id            CF
-   3. Get reg_key             ah=0x42;es:edi <- keyname     ebx=ID
-   4. Get reg_key data        ah=0x43;ebx = ID              0:EAx=dword;
-                                                            1:ES:EDI<-buffer,eax=size
-   5. Set reg_key data        ah=0x44;al=0(dw)or1(dat)      CF
-                              ebx = ID;0:EDI <- dword
-                              1:DS:ESI<-buffer,cx=size
-   6. Get nxt/sub/up key      ah=0x45;ebx = ID              eax=Next
-                              al=+1(next),+2(sub),+4(up)    edx=sub, edi=up
-   7. Get register key name   ah=0x46;ebx=ID                ES:EDI<-buffer
-                                                            eax = size
-
-   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-
- INT 0x23: (screen)
+ display functions (INT 0x20)
 
    1. Allocate screen           ah=0               CF or AX = ID
    2. Kill screen               ah=1;bx=ID         CF
@@ -100,6 +194,10 @@
                      Out: CF
    4. Read file      In:  ah=3; bx=handle;ecx=bytes;es:edi = buffer
                      Out: CF or EAX=BYTES_READ
+   5. Write file     In:  ah=4; bx=handle;ecx=bytes;ds:esi = buffer
+                     Out: CF or EAX=BYTES_READ
+   6. Seek File      In:  ah=5 ; al=subfun ; bx=handle ; ecx = distance
+                     Out: CF or EAX = new position
    10. FindFirst     In:  ah=9;ds:esi-filespec;es:edi-FileInfoRec;cx=attr
                      Out: CF set on error
    11. FindNext      In:  ah=10 ; ds:esi - previous FileInfoRec

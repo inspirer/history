@@ -3,15 +3,15 @@
 #shortdef multitasking 1        // 1 - multitasking enabled ; 0 - disabled
 
 // Processes
-#shortdef max_process 1000      // Number of process
+#shortdef max_process 1024      // Number of process
 #shortdef default_prior 3       // Default task priority
-#shortdef ring0stacksize  2     // Kernel's stack
-#shortdef ring1stacksize  4     // Driver's stack
+#shortdef ring0stacksize  2     // Kernel's stack (pages)
+#shortdef ring1stacksize  4     // Driver's stack (pages)
 
-// Kernel stack
-#shortdef dosfstck 2048         // in bytes
+// Kernel stack (in bytes)
+#shortdef dosfstck 2048
 #shortdef stacksize 2048
 
 // Drivers
 #shortdef max_driver_size 256   // Max size of driver (in pages) ~1Mb
-#shortdef mem_for_regs 24       // ~100kb
+#shortdef mem_for_regs 24       // (in pages) ~100kb

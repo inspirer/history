@@ -17,8 +17,14 @@
 #shortdef x_data_start 4
 
 exc20_r0:
-    cmp ah,0x40 ; jz create_reg_key
-    jmp exc20_r1
+     cmp ah,0x40 ; _jz  create_reg_key
+     cmp ah,0x41 ; _jz  remove_reg_key
+     cmp ah,0x42 ; _jz  get_reg_key
+     cmp ah,0x43 ; _jz  get_reg_key_data
+     cmp ah,0x44 ; _jz  set_reg_key_data
+     cmp ah,0x45 ; _jz  get_next_reg_key
+     cmp ah,0x46 ; _jz  get_reg_name
+     jmp exc20_p0
 
   // 1. Create reg_key
   // In:  ah = 0x40 ; al=rights
@@ -128,10 +134,6 @@ exc20_r0:
      pop eax;pop esi;pop ds;pop ecx;pop ebx;esp=+4
      iret
 
-exc20_r1:
-     cmp ah,0x41 ; jz remove_reg_key
-     jmp exc20_r2
-
   // 2. Remove reg_key
   // In:  ah = 0x41
   //      ebx = key_id
@@ -201,10 +203,6 @@ exc20_r1:
 
      pop es;pop edi;pop ds;pop esi;pop edx;pop ecx;pop ebx;pop eax
      iret
-
-exc20_r2:
-     cmp ah,0x42 ; jz get_reg_key
-     jmp exc20_r3
 
   // 3. Get reg_key
   // In:  ah = 0x42
@@ -285,10 +283,6 @@ exc20_r2:
      pop ds;pop esi;pop edi;pop ecx;esp=+4;pop eax
      iret
 
-exc20_r3:
-     cmp ah,0x43 ; jz get_reg_key_data
-     jmp exc20_r4
-
   // 4. Get reg_key data
   // In:  ah = 0x43
   //      ebx = ID
@@ -330,10 +324,6 @@ exc20_r3:
      eax=d:[~esi.x_dw]
      pop ds;pop esi;pop edi;pop ecx;pop ebx;esp=+4
      iret
-
-exc20_r4:
-    cmp ah,0x44 ; jz set_reg_key_data
-    jmp exc20_r5
 
   // 5. Set reg_key data
   // In:  ah = 0x44
@@ -431,10 +421,6 @@ exc20_r4:
      pop ds;pop esi;pop es;pop edi;pop ecx;pop ebx;pop eax
      iret
 
-exc20_r5:
-    cmp ah,0x45 ; jz get_next_reg_key
-    jmp exc20_r6
-
   // 6. Get next/sub/up reg_key
   //  In:  ah  = 0x45
   //       al  = +1(next),+2(sub),+4(up)
@@ -470,10 +456,6 @@ exc20_r5:
 
      pop ds;pop esi;pop ecx;pop ebx
      iret
-
-exc20_r6:
-    cmp ah,0x46 ; jz get_reg_name
-    jmp exc20_p0
 
   // 7. Get register key name
   //  In:  ah  = 0x46

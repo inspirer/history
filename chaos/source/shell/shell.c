@@ -1,4 +1,5 @@
 #include <conio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <process.h>
 #include <stdio.h>
@@ -15,7 +16,7 @@ void showdir(char *path)
   printf(" current directory: %s\n\n",s);
   res=findfirst(s,&sr,_FF_NORMAL);
   while(res==0){
-    printf(" %-15s   %-9i\n",sr.ff_name,sr.ff_fsize);
+    printf(" %15s   %9i\n",sr.ff_name,sr.ff_fsize);
     size+=sr.ff_fsize;files++;
     res=findnext(&sr);
   }
@@ -27,13 +28,14 @@ void main()
   char s[200],cdir[200]="/",tmp[200];
   int a,b,ID=alloc_console();
   FILE *fp;
+  meminit();
+  fileinit();
 
   printf("ChaOS shell ID=%x\n",ID);
 
   do {
     printf(">");
     gets(s);
-    printf("\n");
 
     if (!strcmp(s,"exit")) break;
 

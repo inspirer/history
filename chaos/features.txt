@@ -1,0 +1,9 @@
+
+  - added defragment_global (ah=9/int 0x20)
+  - changed alloc_LDT/free_LDT/set_data_as_code functions from int to func
+  - optimized function calls (memory/regman/process)
+  - -----""-----  (filesystem/driver/scr_io)
+  - FPU support
+ .142
+  - get/set priority
+  

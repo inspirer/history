@@ -9,13 +9,8 @@
    ax=mem_idt_gdt_data;es=ax;sp=stack
 
    // Create new IDT
-   xor edi,edi
-   esi=idt_place
-   ecx=idt_size
-   rep movsb
-   mov ecx,2048-idt_size
-   xor eax,eax
-   rep stosb
+   xor edi,edi;esi=idt_place;ecx=idt_size;rep movsb
+   mov ecx,2048-idt_size;xor eax,eax;rep stosb
 
    // Get memory size (in pages)
    ecx=d:mem_size;ax=mem_all_data;ds=ax;ebx=ecx<<12
@@ -26,8 +21,8 @@
    ax=mem_kernel_data;ds=ax;d:mem_size=ecx
 
    // Create page catalog (ecx = pages) at 0x121000
-   dx=cx&1023    // dx!=0 => need increment
-   ebx=ecx>>10;if (dx!=0){ebx=++}  // ebx = num of tables
+   dx=cx&1023    // need increment ?
+   ebx=ecx>>10;if (dx!=0){ebx=++}  // ebx = num of tables (dx!=0 => ebx++)
 
    // Save size of table
    eax=ebx;edi=0x818;stosw // Descriptor of page catalog
@@ -48,7 +43,7 @@
 
    // Set kernel pages as System
    push ds;ax=mem_page_catalog;ds=ax
-   edi=cs:d:mem_base<<2+0x1000 // <- end of system pages
+   edi=cs:d:mem_base<<2+0x1000 // <- end of system pages (kernel + page syst)
    esi=0x1400                  // <- start of system pages
    while(esi<edi){
        lodsd
@@ -60,9 +55,7 @@
 
    // install PAGES system
    eax=0x121000;cr3=eax
-   eax=cr0
-   eax=|0x80000000
-   cr0=eax
+   eax=cr0;eax=|0x80000000;cr0=eax
    jmpf $+7,0x8
 
    // Load NULL as LDT
@@ -72,7 +65,7 @@
    ah=6;ebx=1;int 0x20;push ds
    push eax
 
-   // Clear it
+   // Clear it, SAVE: CR3, BASE I/O
    ds=ax;xor esi,esi;ecx=1024
    { d:[esi]=0;esi=+4;loop ?^0 }
    eax=cr3;d:[0x1C]=eax
@@ -82,7 +75,26 @@
    pop eax;bx=mem_idt_gdt_data;ds=bx;
    xor esi,esi;si=ax;esi=+0x805
    b:[esi]=0x89;pop ds;ltr ax
-   w:kernel_PID=ax
+   w:kernel_PID=ax;w:prev_TID=ax
+
+   // Create memory defragmentation task's TSS
+   ah=6;ebx=1;int 0x20;push ds
+   push eax
+
+   // Clear it, SAVE: CR3, BASE I/O, SS:ESP, CS:EIP, EFLAGS
+   ds=ax;xor esi,esi;ecx=1024
+   { d:[esi]=0;esi=+4;loop ?^0 }
+   eax=cr3;d:[0x1C]=eax // CR3
+   w:[0x66]=104;d:[0x168]=0xFFFFFFFF  // IO Table
+   mov w:[0x50],mem_kernel_data;mov d:[0x38],dos_func_stack // SS:ESP
+   mov w:[0x4C],mem_kernel_code;mov d:[0x20],mem_defragment_process // CS:EIP
+   mov d:[0x24],0x46  // EFLAGS
+
+   // Set it as TSS
+   pop eax;bx=mem_idt_gdt_data;ds=bx
+   xor esi,esi;si=ax;esi=+0x805
+   b:[esi]=0x89;pop ds
+   w:xdefrag_PID=ax
 
    // Clear process_list
    ecx=max_process
@@ -98,7 +110,7 @@
    // registry
    reg_init()
 
-   // drivers
+   // drivers + tasks (from "chaos.ini")
    init_drivers()
 
    // switch task
@@ -138,9 +150,12 @@ _dos_exit:
 #shortdef xtask $-4
 xtask_PID   : dw 0
 
+#shortdef xdefrag $-4
+xdefrag_PID : dw 0
+
 #shortdef kernel_switch $-4
 kernel_PID  : dw 0
-kill_task: dw 0
+kill_task   : dw 0
 
    // ------------------------------ [ Data ] ------------------------------
 
@@ -153,8 +168,9 @@ kill_task: dw 0
 
   // Int 20
   #include source\kernel\memory.csm
-  #include source\kernel\process.csm
   #include source\kernel\regman.csm
+  #include source\kernel\process.csm
+  #include source\kernel\message.csm
 
   // Int 21
   #include source\kernel\filesyst.csm

@@ -1,12 +1,12 @@
  // Memory functions
 
  // Descriptor definitions
-#shortdef mem_kernel_code 0x8
+#shortdef mem_kernel_code  0x8
 #shortdef mem_idt_gdt_data 0x10
 #shortdef mem_page_catalog 0x18
-#shortdef mem_kernel_data 0x20
-#shortdef mem_all_data 0x28
-#shortdef mem_start_desc 0x30
+#shortdef mem_kernel_data  0x20
+#shortdef mem_all_data     0x28
+#shortdef mem_start_desc   0x30
 
  // Page definitions
 #shortdef busy_page  512
@@ -26,16 +26,35 @@
 #shortdef err_sys_integrity    11
 #shortdef err_wrong_regname    12
 #shortdef err_reg_key_has_sub  13
+#shortdef err_no_such_task     14
 
    int_20:
 
       // Clear CF
-      clc;push ebp
-      mov ebp,esp
-      and b:[~ebp+12],0xFE
-      pop ebp
-      cmp ah,0 ; jz allocate_memory
-      jmp exc20_r0
+      clc
+      push ebp
+      mov  ebp,esp
+      and  b:[~ebp.12],0xFE
+      pop  ebp
+      cmp  ah,0  ; _jz allocate_memory
+      cmp  ah,1  ; _jz free_memory
+      cmp  ah,2  ; _jz resize_memory
+      cmp  ah,5  ; _jz load_ldt
+      cmp  ah,6  ; _jz mem_alloc_global
+      cmp  ah,7  ; _jz mem_resize_global
+      cmp  ah,8  ; _jz mem_free_global
+      cmp  ah,9  ; _jz mem_defrag_global
+      cmp  ah,10 ; _jz mem_get_free_info
+      cmp  ah,11 ; _jz mem_map_global
+      jmp  exc20_r0
+   exc20_n0:
+      mov  ax,err_no_support
+   set_cf:
+      push ebp
+      mov  ebp,esp
+      or   d:[~ebp+12],1
+      pop  ebp
+      iret
 
    //   1. Allocate memory
    //     In:  ah  = 0x0
@@ -95,7 +114,7 @@
          ifelse (ax==0){
            ecx=++
          } else {
-           ecx=0
+           xor ecx,ecx
          }
       }
 
@@ -142,10 +161,6 @@
       pop ebp;pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
       iret
 
-exc20_n0:
-      cmp ah,1 ; jz free_memory
-      jmp exc20_n1
-
    //   2. Free memory
    //     In:  ah  = 0x1
    //          dx  = SEG to Free
@@ -166,9 +181,9 @@ exc20_n0:
       b:[esi]=0x92;push esi;push ds
       ds=ax;xor esi,esi;si=dx
 
-      // If it's not memory/ring3 with data => error
-      mov al,b:[~esi+5];and al,0xFE
-      if (al!=0xF2){
+      // If it's not memory/ring3 with data or assigned to code => error
+      mov ax,w:[~esi+5];and al,0xFE;and ah,16
+      if (al!=0xF2||ah!=0){
          pop ds;pop esi;b:[esi]=0x82
          pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
          ax=err_wrong_info
@@ -208,150 +223,207 @@ exc20_n0:
    //   3. Resize memory
    //     In:  ah  = 0x2
    //          ebx = NewSize
-   //          dx  = SEG of block
+   //          dx  = SEG of loc_block
    //     Out: CF set on error (not enough memory)
    resize_memory:
 
-      // ????
-
-      ax=err_no_support
-      jmp set_cf
-      iret
-
-   //   4. Allocate LDT
-   //     In:  ah  = 0x3
-   //     Out: CF set on error (free desc. absent)
-   //          ax  = LDTNum
-   allocate_ldt:
-
-      // check
-      check_first_ring()
-      if (~c){ ax=err_access_denied;jmp set_cf }
-
       // Save registers
-      push ds;push esi;push ecx;push edi;push edx;push ebx;push ebp
+      push ds;push esi;push ecx;push edi;push edx;push ebx
 
-      // Allocate global memory For LDT
-      ah=6;ebx=1;int 0x20;xor edx,edx;dx=ax
-
-      // Check if all ok
-      if (~c){
-        pop ebp;pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
-        jmp set_cf
-      }
-
-      // Clear table
-      ds=dx;ecx=1024;xor esi,esi
-      { d:[esi]=0;esi=+4;loop ?^0 }
-
-      // Set LDT
-      bx=mem_idt_gdt_data;ds=bx;esi=0x800+edx
-      lodsd;lodsb;b:[esi]=0x82;
-
-      // Return LDT
-      eax=edx
-
-      // Restore registers
-      pop ebp;pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
-      iret
-
-exc20_n1:
-      cmp ah,2 ; jz resize_memory
-      cmp ah,3 ; jz allocate_ldt
-      cmp ah,4 ; jz free_ldt
-      jmp exc20_n2
-
-   //   5. Free LDT
-   //     In:  ah  = 0x4
-   //          bx  = LDTNum
-   //     Out: CF set on error
-   free_ldt:
-
-      // check
-      check_first_ring()
-      if (~c){ ax=err_access_denied;jmp set_cf }
-
-      // Save registers
-      push ds;push esi;push ecx;push edx;push ebx;push eax
-
-      // Set LDT as data
-      xor esi,esi;and bx,0xF8;si=bx;esi=+0x800
-      ax=mem_idt_gdt_data;ds=ax
-      lodsd;lodsd;
-
-      // Error (no LDT found there)
-      if (ah!=0x82){
-         pop eax;pop ebx;pop edx;pop ecx;pop esi;pop ds
+      // Set LDT as DATA
+      sldt ax;and dx,0xF8
+      if (ax==0){
+         pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
          ax=err_wrong_info
          jmp set_cf
       }
+      cx=mem_idt_gdt_data;ds=cx
+      xor esi,esi;si=ax;esi=+0x805
+      b:[esi]=0x92;xor ecx,ecx;mov cx,w:[~esi-5]
+      push esi;push ds;ds=ax;xor esi,esi;si=dx
 
-       // Else set LDT as Data & get it's size
-      ah=0x92;d:[~esi-4]=eax
-      xor ecx,ecx;mov cx,w:[~esi-8];ecx=++
-      ecx=<<9
+      // If it's not memory/ring3 with data => error
+      mov ax,w:[~esi+5];and al,0xFE;and ah,16
+      if (al!=0xF2){
+         pop ds;pop esi;b:[esi]=0x82
+         pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+         ax=err_wrong_info
+         jmp set_cf
+      } push esi
 
-      // Get LDT descr
-      push ebx;push ds
-      ds=bx;xor esi,esi
-
-      // Free each entry in LDT
-      {
-        // Save location & limit
-        push ecx
-        lodsw;cx=ax;ecx=<<16
-        lodsw;dx=ax;edx=<<16
-        lodsb;dl=al
-        lodsb
-
-        ifelse (al==0){
-          lodsw
-        } else {
-
-          lodsb;cl=al&15;ch=0
-          lodsb;dh=al
-          ecx=<16+1;edx=<16>>10 + 4096
-
-          // Free pages (ecx = num_of_pages ; edx = location in table)
-          push esi;push ds
-          ax=mem_page_catalog;ds=ax;esi=edx
-          {
-            lodsd;and ax,0xFFFF-busy_page
-            mov d:ds:[~esi-4],eax
-            loop ?^0
-          }
-          pop ds;pop esi
+      // if assigned to code => search for code desc ( ecx = size)
+      ifelse (ah!=0){
+        push esi;lodsd;edx=eax;lodsb;dl=al;lodsw;lodsb;dh=al;edx=<16
+        xor esi,esi;inc ecx;ecx=<<9
+        {
+          lodsd;lodsb;ah=al;lodsb;lodsb;lodsb;xchg al,ah;eax=<16;
+          if (eax!=edx){loop ?^1;jmps ?v1}
+          mov al,b:[~esi-3];and al,0xfe
+          if (al!=0xfa){loop ?^1}
         }
-        pop ecx
-        loop ?^0
+        sub esi,8;if (ecx==0){ xor esi,esi;dec esi} eax=esi
+        pop esi
+      } else {
+        xor eax,eax;dec eax
+      }
+      push eax
+
+      // Save location & limit
+      lodsw;cx=ax;ecx=<<16
+      lodsw;dx=ax;edx=<<16
+      lodsb;dl=al
+      lodsb;lodsb;cl=al&15
+      lodsb;dh=al
+      ecx=<16++;edx=<16>>10 + 4096
+      pop eax;pop esi;push eax
+
+      // if new size less then old (ecx = num_of_pages ; edx = loc in table)
+      ifelse (ecx=>ebx){
+
+          // if equal => break
+          pop eax;if (ecx!=ebx){
+
+            // Save new size in descriptor
+            push eax;w:[esi]=bx;ebx=>16
+            lodsd;lodsw;lodsb;al=&0xF0|bl;ebx=>16
+
+            // Save in associated descriptor
+            pop eax;if (eax!=0xFFFFFFFF){
+               esi=eax;w:[esi]=bx;ebx=>16
+               lodsd;lodsw;lodsb;al=&0xF0|bl;ebx=>16
+            }
+
+            // Free other pages (ebx-new ; ecx-old)
+            ecx=-ebx;ebx=<<2;edx=+ebx;ebx=>>2
+            ax=mem_page_catalog;ds=ax;esi=edx
+            {
+              lodsd;and ax,0xFFFF-busy_page
+              mov d:[~esi-4],eax
+              loop ?^0
+            }
+
+            // read page's catalog
+            eax=cr3;cr3=eax
+
+          }
+
+      // if new size greater oldsize=ecx, loc_in_tb=edx & newsize=ebx
+      } else {
+
+          // Allocate memory
+          ah=6;int 0x20
+
+          // Error? Yes
+          if (~c){
+            pop ds;pop esi;b:[esi]=0x82;pop ebx;pop edx;
+            pop edi;pop ecx;pop esi;pop ds
+            jmp set_cf
+          }
+
+          // No => save desc
+          push eax;xor edi,edi;di=ax;edi=+0x800
+
+          // xchg (es:edi)newdesc & (ds:esi)olddesc
+          push es;ax=mem_idt_gdt_data;es=ax
+          eax=d:[esi];ebx=d:es:[edi];d:[esi]=ebx;d:es:[edi]=eax
+          mov eax,d:[~esi+4];mov ebx,d:es:[~edi+4]
+          xchg ah,bh;eax=>16;ebx=>16;push ecx;cl=al&0xF0;ch=bl&0xF0
+          and al,0xF;and bl,0xF;add al,ch;add bl,cl;pop ecx;eax=>16;ebx=>16
+          mov d:[~esi+4],ebx;mov d:es:[~edi+4],eax
+          pop es
+
+          // Save in associated descriptor
+          pop eax;pop ebx;push eax
+          if (ebx!=0xFFFFFFFF){
+            push esi;push edi;edi=ebx
+            lodsd;d:[edi]=eax;lodsb;b:[~edi.4]=al
+            lodsw;lodsb;b:[~edi.7]=al;al=b:[~edi.6]
+            al=&0xF0;ah=&0xF;add al,ah;mov b:[~edi.6],al
+            pop edi;pop esi
+          }
+
+          // oldpos=edx newpos=?(ebx) ecx=oldsize
+          lodsd;ebx=eax;lodsb;bl=al;lodsw;lodsb;bh=al;ebx=<16;esi=-8
+
+          // oldstartpage=esi newstartpage=edi ecx=numofpages
+          esi=edx;edi=ebx>>10+4096
+
+          // Xchg new & old pages
+          ax=mem_page_catalog;ds=ax
+          {
+             eax=d:[esi];ebx=d:[edi]
+             d:[edi]=eax;d:[esi]=ebx
+             edi=+4;esi=+4
+             loop ?^0
+          }
+
+          // Free temporary pages & read page's catalog
+          pop edx;ah=8;int 0x20
+
       }
 
-      // Free LDT & reread page's catalog
-      pop ds;pop edx;ah=8;int 0x20
+      // Return to LDT her type
+      pop ds;pop esi;b:[esi]=0x82
 
       // Restore registers
-      pop eax;pop ebx;pop edx;pop ecx;pop esi;pop ds
+      pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
       iret
 
-   //   6. Load LDT
+   //   6. ~~~??~~~ LDT
    //     In:  ah  = 0x5
-   //          bx  = LDTNum
+   //          bp  = LDT
+   //          dx  = ENTRY or 0xFFFF(cx=global_entry)
+   //     Out: EAX:EBX = code
    load_ldt:
 
-      // check
-      check_first_ring()
-      if (~c){ ax=err_access_denied;jmp set_cf }
+      // Save registers
+      push ds;push esi;push ecx;push edi;push edx
 
-      // Save in TSS
-      // ????
+      if (dx==0xFFFF){
 
-      lldt bx
+        // get global info
+        ax=mem_idt_gdt_data;ds=ax;xor esi,esi;si=cx;add esi,0x800
+
+        // Get INFO
+        lodsd;ebx=eax;lodsd
+
+        pop edx;pop edi;pop ecx;pop esi;pop ds
+        iret
+      }
+      if (dx==0xFFFE){
+
+        // get global info
+        esi=ecx;shr esi,10;add esi,0x1000
+        ax=mem_page_catalog;ds=ax
+
+        // Get INFO
+        lodsd
+
+        pop edx;pop edi;pop ecx;pop esi;pop ds
+        iret
+      }
+
+      // Set LDT as DATA
+      ax=bp;and dx,0xFFF8
+      if (ax==0){
+         pop edx;pop edi;pop ecx;pop esi;pop ds
+         ax=err_wrong_info
+         jmp set_cf
+      }
+      cx=mem_idt_gdt_data;ds=cx
+      xor esi,esi;si=ax;esi=+0x805
+      b:[esi]=0x92;push esi;push ds
+      ds=ax;xor esi,esi;si=dx
+
+      // Get INFO
+      lodsd;ebx=eax;lodsd
+
+      // Return to LDT her type
+      pop ds;pop esi;b:[esi]=0x82
+
+      // Restore registers
+      pop edx;pop edi;pop ecx;pop esi;pop ds
       iret
-
-exc20_n2:
-      cmp ah,5 ; jz load_ldt
-      cmp ah,6 ; jz mem_alloc_global
-      jmp exc20_n3
 
    // 7. Allocate Global
    //   In:  ah  = 0x6
@@ -399,7 +471,7 @@ exc20_n2:
          ifelse (ax==0){
            ecx=++
          } else {
-           ecx=0
+           xor ecx,ecx
          }
       }
 
@@ -439,10 +511,6 @@ exc20_n2:
       // Restore registers
       pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
       iret
-
-exc20_n3:
-      cmp ah,7;jz mem_resize_global
-      jmp exc20_n4
 
    // 8. Resize Global
    //   In:  ah  = 0x7
@@ -542,10 +610,6 @@ exc20_n3:
       pop edx;pop ecx;pop eax;pop edi;pop esi;pop ds
       iret
 
-exc20_n4:
-      cmp ah,8;jz mem_free_global
-      jmp exc20_n5
-
    // 9. Free Global
    //   In:  ah  = 0x8
    //        dx  = SEG of global
@@ -600,27 +664,10 @@ exc20_n4:
       pop eax;pop edx;pop ecx;pop esi;pop ds
       iret
 
-exc20_n5:
-      cmp ah,9;jz mem_defrag_global
-      jmp exc20_n6
-
    // 10. Defragment Global
    //   In:  ah  = 0x9
    mem_defrag_global:
-
-      // ????
-
-      iret
-
-   exc20_n6:
-      cmp ah,0xA;jz mem_get_free_info
-      cmp ah,0xB;jz mem_map_global
-      ax=err_no_support
-   set_cf:
-      push ebp
-      mov ebp,esp
-      or d:[~ebp+12],1
-      pop ebp
+      callf d:cs:[xdefrag]
       iret
 
    // 11. Get free info
@@ -753,9 +800,291 @@ exc20_n5:
    mem_size:
      dd 512   // Minimal size for work = 2Mb (in pages)
 
- check_first_ring:
+   // -- ---- --- -- -- --- --- ---- --- --- -- -- --- --- ---- --- --- --
+
+   // Return CF if called from Ring3
+   check_first_ring:
       push ebp;mov ebp,esp;push eax
       eax=d:[~ebp.12];and ax,3
       ifelse (al<=1){ clc } else { stc }
       pop eax;pop ebp
+      ret
+
+   // Memory defragmentation function (as process)
+   // to call:
+   //   callf d:mem_kernel_code:[xdefrag]
+   mem_defragment_process:
+      ax=mem_page_catalog;es=ax;ax=mem_idt_gdt_data;ds=ax
+
+      xor ecx,ecx
+      esi=cs:d:mem_base<<2+4096;edi=cs:d:mem_size<<2+4096
+      _while(esi<edi){
+         mov  eax,d:es:[esi]
+         add  esi,4
+         and  ax,busy_page
+         ifelse (ax==0){
+           ecx=++
+         } else {
+           _if (ecx!=0){
+
+             push edi;mov edi,esi;shl ecx,2;sub edi,ecx;shr ecx,2
+             mov edx,esi;sub edx,0x1004;shl edx,10;push edi;sub edi,4
+             mov esi,mem_start_desc+0x800
+
+             // ES:EDI = (* long)1st_freepage; ECX = freepages_to_remove
+             // EDX = BASE32_to_search; DS:ESI = (* qword)first_selector
+             // EAX,EBX not defined
+
+             {
+               lodsd;mov ebx,eax;shl ebx,16
+               lodsw;mov bh,ah;mov ah,al;lodsb;mov bl,al
+               lodsb;xchg ah,al;rol eax,16;and bl,0xF;and bh,0x9F
+
+               // EAX = BASE32, BH = DescType, <BL,wHi_EBX> = LIMIT
+               push eax
+               xor eax,eax
+               al=bh&0x90
+               if (al==0x90||bh==0x89||bh==0x8B){ ah=1 }
+               if (bh==0x82){ ah=2 }
+               bh=ah
+               pop eax
+
+               // BH = 0(system), 1(data/code/tss), 2(LDT)
+               ifelse (bh==1){
+
+                 if (eax==edx){
+
+                    _move_block:
+                    mov bh,0
+                    rol ebx,16
+                    inc ebx
+
+                    // found descriptor to move
+
+                    // ES:EDI = (* long)1st_freepage; ECX = freepages_to_del
+                    // EDX = BASE32_to_search; DS:ESI = (* qword)next_sel
+                    // EBX = LIMIT (in pages), EAX = BASE32
+
+                    // 1. Save new BASE32
+                    shl ecx,12;sub eax,ecx;shr ecx,12;w:[~esi-6]=ax
+                    rol eax,16;b:[~esi-1]=ah;b:[~esi-4]=al
+
+                    // 2. Prepeare (ESI)
+                    mov esi,edx;shr esi,10;add esi,4096
+
+                    // 3. Move pages (ES:EDI[EBX] <= ES:ESI[EBX])
+                    while(ebx>0){
+                      eax=d:es:[edi];ecx=d:es:[esi]
+                      d:es:[edi]=ecx;d:es:[esi]=eax
+                      add edi,4;add esi,4
+                      dec ebx
+                    }
+
+                    eax=cr3;cr3=eax
+                    jmp __pages_moved
+                 }
+
+               } else { _if (bh==2){
+
+                 // if LDT_BASE32 = BASE32_to_search
+                 if (eax==edx){ jmp _move_block }
+
+                 // open LDT as DATA
+                 mov bh,0;rol ebx,16;inc ebx;shl ebx,9
+                 push esi;b:[~esi-3]=0x92;sub esi,0x800+8
+                 ds=si;xor esi,esi;push ebx;push ecx
+
+                 // ES:EDI = (* long)1st_freepage; ECX = freepages_to_del
+                 // EDX = BASE32_to_search; DS:ESI = (* qword)start_sel
+                 // EBX = elements_in_LDT
+
+                 ecx=ebx
+                 {
+                   lodsd;mov ebx,eax;shl ebx,16
+                   lodsw;mov bh,ah;mov ah,al;lodsb;mov bl,al
+                   lodsb;xchg ah,al;rol eax,16;and bh,0x9E
+
+                   // EAX = BASE32, BH = DescType, BL:<hWebx> = LIMIT
+
+                   _if (bh==0x92&&eax==edx){
+
+                      bh=bl;and bl,0xF
+                      and bh,0x10
+                      pop ecx
+
+                      // EAX = BASE32, ECX = freepages_to_del
+                      // ES:EDI = (* long)1st_freepage;
+                      // EDX = BASE32_to_search; DS:ESI = (* qword)next_sel
+
+                      // 1. Save new BASE32
+                      shl ecx,12;sub eax,ecx;shr ecx,12
+                      w:[~esi-6]=ax;rol eax,16;b:[~esi-1]=ah;b:[~esi-4]=al
+
+                      // 2. Fix associated code segment
+                      pop ecx
+                      if (bh!=0){
+                        ror eax,16
+                        xor esi,esi;push ebx;push eax
+
+                        // 2.1 Search code seg
+                        {
+                          lodsd;lodsw;bh=ah;ah=al;lodsb;lodsb;xchg ah,al
+                          rol eax,16;and bh,0x98
+
+                          if (eax==edx&&bh==0x98){
+                             pop eax
+                             w:[~esi-6]=ax;rol eax,16;b:[~esi-1]=ah;b:[~esi-4]=al
+                             jmp ?v1
+                          }
+
+                          loop ?^0
+                          pop eax
+                        }
+
+                        pop ebx
+                        mov bh,0
+                      }
+
+                      rol ebx,16
+                      inc ebx
+
+                      // EBX = LIMIT
+
+                      // 3. Prepeare (ESI)
+                      mov esi,edx;shr esi,10;add esi,4096
+
+                      // 4. Move pages (ES:EDI[EBX] <= ES:ESI[EBX])
+                      while(ebx>0){
+                        eax=d:es:[edi];ecx=d:es:[esi]
+                        d:es:[edi]=ecx;d:es:[esi]=eax
+                        add edi,4;add esi,4
+                        dec ebx
+                      }
+
+                      eax=cr3;cr3=eax
+                      ax=mem_idt_gdt_data;ds=ax;pop esi;b:[~esi-3]=0x82
+                      jmp __pages_moved
+                   }
+
+                   dec ecx
+                   cmp ecx,0
+                   _jnz ?^0
+                 }
+
+                 pop ecx;pop esi
+                 ax=mem_idt_gdt_data;ds=ax;pop esi;b:[~esi-3]=0x82
+
+               }}
+
+               if (esi<0x10800){ jmp ?^1 }
+             }
+
+           __pages_moved:
+             pop esi;pop edi
+             xor ecx,ecx
+           }
+         }
+      }
+      iret
+      jmp mem_defragment_process
+
+   // Allocate LDT
+   //     Out: CF set on error (free desc. absent)
+   //          ax  = LDTNum
+   allocate_ldt:
+
+      // Save registers
+      push ds;push esi;push ecx;push edi;push edx;push ebx;push ebp
+
+      // Allocate global memory For LDT
+      ah=6;ebx=1;int 0x20;xor edx,edx;dx=ax
+
+      // Check if all ok
+      if (~c){
+        pop ebp;pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+        stc
+        ret
+      }
+
+      // Clear table
+      ds=dx;ecx=1024;xor esi,esi
+      { d:[esi]=0;esi=+4;loop ?^0 }
+
+      // Set LDT
+      bx=mem_idt_gdt_data;ds=bx;esi=0x800+edx
+      lodsd;lodsb;b:[esi]=0x82;
+
+      // Return LDT
+      eax=edx
+
+      // Restore registers
+      pop ebp;pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
+      ret
+
+   // Free LDT
+   //  In:  bx = LDTNum
+   //  Out: CF set on error
+   free_ldt:
+
+      // Save registers
+      push ds;push esi;push ecx;push edx;push ebx;push eax
+
+      // Set LDT as data
+      xor esi,esi;and bx,0xF8;si=bx;esi=+0x800
+      ax=mem_idt_gdt_data;ds=ax
+      lodsd;lodsd;
+
+      // Error (no LDT found there)
+      if (ah!=0x82){
+         pop eax;pop ebx;pop edx;pop ecx;pop esi;pop ds
+         ax=err_wrong_info
+         stc
+         ret
+      }
+
+       // Else set LDT as Data & get it's size
+      ah=0x92;d:[~esi-4]=eax
+      xor ecx,ecx;mov cx,w:[~esi-8];inc ecx
+      ecx=<<9
+
+      // Get LDT descr
+      push ebx;push ds
+      ds=bx;xor esi,esi
+
+      // Free each entry in LDT
+      {
+        // Save location & limit
+        push ecx
+        lodsw;cx=ax;ecx=<<16
+        lodsw;dx=ax;edx=<<16
+        lodsb;dl=al
+        lodsb
+
+        ifelse (al==0){
+          lodsw
+        } else {
+
+          lodsb;cl=al&15;ch=0
+          lodsb;dh=al
+          ecx=<16+1;edx=<16>>10 + 4096
+
+          // Free pages (ecx = num_of_pages ; edx = location in table)
+          push esi;push ds
+          ax=mem_page_catalog;ds=ax;esi=edx
+          {
+            lodsd;and ax,0xFFFF-busy_page
+            mov d:ds:[~esi-4],eax
+            loop ?^0
+          }
+          pop ds;pop esi
+        }
+        pop ecx
+        loop ?^0
+      }
+
+      // Free LDT & reread page's catalog
+      pop ds;pop edx;ah=8;int 0x20
+
+      // Restore registers
+      pop eax;pop ebx;pop edx;pop ecx;pop esi;pop ds
       ret

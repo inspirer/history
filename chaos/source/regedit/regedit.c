@@ -1,5 +1,6 @@
 #include <conio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <regs.h>
 
@@ -8,13 +9,14 @@ void main()
   int ID=alloc_console();
   char s[200];
   int key;
+  meminit();
+  fileinit();
 
   printf("regedit console\n");
 
   do {
     printf("#");
     gets(s);
-    printf("\n");
 
     if (!strcmp(s,"exit")) break;
 

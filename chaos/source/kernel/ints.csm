@@ -27,9 +27,6 @@
  exc_06: // Invalide opcode
    ebx=0x6;jmp fault
 
- exc_07: // Device not ready
-   ebx=0x7;jmp fault
-
  exc_08: // Double fault
    pop eax;pop ebx;shl ebx,16;mov bx,0x8
    jmp debug
@@ -172,6 +169,32 @@ int_77:
    ax=mem_all_data;fs=ax
    ebx=0x77
    jmp emulate_int
+
+ // coprocessor int
+exc_07:
+   push ds;push esi;push eax;push ebx
+   ax=mem_idt_gdt_data;ds=ax;clts
+
+   // Save
+   bx=w:cs:prev_TID;xor esi,esi;si=bx;add esi,0x805
+   al=b:[esi];b:[esi]=0x92;push esi;push ds;ds=bx
+   esi=_tss_copr;b:[esi]=1;inc esi;fsave [esi]
+   pop ds;pop esi;b:[esi]=al
+
+   // Load
+   xor esi,esi;str bx;si=bx;add esi,0x805;al=b:[esi]
+   b:[esi]=0x92;push eax;push esi;push ds;ds=bx
+   esi=_tss_copr;al=b:[esi]
+   if (al==1){ inc esi;frstor [esi] }
+   pop ds;pop esi;pop eax;b:[esi]=al
+
+   // save TaskID
+   ax=mem_kernel_data;ds=ax;w:[prev_TID]=bx
+
+   pop ebx;pop eax;pop esi;pop ds
+   iret
+
+prev_TID: dw 0
 
  // TIMER interrupt (1kHz)
 int_78:

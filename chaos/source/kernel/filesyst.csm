@@ -10,9 +10,15 @@
     check_first_ring()
     if (~c){ ax=err_access_denied;jmp set_cf }
 
-    cmp ah,0x0 ; jz  CreateFile
-    cmp ah,0x1 ; jz  OpenFile
-    jmp int21_f0
+    cmp ah,0x0 ; _jz  CreateFile
+    cmp ah,0x1 ; _jz  OpenFile
+    cmp ah,0x2 ; _jz  CloseFile
+    cmp ah,0x3 ; _jz  ReadFile
+    cmp ah,0x4 ; _jz  WriteFile
+    cmp ah,0x5 ; _jz  SeekFile
+    cmp ah,0x9 ; _jz  find_first
+    cmp ah,0xA ; _jz  find_next
+    jmp int21_s0
 
     // 1. Create file
     //   In:  ah  = 0 ; cx  = File attribute
@@ -86,10 +92,6 @@
     pop esi;pop ebx;pop es;pop edi
     iret
 
-int21_f0:
-    cmp ah,0x2 ; jz  CloseFile
-    jmp int21_f1
-
     // 3. Close file
     //   In:  ah  = 2 ; bx  = file handle
     //   Out: CF set on error (ax = dos error code|ax=undef)
@@ -159,11 +161,6 @@ int21_f0:
     pop ebx;pop ds;pop edi;pop esi
     iret
 
-  int21_f1: // Continue check
-    cmp ah,0x3 ; jz  ReadFile
-    cmp ah,0x4 ; jz  WriteFile
-    jmp int21_f2
-
     // 5. Write file
     //   In:  ah  = 4 ;  bx  = file handle
     //        cx  = bytes to write (0-truncate)
@@ -171,11 +168,77 @@ int21_f0:
     //   Out: CF set on error (ax = dos error code)
     //        ax  = bytes actually written
   WriteFile:
+    push esi;push edi;push ds;push ebx;push es
+
+    // prepare registers
+    push ds;ax=mem_kernel_data;ds=ax
+    w:[VM_TSS.tss_eax]=0x4000
+    w:[VM_TSS.tss_ebx]=bx
+    w:[VM_TSS.tss_ecx]=cx
+    ax=w:[dos_vm_call.4]
+    w:[VM_TSS.tss_edx]=ax
+    xor eax,eax;pop ds
+
+    // prepeare ES:EDI
+    xor edi,edi;di=w:cs:dos_vm_call;edi=<<4
+    movzx eax,w:cs:dos_vm_call.4;add edi,eax
+    ax=mem_all_data;es=ax;and ecx,0xFFFF
+
+    // copy write buffer
+    rep movsb
+
+    // Call it
+    call_VM_task()
+
+    // All OK?
+    ifelse (ebx==0){
+      and  eax,0xFFFF
+
+    } else {
+
+      // No => set CF
+      pop es;pop ebx;pop ds;pop edi;pop esi
+      jmp set_cf
+    }
+
+    // Restore
+    pop es;pop ebx;pop ds;pop edi;pop esi
     iret
 
-int21_f2:
-    cmp ah,0x9 ; jz find_first
-    jmp int21_f3
+    // 6. Move file pointer
+    //   In:  ah  = 5 ;  bx  = file handle
+    //        ecx = distance to move ; al = subfun (start/curr/end)
+    //   Out: CF set on error (ax = dos error code)
+  SeekFile:
+    push ecx;push ds;push ebx
+
+    // prepare registers
+    push ds;push eax;ax=mem_kernel_data;ds=ax
+    pop eax;mov ah,0x42
+    w:[VM_TSS.tss_eax]=ax
+    w:[VM_TSS.tss_ebx]=bx
+    w:[VM_TSS.tss_edx]=cx
+    shr  ecx,16
+    w:[VM_TSS.tss_ecx]=cx
+    xor eax,eax;pop ds
+
+    // Call it
+    call_VM_task()
+
+    // All OK?
+    if (ebx!=0){
+
+      // No => set CF
+      pop ebx;pop ds;pop ecx
+      jmp set_cf
+    }
+    shl eax,16
+    ax=w:cs:[VM_TSS.tss_edx]
+    rol eax,16
+
+    // Restore
+    pop ebx;pop ds;pop ecx
+    iret
 
     // 10. FindFirst
     //   In:  ah  = 9
@@ -234,10 +297,6 @@ int21_f2:
     // Restore
     pop esi;pop edi;pop ds;pop ecx;pop ebx;pop eax
     iret
-
-int21_f3:
-    cmp ah,0xA ; jz find_next
-    jmp int21_s0
 
     // 11. FindNext
     //   In:  ah  = 10

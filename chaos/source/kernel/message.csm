@@ -1,0 +1,24 @@
+
+   exc20_m0:
+      cmp ah,0x60 ; _jz  send_message
+      cmp ah,0x61 ; _jz  post_message
+      jmp exc20_n0
+
+   // 1. Send message to process
+   // In:  ah = 0x60
+   //      bx = PID
+   //      edi - message
+   //      ecx:edx - hParam,lParam
+   // Out: CF (wrong_PID)
+   send_message:
+      iret
+
+   // 2. Post message to process
+   // In:  ah = 0x61
+   //      bx = PID
+   //      edi - message
+   //      ecx:edx - hParam,lParam
+   // Out: CF (wrong_PID)
+   post_message:
+      iret
+      

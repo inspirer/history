@@ -1,4 +1,4 @@
- // Virtual Mode Menager
+ // Virtual Mode Manager
 
 // VM Stack
 #shortdef vm_ds 32
@@ -140,7 +140,7 @@
    movzx ebx,w:[ebp.vm_cs]
    edx=ebx<<4+eax
    ebp=d:fs:[edx]
-   //ebp = 0xFABEA1
+   ebp = 0xFABEA1
    jmp debug
 
 
@@ -211,6 +211,7 @@ init_VM_task:
 
    ret
 
+// call Virtual Mode Task
 call_VM_task:
 
    // Set VM TSS as data
@@ -251,10 +252,14 @@ call_VM_task:
    // Get EAX & CF
    ax=w:cs:vm_task.4;ds=ax
    eax=d:[tss_eax];ebx=d:[tss_ebx]
-   and ebx,1
+   and ebx,1;ecx=d:[tss_edx]
 
    // Restore type
    pop esi;pop ds;b:[esi]=0x89
+
+   // Save EDX in VM_TSS
+   si=mem_kernel_data;ds=si
+   d:[VM_TSS.tss_edx]=ecx
 
    // Restore regs & ret
    pop ecx;pop edi;pop esi;pop ds;pop es

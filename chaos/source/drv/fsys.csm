@@ -35,14 +35,15 @@
 #shortdef err_unkn_read      0x83
 #shortdef err_no_more_files  0x84
 #shortdef err_not_exe        0x85
+#shortdef err_unkn_write     0x86
 
 #shortdef task_sign 0x0
 #shortdef task_name 0x3
 #shortdef task_stck 0xC
 #shortdef task_size 0xE
 
-#shortdef dos_block_read  16384
-#shortdef dos_block_write 16384
+#shortdef dos_block_read  4096
+#shortdef dos_block_write 4096
 
 #org 0
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
@@ -142,7 +143,7 @@
 
               }
 
-              pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+              pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
               iret
 
            }
@@ -310,8 +311,87 @@
        pop ebx;pop edx;pop edi;pop ecx;eax=-edi
        iret
 
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 5. Write file
+  // In:  ah  = 4
+  //      bx  = handle
+  //      ecx = bytes
+  //      ds:esi = buffer
+  // Out: CF or EAX=BYTES_READ
+  write_file:
+       if (ebx>max_handle_num||ebx<0){ ax=err_wrong_info;jmp set_cf }
+
+       push ecx;push esi;push edx;push ebx
+       edx=ecx
+
+       // Translate handle to normal_handle
+       push ds;push esi;push ecx;esi=d:cs:mem;ds=si
+       ecx=max_handle_num;xor esi,esi
+       while(ecx!=ebx){ ecx=--;esi=+_h_structure }
+       str ax;and al,0xF8
+       if(w:[esi._h_task]!=ax){
+           pop ecx;pop esi;pop ds;pop ebx;pop edx;pop esi;pop ecx
+           ax=err_access_denied;jmp set_cf
+       }
+       ebx=d:[esi._h_hand]
+       pop ecx;pop esi;pop ds
+
+       // write data
+       while(edx>0){
+          ecx=dos_block_write
+          if (ecx>edx){ ecx=edx }
+          edx=-ecx
+          ah=4;int 0x21
+          if (~c){
+             pop ebx;pop edx;pop esi;pop ecx
+             ax=err_unkn_write;jmp set_cf
+          }
+          eax=&0xFFFF
+          esi=+eax
+          if(eax==0){ jmp ?v1 }
+       }
+       eax=esi
+
+       pop ebx;pop edx;pop esi;pop ecx;eax=-esi
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 6. Seek File
+  // In:  ah  = 5 ; al = subfun ; bx  = handle
+  //      ecx = distance
+  // Out: CF or EAX = new position
+  seek_file:
+       if (ebx>max_handle_num||ebx<0){ ax=err_wrong_info;jmp set_cf }
+
+       push ebx
+
+       // Translate handle to normal_handle
+       push eax;push ds;push esi;push ecx;esi=d:cs:mem;ds=si
+       ecx=max_handle_num;xor esi,esi
+       while(ecx!=ebx){ ecx=--;esi=+_h_structure }
+       str ax;and al,0xF8
+       if(w:[esi._h_task]!=ax){
+           pop ecx;pop esi;pop ds;pop eax;pop ebx
+           ax=err_access_denied;jmp set_cf
+       }
+       ebx=d:[esi._h_hand]
+       pop ecx;pop esi;pop ds;pop eax
+
+       // Set new position
+       mov  ah,5
+       int  0x21
+
+       if (~c){
+         pop ebx;jmp set_cf
+       }
+
+       pop ebx
+       iret
+
   int25_f2:
-       cmp ah,0x9 ; jz find_first
+       cmp ah,0x4 ; _jz write_file
+       cmp ah,0x5 ; _jz seek_file
+       cmp ah,0x9 ; jz  find_first
        jmp int25_f3
 
  #shortdef _file_info_rec_ _file_name_full_
@@ -603,15 +683,15 @@
        push ebx;ah=6;xor ebx,ebx;bx=w:es:_driver_mem_end_.task_size;int 0x20
        pop ebx;if(~c){jmps _task_not_loaded} push eax
        xor ecx,ecx;mov cx,w:es:_driver_mem_end_.task_stck;push ecx
-       xor ecx,ecx;mov cx,w:es:_driver_mem_end_.task_size;shl ecx,12
+       xor ecx,ecx;mov cx,w:es:_driver_mem_end_.task_size;push ecx;shl ecx,12
        es=ax
 
        // Read task
-       xor edi,edi;ah=3;int 0x25;push eax
+       xor edi,edi;ah=3;int 0x25
        ah=2;int 0x25
 
        // Run task
-       pop ebx;pop ecx;ebx=>>12;inc ebx;push ds;push es;pop ds;ah=0x28;int 0x20;pop ds
+       pop ebx;pop ecx;push ds;push es;pop ds;ah=0x20;int 0x20;pop ds
        if (~c){
           pop edx;ah=8;int 0x20
           pop esi;pop edi;pop edx;pop ecx;pop ebx;pop es;jmp set_cf
