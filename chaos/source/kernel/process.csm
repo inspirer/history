@@ -1,3 +1,5 @@
+// process.csm
+
 #shortdef _tss_copr 0x16C
 
  // Process manipulation
@@ -35,7 +37,7 @@
       }
       sldt di;push edi;lldt ax
       push ebx;add ebx,ecx;ax=0;int 0x20;pop ebx;if (~c){
-         pop eax;pop eax;pop edx;ss=ax;esp=edx;pop edi;pop edx;pop eax
+         pop eax;lldt ax;pop eax;pop edx;ss=ax;esp=edx;pop edi;pop edx;pop eax
          ax=err_no_free_memory;jmp set_cf
       } add ecx,ebx
 
@@ -361,8 +363,9 @@ tasks:  dw  0
       }
 
       // Save in list
-      pop eax;ebx=eax;rol ebx,16;bx=default_prior
-      d:[esi]=ebx
+      pop eax
+      mov w:[xtask_PID],ax
+      mov ebx,eax;rol ebx,16;mov bx,default_prior;mov d:[esi],ebx
 
       // Restore registers
       pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds

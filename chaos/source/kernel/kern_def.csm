@@ -11,7 +11,3 @@
 // Kernel stack (in bytes)
 #shortdef dosfstck 2048
 #shortdef stacksize 2048
-
-// Drivers
-#shortdef max_driver_size 256   // Max size of driver (in pages) ~1Mb
-#shortdef mem_for_regs 24       // (in pages) ~100kb

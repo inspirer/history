@@ -1,0 +1,183 @@
+// filesys.sm , faq.txt
+
+  db "CC",26               // ID
+  db "filesystem",0        // device name
+  dw 3                     // size of driver in pages
+  dd mdrv                  // minidriver function table
+  dd xdata                 // data <w:_ds>,<s:params>
+  dd init                  // initialization procedure
+  dd func                  // function table
+
+#define call_drv0 int 0x30;
+#define call_drv1 int 0x31;
+#define blocksize 8192
+
+#code 32
+#org 0
+
+#define _exec_data_ data
+#define _entry_point_  16
+#define _func_table_   20
+#define _params_       24
+#define _prog_size_    28
+#define _stack_size_   30
+
+#define _file_not_found   0x80
+#define _it_is_directory  0x81
+#define no_such_directory 0x82
+#define not_executable    0x83
+
+init:
+  push ds
+  mov ax,w:cs:[_ds];mov ds,ax
+  mov esi,cpr;mov eax,d:[write];int 0x30
+
+  mov esi,run;mov eax,d:[fsExec];call_drv1
+  { jnc down(00)
+    mov esi,error;mov eax,d:[write];call_drv0
+  }
+
+  pop ds
+  iret
+
+cpr: db "chaos filesystem driver\n",0
+run: db "d:\\source\\chaos\\task",0
+error: db "error exec N"; number: db "0\n",0
+
+_create: // "createFile"
+  mov eax,d:cs:[dCreate];call_drv0
+  _jc set_cf
+  iret
+
+_open:   // "openFile"
+  mov eax,d:cs:[dOpen];call_drv0
+  _jc set_cf
+  iret
+
+_close:  // "closeFile"
+  mov eax,d:cs:[dClose];call_drv0
+  _jc set_cf
+  iret
+
+_read:   // "readFile"
+  shl ecx;shr ecx
+  push edi;push esi;push ecx
+  xor esi,esi
+  {
+    mov eax,ecx
+    { cmp eax,blocksize;jle down(00);mov eax,blocksize }
+    sub ecx,eax
+    push ecx
+    mov ecx,eax;mov eax,d:cs:[dRead];call_drv0
+    { jnc down(00);pop ecx;pop ecx;pop esi;pop edi;jmp set_cf }
+    add edi,eax;add esi,eax
+    pop ecx
+    cmp eax,0
+    jnz up(00)
+  }
+  mov eax,esi
+  pop ecx;pop esi;pop edi
+  iret
+
+  //  Execute ("execute")
+  //     ds:esi - path_and_name, ds:edi - arguments
+  //     Out: CF if error, else AX = PID
+
+_exec:   // "execute"
+
+  // open file
+  push edx
+  mov dl,0;mov eax,d:cs:[fsOpen];call_drv1
+  { jnc down(00);pop edx;jmp set_cf }
+
+  // read header
+  push ds;push es;push ebx;push edi;mov bx,w:cs:[_ds];mov ds,bx;mov es,bx
+  push ecx
+  mov ebx,eax;mov ecx,0x20;mov edi,_exec_data_;mov eax,d:[fsRead];call_drv1
+  {
+    jnc down(00);mov eax,d:[fsClose];call_drv1
+    pop ecx;pop edi;pop ebx;pop es;pop ds;pop edx
+    jmp set_cf
+  }
+
+  // check header
+  cmp w:[_exec_data_],'CE'
+  {
+    jz down(00);mov eax,d:[fsClose];call_drv1
+    pop ecx;pop edi;pop ebx;pop es;pop ds;pop edx
+    mov eax,not_executable;jmp set_cf
+  }
+
+  // allocate memory
+  push ebx
+  mov ah,6;xor ebx,ebx;mov bx,w:[_exec_data_._prog_size_];int 0x20
+  {
+    jnc down(00);push eax;mov eax,d:[fsClose];call_drv1;pop eax
+    pop ebx;pop ecx;pop edi;pop ebx;pop es;pop ds;pop edx
+    jmp set_cf
+  }
+  shl ebx,12;mov ecx,ebx
+  pop ebx;push eax;push es;mov es,ax
+
+  // read
+  xor edi,edi;mov eax,d:[fsRead];call_drv1
+  {
+    jnc down(00);push eax;mov eax,d:[fsClose];call_drv1;pop eax
+    add esp,8;pop ecx;pop edi;pop ebx;pop es;pop ds;pop edx
+    jmp set_cf
+  }
+
+  // Close
+  push eax;mov eax,d:[fsClose];call_drv1;pop ecx
+
+  // process tables (ecx=size_of_code)
+
+  // Execute
+  mov ax,es;pop es;mov ds,ax
+  xor ebx,ebx;mov bx,w:[_exec_data_._prog_size_]
+  xor ecx,ecx;mov cx,w:[_exec_data_._stack_size_]
+  mov ah,0x20;int 0x20
+  {
+    jnc down(00);pop ebx;pop ecx;pop edi;pop ebx;pop es;pop ds;pop edx
+    jmp set_cf
+  }
+
+  // free DS
+  xor eax,eax;mov ds,ax
+  pop edx;mov ah,8;int 0x20
+
+  // return OK
+  pop ecx;pop edi;pop ebx;pop es;pop ds;pop edx
+  iret
+
+set_cf:
+  push ebp
+  mov  ebp,esp
+  or   d:[~ebp+12],1
+  pop  ebp
+  iret
+
+mdrv:
+  ptt:    db "ProcessTaskTable",0
+  dCreate:db "dosCreateFile",0
+  dOpen:  db "dosOpenFile",0
+  dClose: db "dosCloseFile",0
+  dRead:  db "dosReadFile",0
+  exit:   db "errorexit",0
+  write:  db "dosDisplayString",0
+  char:   db "dosDisplayChar",0
+  db 0
+
+func:
+          dd _create ; db "createFile",0
+fsOpen:   dd _open   ; db "openFile",0
+fsClose:  dd _close  ; db "closeFile",0
+fsRead:   dd _read   ; db "readFile",0
+fsExec:   dd _exec   ; db "execute",0
+dd -1
+
+xdata:
+  _ds:  dw 0
+  param:
+
+data:

@@ -1,0 +1,93 @@
+// dosfs.sm
+
+  db "CC",26               // ID
+  db "dosfs",[6]           // device name
+  dw 1                     // size of driver in pages
+  dd mdrv                  // minidriver function table
+  dd xdata                 // data <w:_ds>,<s:params>
+  dd init                  // initialization procedure
+  dd func                  // function table
+
+#define call_drv0 int 0x30;
+
+#code 32
+#org 0
+
+#define blocksize 8192
+
+init:
+  push ds
+  mov ax,w:cs:[_ds];mov ds,ax
+  mov esi,cpr;mov eax,d:[write];int 0x30
+  pop ds
+  iret
+
+cpr: db "dos fat driver\n",0
+
+_create:
+  mov eax,d:[dCreate];call_drv0
+  jc set_cf
+  iret
+
+_open:
+  mov eax,d:[dOpen];call_drv0
+  jc set_cf
+  iret
+
+_close:
+  mov eax,d:[dClose];call_drv0
+  jc set_cf
+  iret
+
+_read:
+  shl ecx;shr ecx
+  push edi;push esi;push ecx
+  xor esi,esi
+  {
+    mov eax,ecx
+    { cmp eax,blocksize;jle down(00);mov eax,blocksize }
+    sub ecx,eax
+    push ecx
+    mov ecx,eax;mov eax,d:[dRead];call_drv0
+    { jnc down(00);pop ecx;pop ecx;pop esi;pop edi;jmp set_cf }
+    add edi,eax;add esi,eax
+    pop ecx
+    cmp eax,0
+    jnz up(00)
+  }
+  mov eax,esi
+  pop ecx;pop esi;pop edi
+  iret
+
+set_cf:
+  push ebp
+  mov  ebp,esp
+  or   d:[~ebp+12],1
+  pop  ebp
+  iret
+
+mdrv:
+  exit:   db "errorexit",0
+  dCreate:db "dosCreateFile",0
+  dOpen:  db "dosOpenFile",0
+  dClose: db "dosCloseFile",0
+  dRead:  db "dosReadFile",0
+  dWrite: db "dosWriteFile",0
+  dSeek:  db "dosSeekFile",0
+  dFirst: db "dosFindFirst",0
+  dNext:  db "dosFindNext",0
+  write:  db "dosDisplayString",0
+  db 0
+
+func:
+  dd _create ; db "CreateFile_dosfs",0
+  dd _open   ; db "OpenFile_dosfs",0
+  dd _close  ; db "CloseFile_dosfs",0
+  dd _read   ; db "ReadFile_dosfs",0
+  dd -1
+
+xdata:
+  _ds:  dw 0
+  param:
+
+data:

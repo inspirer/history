@@ -7,22 +7,54 @@
  .142
   - get/set priority
  .143
-  - mini_driver load to 1st Mb
+  - ring0drivers load to 1st Mb
  .144
   - NMI enable/disable
   - exit with string as error
  .145
-  - mini_drivers loaded to memory and initialized
+  - ring0drivers loaded to memory and initialized
   - sstruct maker
  .146
   - minidrv.csm
-  - interface for mini drivers
+  - interface for ring0drivers
  .147
-  - mini drivers have DS associated with CS (!! defrag doesn't process it)
+  - ring0drivers have DS associated with CS (!! defrag doesn't process it)
  .148
-  - VM TASK -> minidriver (vmm.sm)
+  - VM TASK -> ring0driver (vmm.sm)
  .149
-  - HDD driver -> minidriver (vmm.sm)
+  - HDD driver -> ring0driver (vmm.sm)
  .150
-  - driver loader (driver.ini parser) -> minidriver (drvload.sm)
-  
+  - driver loader (only driver.ini parser) -> ring0driver (drvload.sm)
+ .151
+  - ring0driver functions registered (not checked eq names)
+ .152
+  - kernel can process function tables (func #2)
+  - optimized: minidrv.csm
+ .153
+  - driver loader loads ring1driver, process tables & fill mdata
+ .154
+  - full load of ring1drivers
+  ! bug: interrupts
+ .155
+  - load of ring1function table, but no processing
+  ! fixed: interrupts
+ .156
+  - int 0x31 processes task->ring1driver calls
+ .157
+  - processing task's tables
+ .158
+  - old drivers unlinked
+  - filesys driver reads filesys.ini
+  - removed registers
+  - int21 removed
+  - added functions dosOpenFile,etc.
+  - kernel cannot have access to filesystem
+  - etc.
+ .159
+  - filesys: build & show directory tree
+ .160
+  - fixed: filesys error
+  - filesys: show errors in filesys.ini
+ .161
+  - dosfs added
+  - filesys removed

@@ -1,4 +1,4 @@
- // ChaOS kernel v0.99
+// kernel.csm - ChaOS kernel v0.99
 #output kernel.bin
 #include source\kernel\kern_def.csm
 #code 32
@@ -6,22 +6,15 @@
 
    // Initialization (ds=Data,es=IDT/GDT,ss=Data)
    mov ax,mem_kernel_data
-   mov ds,ax
-   mov ss,ax
-   mov fs,ax
-   mov gs,ax
+   mov ds,ax;mov ss,ax;mov fs,ax;mov gs,ax
    mov ax,mem_idt_gdt_data
-   mov es,ax
-   mov sp,stack
+   mov es,ax;mov sp,stack
 
    // Create new IDT
-   xor edi,edi
-   mov esi,idt_place
-   mov ecx,idt_size
-   rep movsb
+   xor edi,edi;mov esi,idt_place
+   mov ecx,idt_size;rep movsb
    mov ecx,2048-idt_size
-   xor eax,eax
-   rep stosb
+   xor eax,eax;rep stosb
 
    // Get memory size (in pages)
    mov ecx,d:[mem_size];mov ax,mem_all_data;mov ds,ax;ebx=ecx<<12
@@ -114,17 +107,11 @@
    esi=process_list
    { mov d:[esi],0;add esi,4;loop ?^0 }
 
-   // init mini drivers
-   mini_driver_load()
-
    // Enable ints
    enable_int_system()
 
-   // registers
-   reg_init()
-
-   // drivers + tasks (from "chaos.ini")
-   init_drivers()
+   // init mini drivers
+   mini_driver_load()
 
    // switch task
    cli
@@ -181,12 +168,10 @@ kill_task   : dw 0
 
   // Int 20
   #include source\kernel\memory.csm
-  #include source\kernel\regman.csm
   #include source\kernel\process.csm
   #include source\kernel\message.csm
 
   #include source\kernel\ints.csm
-  #include source\kernel\driver.csm
   #include source\kernel\minidrv.csm
 
    // ------------------------ [ Return to loader ] ------------------------

@@ -2,7 +2,7 @@
 
   db "CD",26               // ID
   db "sys_vm_task",[2]     // device name
-  dd 0                     // interface procedure
+  dd func                  // interface block
   dd mdata                 // block of data to fill
   dd init_VM_task          // initialization procedure
   dw 4                     // size of mdriver in pages
@@ -97,7 +97,6 @@ init_VM_task:
 
    // install handler
    mov ax,0xD;mov bx,cs;mov edx,exc_0D;call kernel
-   mov ax,0x21;mov bx,cs;mov edx,int_21;call kernel
    mov ax,0x76;mov bx,cs;mov edx,int_76;call kernel
    mov ax,0x77;mov bx,cs;mov edx,int_77;call kernel
    retf
@@ -347,31 +346,13 @@ vm_task: dd 0
 
  // File system routines
 
- int_21:
-   clc;push ebp
-   mov ebp,esp
-   and b:[~ebp.12],0xFE
-   pop ebp
-
-   cmp ah,0x0 ; _jz  CreateFile
-   cmp ah,0x1 ; _jz  OpenFile
-   cmp ah,0x2 ; _jz  CloseFile
-   cmp ah,0x3 ; _jz  ReadFile
-   cmp ah,0x4 ; _jz  WriteFile
-   cmp ah,0x5 ; _jz  SeekFile
-   cmp ah,0x9 ; _jz  find_first
-   cmp ah,0xA ; _jz  find_next
-   cmp ah,0x30; _jz  display_char
-   cmp ah,0x31; _jz  display_string
-   mov ax,err_no_support
-   jmp set_cf
-
    // 1. Create file
-   //   In:  ah  = 0 ; cx  = File attribute
+   //   In:  cx  = File attribute
    //        ds:esi - Name (ASCIIZ)
    //   Out: CF set on error (ax = dos error code)
    //        ax  = file handle
  CreateFile:
+   clc;cld
    push edi;push es;push ebx;push esi
 
    // prepare ES:EDI
@@ -403,15 +384,15 @@ vm_task: dd 0
 
    // Restore
    pop esi;pop ebx;pop es;pop edi
-   iret
+   jmp clear_cf
 
    // 2. Open file
-   //   In:  ah  = 1
-   //        al  = access mode (0-read, 1-write, 2-r/w)
+   //   In:  dl  = access mode (0-read, 1-write, 2-r/w)
    //        ds:esi - Name (ASCIIZ)
    //   Out: CF set on error (ax = dos error code)
    //        ax  = file handle
  OpenFile:
+   clc;cld;mov al,dl
    push edi;push es;push ebx;push esi
 
    // prepare ES:EDI
@@ -442,12 +423,13 @@ vm_task: dd 0
 
    // Restore
    pop esi;pop ebx;pop es;pop edi
-   iret
+   jmp clear_cf
 
    // 3. Close file
-   //   In:  ah  = 2 ; bx  = file handle
+   //   In:  bx  = file handle
    //   Out: CF set on error (ax = dos error code|ax=undef)
  CloseFile:
+   clc;cld
    push ebx;push ds;push es
 
    // prepare registers
@@ -461,16 +443,16 @@ vm_task: dd 0
 
    // Restore
    pop es;pop ds;pop ebx
-   iret
+   jmp clear_cf
 
    // 4. Read file
-   //   In:  ah  = 3
-   //        bx  = file handle
+   //   In:  bx  = file handle
    //        cx  = bytes to read
    //        es:edi - buffer
    //   Out: CF set on error (ax = dos error code)
    //        ax  = bytes actually read
  ReadFile:
+   clc;cld
    push esi;push edi;push ds;push ebx
 
    // prepare registers
@@ -517,15 +499,16 @@ vm_task: dd 0
 
    // Restore
    pop ebx;pop ds;pop edi;pop esi
-   iret
+   jmp clear_cf
 
    // 5. Write file
-   //   In:  ah  = 4 ;  bx  = file handle
+   //   In:  bx  = file handle
    //        cx  = bytes to write (0-truncate)
    //        ds:esi - buffer
    //   Out: CF set on error (ax = dos error code)
    //        ax  = bytes actually written
  WriteFile:
+   clc;cld
    push esi;push edi;push ds;push ebx;push es
 
    // prepare registers
@@ -560,13 +543,14 @@ vm_task: dd 0
 
    // Restore
    pop es;pop ebx;pop ds;pop edi;pop esi
-   iret
+   jmp clear_cf
 
    // 6. Move file pointer
-   //   In:  ah  = 5 ;  bx  = file handle
+   //   In:  bx  = file handle
    //        ecx = distance to move ; al = subfun (start/curr/end)
    //   Out: CF set on error (ax = dos error code)
  SeekFile:
+   clc;cld
    push ecx;push ds;push ebx
 
    // prepare registers
@@ -596,15 +580,15 @@ vm_task: dd 0
 
    // Restore
    pop ebx;pop ds;pop ecx
-   iret
+   jmp clear_cf
 
-   // 10. FindFirst
-   //   In:  ah  = 9
-   //        ds:esi - filespec
+   // 7. FindFirst
+   //   In:  ds:esi - filespec
    //        es:edi - Place for FileInfoRec
    //        cx  = attributes
    //   Out: CF set on error (ax = dos error code)
  find_first:
+   clc;cld
    push eax;push ebx;push ecx;push ds;push es;push edi;push esi
 
    // prepare DTA
@@ -657,13 +641,13 @@ vm_task: dd 0
 
    // Restore
    pop esi;pop edi;pop ds;pop ecx;pop ebx;pop eax
-   iret
+   jmp clear_cf
 
-   // 11. FindNext
-   //   In:  ah  = 10
-   //        ds:esi - previous FileInfoRec
+   // 8. FindNext
+   //   In:  ds:esi - previous FileInfoRec
    //   Out: CF set on error (ax = dos error code)
  find_next:
+   clc;cld
    push eax;push ebx;push ecx;push es;push edi;push ds;push esi
 
    // prepare DTA
@@ -714,25 +698,27 @@ vm_task: dd 0
 
    // Restore
    pop esi;pop ds;pop edi;pop es;pop ecx;pop ebx;pop eax
-   iret
+   jmp clear_cf
 
  // 1. Display character
- // In: al = char to display
+ // In: dl = char to display
  display_char:
+   clc;cld
 
    push ds;push ebx
    mov bx,w:cs:[_ds];cli;mov ds,bx
    mov w:[data.VM_TSS.tss_eax],0x200
-   mov w:[data.VM_TSS.tss_edx],ax
+   mov w:[data.VM_TSS.tss_edx],dx
 
    call sys_VM_task
 
    sti;pop ebx;pop ds
-   iret
+   jmp clear_cf
 
  // 2. Display string from DS:ESI
  // In: DS:ESI - ptr to ASCIIZ
  display_string:
+   clc;cld
    push edi;push es;push ebx;push esi
 
    // prepare ES:EDI
@@ -755,7 +741,7 @@ vm_task: dd 0
 
    // Restore
    sti;pop esi;pop ebx;pop es;pop edi
-   iret
+   jmp clear_cf
 
  set_cf:
    push ebp
@@ -763,5 +749,25 @@ vm_task: dd 0
    or   d:[~ebp+12],1
    pop  ebp
    iret
+
+ clear_cf:
+   push ebp
+   mov  ebp,esp
+   and  b:[~ebp.12],0xFE
+   pop  ebp
+   iret
+
+func:
+  dd CreateFile         ; db "dosCreateFile",0
+  dd OpenFile           ; db "dosOpenFile",0
+  dd CloseFile          ; db "dosCloseFile",0
+  dd ReadFile           ; db "dosReadFile",0
+  dd WriteFile          ; db "dosWriteFile",0
+  dd SeekFile           ; db "dosSeekFile",0
+  dd find_first         ; db "dosFindFirst",0
+  dd find_next          ; db "dosFindNext",0
+  dd display_char       ; db "dosDisplayChar",0
+  dd display_string     ; db "dosDisplayString",0
+  dd 0
 
 data:

@@ -1,81 +1,75 @@
  // interrupts/exeptions in ChaOS kernel
 
- show_edx: // Shows EDX  (Used: ECX,EAX)
-   ecx=8
-   { rol edx,4;al=dl&0F+'0';if(al>'9'){al=+7}
-     ah=0x30;int 0x21;loop ?^0 }
-   ret
-
  exc_00: // Division by zero
-   ebx=0x0;jmp fault
+   mov ebx,0x0;jmp fault
 
  exc_01: // Debug exeption
-   ebx=0x1;jmp fault
+   mov ebx,0x1;jmp fault
 
  exc_02: // NMI
-   ebx=0x2;jmp fault
+   mov ebx,0x2;jmp fault
 
  exc_03: // Break point
-   ebx=0x3;jmp fault
+   mov ebx,0x3;jmp fault
 
  exc_04: // Overflow
-   ebx=0x4;jmp fault
+   mov ebx,0x4;jmp fault
 
  exc_05: // BOUND error
-   ebx=0x5;jmp fault
+   mov ebx,0x5;jmp fault
 
  exc_06: // Invalide opcode
-   ebx=0x6;jmp fault
+   mov ebx,0x6;jmp fault
 
  exc_08: // Double fault
    pop eax;pop ebx;shl ebx,16;mov bx,0x8
    jmp debug
 
  exc_09: // ???
-   ebx=0x9;jmp fault
+   mov ebx,0x9;jmp fault
 
  exc_0A: // Wrong TSS
-   ebx=0xA;jmp fault
+   mov ebx,0xA;jmp fault
 
  exc_0B: // Segment not present
-   ebx=0xB;jmp fault
+   mov ebx,0xB;jmp fault
 
  exc_0C: // Stack error
-   ebx=0xC;jmp fault
+   mov ebx,0xC;jmp fault
 
  exc_0D: // GPF
-   ebx=0xD;jmp fault
+   mov ebx,0xD;jmp fault
 
  exc_0E: // Page fault
-   ebx=0xE;jmp fault
+   mov ebx,0xE;jmp fault
 
  exc_0F: // ???
-   ebx=0xF;jmp fault
+   mov ebx,0xF;jmp fault
 
  exc_10: // FPU error
-   ebx=0x10;jmp fault
+   mov ebx,0x10;jmp fault
 
  exc_11: // BOUND
-   ebx=0x11;jmp fault
+   mov ebx,0x11;jmp fault
 
  oth_exc: // other (undoc)
-   ebx=0x1111;jmp fault
+   mov ebx,0x1111;jmp fault
 
  // Fault : EBX = NUM
  fault:
    pop ebp;pop eax
  debug:
-   dx=mem_kernel_data;ds=dx;es=dx;ss=dx
-   esp=stack;esi=ebx;edi=eax;ecx=1
+   mov dx,mem_kernel_data;mov ds,dx;mov es,dx;mov ss,dx
+   mov esp,stack;mov esi,ebx;mov edi,eax;mov ecx,1
    jmp exit
 
  _show_kernel_error: // DS:EBX = (char *)string
    mov dx,mem_kernel_data;mov es,dx;mov ss,dx;mov esp,stack
-   xor edi,edi;di=w:cs:dos_vm_call;edi=<<4
-   movzx esi,w:cs:dos_vm_call.4;add edi,esi
-   si=mem_all_data;es=si;mov esi,ebx
+   xor edi,edi;mov di,w:cs:[dos_vm_call];shl edi,4
+   movzx esi,w:cs:[dos_vm_call.4];add edi,esi
+   mov si,mem_all_data;mov es,si;mov esi,ebx
    { lodsb;stosb;cmp al,0;jnz ?^0 }
-   ecx=2;mov ds,dx;mov es,dx
+   mov ecx,2;mov ds,dx;mov es,dx
    jmp exit
 
  // OS startup => sti
@@ -102,12 +96,12 @@ enable_int_system:
    out 0xA1,al
 
    // Set timer
-   al=0x36;out 0x43,al
+   mov al,0x36;out 0x43,al
    mov ax,timer;mov dx,0x40
    out dx,al;mov al,ah;out dx,al
 
-   al=0xFC;out 0x21,al
-   al=0xFF;out 0xA1,al
+   mov al,0xFC;out 0x21,al
+   mov al,0xFF;out 0xA1,al
 
    mov  al,0x2D
    out  0x70,al
@@ -142,7 +136,7 @@ disable_int_system:
    out 0xA1,al
 
    // Set timer
-   al=0x36;out 0x43,al
+   mov al,0x36;out 0x43,al
    mov ax,0;mov dx,0x40
    out dx,al;mov al,ah;out dx,al
 
@@ -162,23 +156,23 @@ int_77:
  // coprocessor int
 exc_07:
    push ds;push esi;push eax;push ebx
-   ax=mem_idt_gdt_data;ds=ax;clts
+   mov ax,mem_idt_gdt_data;mov ds,ax;clts
 
    // Save
-   bx=w:cs:prev_TID;xor esi,esi;si=bx;add esi,0x805
-   al=b:[esi];b:[esi]=0x92;push esi;push ds;ds=bx
-   esi=_tss_copr;b:[esi]=1;inc esi;fsave [esi]
-   pop ds;pop esi;b:[esi]=al
+   mov bx,w:cs:[prev_TID];xor esi,esi;mov si,bx;add esi,0x805
+   mov al,b:[esi];mov b:[esi],0x92;push esi;push ds;mov ds,bx
+   mov esi,_tss_copr;mov b:[esi],1;inc esi;fsave [esi]
+   pop ds;pop esi;mov b:[esi],al
 
    // Load
-   xor esi,esi;str bx;si=bx;add esi,0x805;al=b:[esi]
-   b:[esi]=0x92;push eax;push esi;push ds;ds=bx
-   esi=_tss_copr;al=b:[esi]
+   xor esi,esi;str bx;mov si,bx;add esi,0x805;mov al,b:[esi]
+   mov b:[esi],0x92;push eax;push esi;push ds;mov ds,bx
+   mov esi,_tss_copr;mov al,b:[esi]
    if (al==1){ inc esi;frstor [esi] }
-   pop ds;pop esi;pop eax;b:[esi]=al
+   pop ds;pop esi;pop eax;mov b:[esi],al
 
    // save TaskID
-   ax=mem_kernel_data;ds=ax;w:[prev_TID]=bx
+   mov ax,mem_kernel_data;mov ds,ax;mov w:[prev_TID],bx
 
    pop ebx;pop eax;pop esi;pop ds
    iret
@@ -201,25 +195,26 @@ int_78:
 
 int_78_386:
    push ds
-   ax=mem_kernel_data;ds=ax
-   dec w:task_lft
+   mov ax,mem_kernel_data;mov ds,ax
+   dec w:[task_lft]
 
-   if (w:task_lft==0){
+   if (w:[task_lft]==0){
 
       // search for task
       push esi;push edi;xor esi,esi
-      si=w:task_no
-      edi=process_list_end
+      mov si,w:[task_no]
+      mov edi,process_list_end
       {
          lodsd
          if(ax!=0){
-           w:task_no=si
-           w:task_lft=ax
-           edi=eax>>16
-           w:task_PID=di
+           mov w:[task_no],si
+           mov w:[task_lft],ax
+           mov edi,eax
+           shr edi,16
+           mov w:[task_PID],di
            jmp ?v1
          }
-         if (edi==esi){ esi=process_list }
+         if (edi==esi){ mov esi,process_list }
          jmp ?^0
       }
       pop edi;pop esi

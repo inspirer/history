@@ -1,0 +1,40 @@
+
+  db "CC",26               // ID
+  db [11]                  // device name
+  dw 1                     // size of driver in pages
+  dd mdrv                  // minidriver function table
+  dd xdata                 // data <w:_ds>,<s:params>
+  dd init                  // initialization procedure
+  dd func                  // function table
+
+#code 32
+#org 0
+
+init:
+  push ds
+  mov ax,w:cs:[_ds];mov ds,ax
+  mov esi,cpr;mov eax,d:[write];int 0x30
+
+
+  pop ds
+  iret
+
+cpr: db "Sample DRIVER\n",0
+
+mdrv:
+  exit:   db "errorexit",0
+  dOpen:  db "dosOpenFile",0
+  dClose: db "dosCloseFile",0
+  dRead:  db "dosReadFile",0
+  write:  db "dosDisplayString",0
+  db 0
+
+func:
+  dd deinit ; db "deinit",0
+  dd -1
+
+xdata:
+  _ds:  dw 0
+  param:
+
+data:

@@ -48,31 +48,48 @@
 #org 0
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 
-       // Show cpr
-       push cs;pop ds;esi=cpr;ah=0x31;int 0x21
+  // Show cpr
+  push cs;pop ds;esi=cpr;ah=0x31;int 0x21
 
-       // Allocate handle buffer
-       ah=6;ebx=driver_mem;int 0x20;ds=ax
-       bx=ax;edi=mem;ah=3;int 0x22
+  // Allocate handle buffer
+  ah=6;ebx=driver_mem;int 0x20;ds=ax
+  bx=ax;edi=mem;ah=3;int 0x22
 
-       // Allocate int25
-       ax=0x125;edx=int25;int 0x22
+  // Allocate int25
+  ax=0x125;edx=int25;int 0x22
 
-       // Set all handles = free
-       ecx=max_handle_num;esi=_h_task
-       { w:[esi]=0;esi=+_h_structure;loop ?^0 }
+  // Set all handles = free
+  ecx=max_handle_num;esi=_h_task
+  { w:[esi]=0;esi=+_h_structure;loop ?^0 }
 
-       iret
+  iret
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-  int25:
-       // Clear CF
-       clc;cli;cld;push ebp
-       mov ebp,esp
-       and b:[~ebp+12],0xFE
-       pop ebp
-       cmp ah,0x0 ; jz create_file
-       jmp int25_f0
+int25:
+  // Clear CF
+  clc
+  cli
+  cld
+  push ebp
+  mov  ebp,esp
+  and  b:[~ebp+12],0xFE
+  pop  ebp
+  cmp  ah,0x0  ; _jz create_file
+  cmp  ah,0x1  ; _jz open_file
+  cmp  ah,0x2  ; _jz close_file
+  cmp  ah,0x3  ; _jz read_file
+  cmp  ah,0x4  ; _jz write_file
+  cmp  ah,0x5  ; _jz seek_file
+  cmp  ah,0x9  ; _jz  find_first
+  cmp  ah,0xA  ; _jz find_next
+  cmp  ah,0x10 ; _jz execute
+  mov  ax,err_no_support
+set_cf:
+  push ebp
+  mov  ebp,esp
+  or   d:[~ebp+12],1
+  pop  ebp
+  iret
 
 #shortdef _file_name_full_ _driver_mem_end_+4096
 
@@ -81,91 +98,102 @@
   //  In:  ah=0; cx = attr
   //       ds:esi - name
   //  Out: CF or ax=handle
-  create_file:
-       if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
-       push es;push ds;push esi;push edi;push ecx;push ebx;push ecx
+create_file:
+  { cmp b:[esi],'/';jz ?v0;mov ax,err_wrong_info;jmp set_cf }
+  push es;push ds;push esi;push edi;push ecx;push ebx;push ecx
 
-       // Copy file name to buffer
-       eax=d:cs:mem;es=ax;edi=_file_name_full_;push edi
-       mov eax,'/Roo';stosd;al='t';stosb
-       { lodsb;stosb;cmp al,0;jnz ?^0 } push es;pop ds
+  // Copy file name to buffer
+  eax=d:cs:mem;es=ax;edi=_file_name_full_;push edi
+  mov eax,'/Roo';stosd;mov al,'t';stosb
+  { lodsb;stosb;cmp al,0;jnz ?^0 } push es;pop ds
 
-       // set esi to end
-       pop esi;edi=esi { lodsb;cmp al,0;jnz ?^0 } dec esi;dec esi
+  // set esi to end
+  pop esi;mov edi,esi { lodsb;cmp al,0;jnz ?^0 } dec esi;dec esi
 
-       // ES:EDI - ptr to start ; DS:ESI to end ; search for last "/"
-       _while(edi<esi){
-         _if (b:[esi]=='/'){
-           push esi;b:[esi]=0;
-           ah=0x42;int 0x20
-           _if (~nc){
+  // ES:EDI - ptr to start ; DS:ESI to end ; search for last "/"
+  { // _while(edi<esi)
+    cmp edi,esi
+    _jge ?v0
 
-              // Copy to >MEM:_driver_mem_end_< full path + name
-              edi=_driver_mem_end_
-              ah=0x43;int 0x20;while(b:[edi]!=0){ inc edi } inc esi
-              { lodsb;stosb;cmp al,0;jnz ?^0 } pop esi
+    { // _if (b:[esi]=='/')
+      cmp b:[esi],'/'
+      _jne ?v0
+    
+      push esi
+      mov b:[esi],0
+      mov ah,0x42;int 0x20
+      { // _if (~nc)
+         _jc ?v0
 
-              // Check driver ID
-              esi=_driver_mem_end_
-              _ifelse(d:[esi]=='dos,'){
-                 lodsd;edi=esi
+         // Copy to >MEM:_driver_mem_end_< full path + name
+         mov edi,_driver_mem_end_
+         mov ah,0x43;int 0x20
+         { cmp b:[edi],0;jz ?v0;inc edi;jmps ?^0 } inc esi
+         { lodsb;stosb;cmp al,0;jnz ?^0 } pop esi
 
-                 // Redirect to DOS (int 0x21)
-                 xor esi,esi;ecx=max_handle_num;xor eax,eax
-                 { if(w:[esi._h_task]==0){ dec eax;jmp ?v1 } esi=+_h_structure;loop ?^0 }
+         // Check driver ID
+         mov esi,_driver_mem_end_
+         _ifelse(d:[esi]=='dos,'){
+            lodsd;mov edi,esi
 
-                 // No free handle
-                 if(ax==0){
-                    pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
-                    ax=err_no_free_desc;jmp set_cf
-                 }
+            // Redirect to DOS (int 0x21)
+            xor esi,esi;mov ecx,max_handle_num;xor eax,eax
+            { if(w:[esi._h_task]==0){ dec eax;jmp ?v1 } add esi,_h_structure;loop ?^0 }
 
-                 // DS:ESI - block ; ES:EDI - fname ; save fname
-                 push ecx;push esi;push edi;xchg esi,edi;esi=_file_name_full_
-                 { lodsb;stosb;cmp al,0;jnz ?^0 }
+            // No free handle
+            { // if(ax==0)
+               cmp ax,0;jnz ?v0
+               pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+               mov ax,err_no_free_desc;jmp set_cf
+            }
 
-                 // Save task ID
-                 pop edi;pop esi;str ax;and al,0xF8;w:[esi._h_task]=ax
+            // DS:ESI - block ; ES:EDI - fname ; save fname
+            push ecx;push esi;push edi;xchg esi,edi;mov esi,_file_name_full_
+            { lodsb;stosb;cmp al,0;jnz ?^0 }
 
-                 // Create file & save handle
-                 pop ecx;pop eax;push ecx;ecx=eax;ah=0;push esi;esi=edi;int 0x21
-                 if (~c){
-                   pop esi;w:[esi._h_task]=0;
-                   pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
-                   ax=err_file_not_found;jmp set_cf
-                 }
-                 pop esi;w:[esi._h_hand]=ax
+            // Save task ID
+            pop edi;pop esi;str ax;and al,0xF8;mov w:[esi._h_task],ax
 
-              } else {
+            // Create file & save handle
+            pop ecx;pop eax;push ecx;mov ecx,eax;mov ah,0;push esi
+            mov esi,edi;int 0x21
+            {
+              jnc ?v0
+              pop esi;mov w:[esi._h_task],0
+              pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+              mov ax,err_file_not_found;jmp set_cf
+            }
+            pop esi;mov w:[esi._h_hand],ax
 
-                 pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
-                 ax=err_unkn_file_sys;jmp set_cf
+         } else {
 
-              }
+            pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+            mov ax,err_unkn_file_sys;jmp set_cf
 
-              pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
-              iret
-
-           }
-           pop esi;b:[esi]=0x2F
          }
-         dec esi
-       }
-       pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
-       ax=err_file_not_found;jmp set_cf
 
-  int25_f0:
-       cmp ah,0x1 ; jz open_file
-       jmp int25_f1
+         pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+         iret
+
+      }
+      pop esi
+      mov b:[esi],0x2F
+    }
+    dec esi
+    jmp ?^0
+  }
+  pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+  mov ax,err_file_not_found
+  jmp set_cf
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 2. Open file
   //  In:  ah=1; al=access mode (0-read,1-write,2-r/w)
   //       ds:esi - name
   //  Out: CF or ax=handle
-  open_file:
-       push eax;ah=0xE;int 0x23;ax=0xD0A;int 0x23;pop eax
-       if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
+open_file:
+  push eax;mov ah,0xE;int 0x23;mov ax,0xD0A;int 0x23;pop eax
+  if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
        push es;push ds;push esi;push edi;push ecx;push ebx;push eax
 
        // Copy file name to buffer
@@ -261,11 +289,6 @@
 
        pop ecx;pop esi;pop ds;pop ebx;pop eax
        iret
-
-  int25_f1:
-       cmp ah,0x2 ; jz close_file
-       cmp ah,0x3 ; jz read_file
-       jmp int25_f2
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 4. Read file
@@ -387,12 +410,6 @@
 
        pop ebx
        iret
-
-  int25_f2:
-       cmp ah,0x4 ; _jz write_file
-       cmp ah,0x5 ; _jz seek_file
-       cmp ah,0x9 ; jz  find_first
-       jmp int25_f3
 
  #shortdef _file_info_rec_ _file_name_full_
 
@@ -533,9 +550,6 @@
        pop ecx;pop edi;pop es;pop esi;pop ds;pop ebx;pop ecx;pop edi;pop eax;pop es
        ax=err_file_not_found;jmp set_cf
 
-  int25_f3:
-       cmp ah,0xA ; jz find_next
-       jmp int25_f4
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 11. FindNext
@@ -643,17 +657,6 @@
           iret
 
        }
-
-  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
-  int25_f4:
-       cmp ah,0x10 ; jz execute
-       ax=err_no_support
-  set_cf:
-       push ebp
-       mov ebp,esp
-       or d:[~ebp+12],1
-       pop ebp
-       iret
 
   // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
   // 17. Execute

@@ -1,30 +1,73 @@
+// FILE: drvload.sm
+// TYPE: ring0driver
+// FUNC: loads ring1drivers from 'driver.ini'
+
 #include "source\minidrv\mdrv.h"
 
   db "CD",26               // ID
   db "driver_loader"       // device name
-  dd 0                     // interface block
+  dd func                  // interface block
   dd mdata                 // block of data to fill
   dd init                  // initialization procedure
-  dw 4                     // size of mdriver in pages
+  dw 2                     // size of mdriver in pages
   dw 0                     // (reserved)
 
 #code 32
 #org 0
 
-#define _ini_str_   0      // 255
-#define _ini_data_  256    // 120
+#define _ini_str_     0      // 255
+#define _ini_data_    256    // 120
+#define _driver_head  384    // 32
+#define _driver_tbl   432    // ~~~
 
+#define max_driver_size 256  // in pages (256*4096 = 1Mb)
+#define ring1function_list_size 7
+#define ring1function_addr_size 4
+
+// load drivers from 'driver.ini'
 init:
-  mov ax,0x100;mov esi,driver_ini;int 0x21
+
+#define ring1driver_call_size ring1driver_end-ring1driver_call
+
+  mov ah,2;mov esi,f_table;call kernel
+  {
+    jnc down(00)
+    mov ah,1;mov ebx,no_functions;call kernel
+  }
+
+  // allocate memory to save ring1driver functions
+  mov  ah,6
+  mov  ebx,ring1function_list_size
+  int  0x20
+  { jnc down(00);nemem:mov ebx,notenoughm;mov ah,1;call kernel }
+  mov  w:[_function_list_sel],ax
+  mov  ah,6
+  mov  ebx,ring1function_addr_size
+  int  0x20
+  jc   nemem
+  mov  w:[_function_addr_sel],ax
+
+  // copy ring1driver_call
+  push es
+  mov  es,ax
+  xor  edi,edi
+  mov  ecx,ring1driver_call_size
+  mov  esi,ring1driver_call
+  rep  movsb
+  pop  es
+
+  // open 'driver.ini'
+  xor edx,edx;mov esi,driver_ini;mov eax,d:[dOpen];int 0x30
   {
     jnc down(00)
     mov ebx,driver_err;mov ah,1;call kernel
   }
-  mov bx,ax
+  mov ebx,eax
 
+  // read strings
   push es;push ds;pop es;mov edi,data._ini_str_
   {
-    push edi;mov ah,3;mov cx,120;mov edi,data._ini_data_;int 0x21;pop edi
+    push edi;mov cx,120;mov edi,data._ini_data_;mov eax,d:[dRead];int 0x30;pop edi
     { // if(ax>0)
       cmp ax,0
       jz  down(00)
@@ -60,6 +103,15 @@ init:
              // DS:ESI = (char *) fname ; DS:EAX = (char *) param (or = NULL)
 
              call load_driver
+             {
+               jnc down(00)
+               add al,'0';mov b:[num],al
+               push esi
+               { lodsb;cmp al,0;jnz up(00) }
+               mov edi,esi;dec edi;mov esi,error
+               { lodsb;stosb;cmp al,0;jnz up(00) }
+               pop ebx;mov ah,1;call kernel
+             }
 
              pop esi
           }
@@ -74,14 +126,313 @@ init:
       jmp up(01)
     }
   }
+  mov eax,d:[dClose]
+  int 0x30
+
+  // init function table of ring1drivers (transform to code_seg)
+  push ds
+  xor esi,esi
+  mov si,w:[_function_addr_sel]
+  push si
+  add esi,0x805
+  mov ax,mem_idt_gdt_data
+  mov ds,ax
+  mov b:[esi],0xba
+  pop ax
+
+  // (init int31)
+  mov esi,0x31<<3
+  xor ebx,ebx
+  mov d:[esi],ebx
+  mov w:[~esi.2],ax
+  mov bh,0xef
+  mov d:[~esi.4],ebx
+  pop ds
+
+  // create task to call intFF
+  mov ah,6;mov ebx,1;int 0x20;push eax;push ds;mov ds,ax
+  mov d:[0],0xCFFFCD;mov w:[3],0xFBEB;mov ecx,1;mov ebx,ecx;mov ah,0x20;int 0x20
+  pop ds;pop edx;push eax;mov ah,8;int 0x20;pop eax
+
+  // save task ID
+  mov w:[drv_init_task_PID_5+5],ax
+  push eax
+
+  // load ES:EDI = (dword *)intFF
+  push es
+  mov ax,mem_idt_gdt_data;mov es,ax;mov edi,2040
+
+  // call drivers
+  mov  ecx,d:[_total_drivers]
+  xor  eax,eax
+  {
+    cmp eax,ecx
+    jge down(00)
+    push eax;push ecx
+
+    // setup intFF
+    mov ecx,d:[data._driver_tbl+8*eax]
+    mov w:es:[edi],cx
+    mov cx,w:[data._driver_tbl+4+8*eax]
+    inc cx
+    mov w:es:[~edi.2],cx
+    mov w:es:[~edi.4],0xEE00
+    shr ecx,16
+    mov w:es:[~edi.6],cx
+
+    // Call task
+    drv_init_task_PID_5: callf 0,0x71CD
+
+    pop ecx;pop eax
+    inc eax
+    jmp up(00)
+  }
+
+  // free intFF
+  xor eax,eax;stosd;stosd
   pop es
-  mov ah,2
-  int 0x21
+
+  // kill task
+  pop ebx;mov ah,0x22;int 0x20
+
+  pop es
   retf
 
+#define file_not_found 1
+#define header_error   2
+#define not_driver     3
+#define low_memory     4
+#define not_fit        5
+#define read_err       6
+#define ring0table_err 7
+#define no_free_sel    8
+#define func_err       9
+
+f_table:
+ dOpen:  db "dosOpenFile",0
+ dClose: db "dosCloseFile",0
+ dRead:  db "dosReadFile",0
+ db 0
+
+// ~ load driver
+// DS:ESI = (char *) fname ; DS:EAX = (char *) param (or = NULL)
+// Out: CF -> error
 load_driver:
+  pusha;push es;push ds;push eax
 
+  // open driver's file
+  xor edx,edx;mov eax,d:cs:[dOpen];int 0x30
+  { jnc down(00);pop eax;pop ds;pop es;popa;mov eax,file_not_found;stc;ret }
+  mov bx,ax
 
+  // load ds,es
+  mov ax,w:cs:[_ds]
+  mov ds,ax;mov es,ax
+
+  // read header
+  mov edi,data._driver_head
+  mov cx,32
+  mov eax,d:[dRead]
+  int 0x30
+  {
+    jnc down(00)
+    _drv_head_err:pop eax;pop ds;pop es;popa
+    mov eax,header_error;stc;ret
+  }
+
+  // check size
+  cmp eax,32
+  jnz _drv_head_err
+
+  // check ID
+  cmp w:[data._driver_head],'CC'
+  { jz down(00);pop eax;pop ds;pop es;popa;mov eax,not_driver;stc;ret }
+
+  // allocate memory for driver
+  push ebx
+  xor ebx,ebx
+  mov bx,w:[data._driver_head.14]
+  cmp ebx,max_driver_size
+  jge _not_enough_mem
+  mov edx,ebx
+  mov ah,6
+  int 0x20
+  {
+    jnc down(00)
+    _not_enough_mem: pop ebx;pop eax;pop ds;pop es;popa
+    mov eax,low_memory;stc;ret
+  }
+  pop ebx
+
+  // read driver to memory (es=DRV_DAT)
+  xor edi,edi
+  push es
+  mov es,ax
+  push eax
+  {
+    cmp edx,0
+    {
+      jnz down(00)
+      pop eax;pop es;pop eax;pop ds;pop es;popa
+      mov eax,not_fit;stc;ret
+    }
+    mov ecx,4096
+    mov eax,d:[dRead]
+    int 0x30
+    {
+      jnc down(00)
+      pop eax;pop es;pop eax;pop ds;pop es;popa
+      mov eax,read_err;stc;ret
+    }
+    and eax,0xFFFF
+    add edi,eax
+    dec edx
+    cmp eax,4096
+    jz  up(00)
+  }
+
+  // close driver
+  mov eax,d:[dClose]
+  int 0x30
+
+  // restore
+  pop eax;pop es;pop ebx;pop edx;push edx;push ds;mov ds,ax
+
+  // process functions table (ds=DRV_DAT)
+  mov esi,d:es:[data._driver_head.16]
+  {
+    cmp esi,0
+    jz down(00)
+    push eax
+    mov ah,2
+    call kernel
+    {
+      jnc down(00)
+      pop eax;pop ds;pop ds;pop es;popa
+      mov eax,ring0table_err;stc;ret
+    }
+    pop eax
+  }
+
+  // fix _DS,params(dx:ebx) (es=DRV_DAT)
+  push es;push ds;pop es;pop ds
+  mov esi,d:[data._driver_head.20]
+  {
+    cmp esi,0
+    jz  down(00)
+    mov w:es:[esi],ax
+    add esi,2
+    mov edi,esi
+    mov esi,ebx
+    push ds;push eax;mov ds,dx
+    {{ cmp esi,0;jnz down(00);mov al,0;stosb;jmps down(01) }
+    { lodsb;stosb;cmp al,0;jnz up(00) }}
+    pop eax;pop ds
+  }
+
+  // get init_proc addr
+  mov esi,d:[data._driver_head.24]
+  push esi
+
+  // associate NEW_CODE_SEG with AX (ds=idt_gdt)
+  push ds
+  xor  esi,esi
+  mov  si,ax
+  add  esi,0x800
+  mov  ax,mem_idt_gdt_data
+  mov  ds,ax
+  mov  eax,d:[esi]
+  mov  ebx,d:[~esi.4]
+  or   b:[~esi.6],0x10
+  mov  esi,mem_start_desc+0x800
+  push eax
+
+  // search for free descriptor ( while(esi<0x10800) )
+  {
+     cmp esi,0x10800
+     jge down(00)
+     lodsd;lodsd
+     and ah,0x80
+     cmp ah,0
+     jz __found_free1
+     jmps up(00)
+  }
+  pop eax;pop ds;pop esi;pop es;pop ds;pop es;popa
+  mov eax,no_free_sel;stc;ret
+
+  // found => set it as associated
+__found_free1:
+  pop  eax
+  sub  esi,8
+  mov  d:[esi],eax
+  mov  bh,0xBA
+  mov  d:[~esi.4],ebx
+  mov  ebx,esi
+  or   b:[~esi.6],0x10
+  sub  ebx,0x800
+  pop ds
+
+#define total_ring1_functions [_total_ring1_functions-ring1driver_call+1]
+
+  // register new functions table (es=DRV_DAT,bx=DRV_CODE)
+  mov esi,d:[data._driver_head.28]
+  {
+    cmp esi,0
+    jz down(00)
+    mov eax,d:[_function_list_sel]
+    mov edi,d:[_function_last_char]
+    push ds;mov edx,eax;rol eax,16;push es;pop ds;mov es,ax
+    mov ecx,d:es:total_ring1_functions
+
+    // dx:edi <- last_char ; ecx = numoffunc
+    // ds:esi <- functions table (ring1 for ring3)
+    // es:[ring1driver_call_size+8*ecx] <- new func addr
+    // bx = code_seg
+    {
+      lodsd
+      mov d:[~esi-4],ecx
+      cmp eax,-1
+      jz  down(00)
+
+      // copy function address
+      mov d:es:[ring1driver_call_size+8*ecx],eax
+      mov w:es:[ring1driver_call_size+4+8*ecx],bx
+
+      // copy function name
+      push es
+      mov es,dx
+      { lodsb
+        {
+          cmp al,0    ; jz  down(00)
+          cmp al,0x21 ; jl  _function_name_error
+          cmp al,0x7E ; jle down(00)
+         _function_name_error:
+          pop es;pop ds;pop esi;pop es;pop ds;pop es;popa
+          mov eax,func_err;stc;ret
+        }
+        stosb;cmp al,0;jnz up(00)
+      }
+      pop es
+      inc ecx
+      jmp up(00)
+    }
+
+    // save number of functions & (char *)(end of func list)
+    mov d:es:total_ring1_functions,ecx
+    pop ds
+    mov d:[_function_last_char],edi
+  }
+
+  // call task (init = BX:EDI) (add to list)
+  pop edi;pop es
+  mov  eax,d:[_total_drivers]
+  mov  w:[data._driver_tbl+4+8*eax],bx
+  mov  d:[data._driver_tbl+8*eax],edi
+  inc  eax
+  mov  d:[_total_drivers],eax
+
+  // restore
+  pop ds;pop es;popa
   ret
 
 kernel: callf d:cs:[kern];ret
@@ -93,7 +444,113 @@ mdata:
   debg: dw [3]
   dos_vm_call: dw [3]
 
-driver_err: db "FATAL: 'driver.ini' not found\\n",0
+_esi:   dd 0
+_total_drivers: dd 0
+_function_list_sel: dw 0
+_function_addr_sel: dw 0
+_function_last_char: dd 0
+funcname:driver_err: db "driverloader: FATAL: 'driver.ini' not found\n",0
+notenoughm: db "driverloader: ERROR: not enough memory\n",0
 driver_ini: db "driver.ini",0
+error:      db ": error N" ; num:   db "0 (driverloader)\n",0
+no_functions: db "driverloader: fatal: not enough functions\n",0
+
+// �[ functions ]컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴�
+
+func:
+  dd process_task_table ; db "ProcessTaskTable",0
+  dd error_exit         ; db "errorexit",0
+  dd 0
+
+// ~ ProcessTaskTable
+// DS:ESI - table
+// Out: CF set on error, DS:ESI - function
+process_task_table:
+  push es;push edi;push edx;push ecx;push ebx;push eax;push esi
+  mov di,w:cs:[_function_list_sel]
+  mov es,di
+  mov edx,d:cs:[_function_last_char]
+  {
+    cmp b:[esi],0
+    jz  down(00)
+
+    mov ebx,esi
+    xor edi,edi
+    xor ecx,ecx
+    {
+      cmp esi,edx
+      jge down(00)
+
+      {
+        lodsb
+        mov ah,b:es:[edi]
+        inc edi
+        cmp ah,0
+        jz  down(00)
+        cmp ah,al
+        jz  up(00)
+      }
+      {
+        cmp al,0
+        jnz down(00)
+        cmp ah,0
+        jnz down(00)
+        mov d:[ebx],ecx
+        jmp _found
+      }
+      {
+        cmp ah,0
+        jz  down(00)
+        mov ah,b:es:[edi]
+        inc edi
+        jmps up(00)
+      }
+      mov esi,ebx
+      inc ecx
+      jmp up(00)
+    }
+
+    // not found
+    pop eax;pop eax;pop ebx;pop ecx;pop edx;pop edi;pop es
+    jmp set_cf
+
+    _found:
+    jmp up(00)
+  }
+  pop esi;pop eax;pop ebx;pop ecx;pop edx;pop edi;pop es
+  iret
+
+// ~ error_exit DS:EBX - asciiz
+error_exit:
+  mov ah,1;call kernel
+
+ set_cf:
+  push ebp
+  mov  ebp,esp
+  or   d:[~ebp+12],1
+  pop  ebp
+  iret
+
+// �[ data ]컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴컴
+
+ring1driver_call:
+  shl eax;shr eax
+  push ebp
+  mov ebp,esp
+  and b:[~ebp.12],0xFE
+  pop ebp
+  {
+   _total_ring1_functions:
+    cmp eax,0
+    jl down(00)
+    xor eax,eax
+    push ebp
+    mov ebp,esp
+    or d:[~ebp.12],1
+    pop ebp
+    iret
+  }
+  jmpf d:cs:[ring1driver_call_size+8*eax]
+ring1driver_end:
 
 data:

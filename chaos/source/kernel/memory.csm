@@ -1,4 +1,4 @@
- // Memory functions
+// memory.csm - memory functions
 
  // Descriptor definitions
 #shortdef mem_kernel_code  0x8
@@ -39,14 +39,13 @@
       cmp  ah,0x00; _jz allocate_memory
       cmp  ah,0x01; _jz free_memory
       cmp  ah,0x02; _jz resize_memory
-      cmp  ah,0x05; _jz load_ldt
       cmp  ah,0x06; _jz mem_alloc_global
       cmp  ah,0x07; _jz mem_resize_global
       cmp  ah,0x08; _jz mem_free_global
       cmp  ah,0x09; _jz mem_defrag_global
       cmp  ah,0x0A; _jz mem_get_free_info
       cmp  ah,0x0B; _jz mem_map_global
-      jmp  exc20_r0
+      jmp  exc20_p0
    exc20_n0:
       mov  ax,err_no_support
    set_cf:
@@ -367,62 +366,6 @@
 
       // Restore registers
       pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
-      iret
-
-   //   6. ~~~??~~~ LDT
-   //     In:  ah  = 0x5
-   //          bp  = LDT
-   //          dx  = ENTRY or 0xFFFF(cx=global_entry)
-   //     Out: EAX:EBX = code
-   load_ldt:
-
-      // Save registers
-      push ds;push esi;push ecx;push edi;push edx
-
-      if (dx==0xFFFF){
-
-        // get global info
-        ax=mem_idt_gdt_data;ds=ax;xor esi,esi;si=cx;add esi,0x800
-
-        // Get INFO
-        lodsd;ebx=eax;lodsd
-
-        pop edx;pop edi;pop ecx;pop esi;pop ds
-        iret
-      }
-      if (dx==0xFFFE){
-
-        // get global info
-        esi=ecx;shr esi,10;add esi,0x1000
-        ax=mem_page_catalog;ds=ax
-
-        // Get INFO
-        lodsd
-
-        pop edx;pop edi;pop ecx;pop esi;pop ds
-        iret
-      }
-
-      // Set LDT as DATA
-      ax=bp;and dx,0xFFF8
-      if (ax==0){
-         pop edx;pop edi;pop ecx;pop esi;pop ds
-         ax=err_wrong_info
-         jmp set_cf
-      }
-      cx=mem_idt_gdt_data;ds=cx
-      xor esi,esi;si=ax;esi=+0x805
-      b:[esi]=0x92;push esi;push ds
-      ds=ax;xor esi,esi;si=dx
-
-      // Get INFO
-      lodsd;ebx=eax;lodsd
-
-      // Return to LDT her type
-      pop ds;pop esi;b:[esi]=0x82
-
-      // Restore registers
-      pop edx;pop edi;pop ecx;pop esi;pop ds
       iret
 
    // 7. Allocate Global

@@ -1,0 +1,24 @@
+
+  db "CE",26       // ID
+  db [13]          // task_description
+  dd main          // entry point
+  dd table         // table of function
+  dd params        // params
+  dw 2             // size in pages
+  dw 2             // stack size
+
+#org 0
+#code 32
+
+main:
+  call _main
+  mov  ah,0x21
+  int  0x20
+
+_main:
+  ret
+
+table:
+  db 0
+
+params:

@@ -9,14 +9,12 @@ echo  -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 echo.
 echo Building kernel ...
 echo.
-f:\source\c\chasm_os.exe source\kernel\kernel.csm
-:f:\soft\chasm\chasm_w.exe source\kernel\kernel.csm
+chasm.exe source\kernel\kernel.csm
 
 echo.
 echo Building kernel loader ...
 echo.
-f:\source\c\chasm_os.exe source\kernel\chaos.csm
-:f:\soft\chasm\chasm_w.exe source\kernel\chaos.csm
+chasm.exe source\kernel\chaos.csm
 
 echo.
 choice Run ChaOS now

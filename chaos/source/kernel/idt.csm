@@ -1,12 +1,5 @@
  // Interrupt descriptor table for ChaOS kernel
 
-_temp_data: // 1024 bytes
-
-// Data
-#shortdef _ini_data_ _temp_data
-#shortdef _ini_str_ _temp_data+128
-#shortdef _ini_end_ _temp_data+128+256
-
  // Exc00 : Division by zero
  dw exc_00,8
  db 0,0xEE,0,0
@@ -140,14 +133,21 @@ _temp_data: // 1024 bytes
  db 0,0xEE,0,0
 
  // Int21 : File system functions
- dw [4]
+ dd [2]
 
- // Int22 : kernel for Driver's
- dw int_22,8
- db 0,0xEE,0,0
+ // Int22-Int2F
+ dd [28]
 
- // Int23-Int6F
- dd [154]
+ // Int30 : ring0drivers for ring1drivers & ring0drivers
+ dw int_30,8
+ db 0,0xAE,0,0
+
+ // Int31: ring1drivers for tasks
+ // Int32: ring1drivers for ring1drivers
+ // Int33: libraries for tasks
+
+ // Int31-Int6F
+ dd [126]
 
  // Int70-Int75
  dd [12]
