@@ -1,10 +1,23 @@
 
-	MS SourceSafe 6.0 navigator 1.05
+	MS SourceSafe 6.0 navigator 1.06
 
 [!] Important
 [+] New
 [-] Bugs fixed
 [*] Changes
+
+Version 1.06, 19 Apr 2004
+
+[+] Ctrl-Alt-F7  History dialog (thx to Max Belugin)
+
+[+] New options in Configure plugin menu:
+		"Mark files, which haven't been CO by you as &Read-Only"
+		"Mark CO files as &System"
+
+[-] Small bug: ss:!$\base  now works correctly
+[-] crash on 1.70b6
+
+[*] Ctrl-Alt-F5 title depends on "show dates" state
 
 Version 1.05, 16 Apr 2004
 

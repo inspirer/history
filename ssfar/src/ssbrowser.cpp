@@ -67,28 +67,32 @@ int WINAPI _export Configure( int ItemNumber )
 	char s[128];
 
 	FarDialog dlg;
-	static int id_allocated, id_cancel, id_prefix, id_ver, id_showdates;
+	static int id_allocated, id_cancel, id_prefix, id_ver, id_showdates, id_marksys, id_markro;
 	static struct InitDialogItem items[] = {
 	 { DI_TEXT,       1,0,0,0,		0,0,0,0,(char*)msg_config_prefix },
 	 { DI_EDIT,       1,1,-2,0,		1,(int)"ss_prefix",DIF_HISTORY,0, "", &id_prefix },
 
 	 { DI_TEXT,       1,2,0,0,		0,0,DIF_SEPARATOR,0,"" },
 	 { DI_CHECKBOX,   1,3,0,0,      0,0,0,0,(char*)msg_config_showdates,&id_showdates },
+	 { DI_CHECKBOX,   1,4,0,0,      0,0,0,0,(char*)msg_config_markro,&id_markro },
+	 { DI_CHECKBOX,   1,5,0,0,      0,0,0,0,(char*)msg_config_marksys,&id_marksys },
 
-	 { DI_TEXT,       1,4,0,0,		0,0,DIF_SEPARATOR,0,"" },
-	 { DI_TEXT,       1,5,0,0,		0,0,0,0,"",&id_ver },
-	 { DI_TEXT,       1,6,0,0,		0,0,0,0,"",&id_allocated },
+	 { DI_TEXT,       1,6,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_TEXT,       1,7,0,0,		0,0,0,0,"",&id_ver },
+	 { DI_TEXT,       1,8,0,0,		0,0,0,0,"",&id_allocated },
 
-	 { DI_TEXT,       1,7,0,0,		0,0,DIF_SEPARATOR,0,"" },
-	 { DI_BUTTON,     0,8,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_config_ok },
-	 { DI_BUTTON,     0,8,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_config_can, &id_cancel },
+	 { DI_TEXT,       1,9,0,0,		0,0,DIF_SEPARATOR,0,"" },
+	 { DI_BUTTON,     0,10,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_config_ok },
+	 { DI_BUTTON,     0,10,0,0,		0,0,DIF_CENTERGROUP,0,(char*)msg_config_can, &id_cancel },
 	};
 
-	create_fdlg( &dlg, 60, 13, msg_config, items, array_size( items ) );
+	create_fdlg( &dlg, 70, 15, msg_config, items, array_size( items ) );
 	FSF.sprintf( dlg.di[id_allocated].Data, MSG(msg_config_alloc), allocated_blocks ); 
 	FSF.sprintf( dlg.di[id_ver].Data, MSG(msg_config_version), VERSION ); 
 	GetRegKey( "", "cmdline_prefix", cmdprefix, cmdprefix, 256 );
 	GetRegKey( "", "showdates", dlg.di[id_showdates].Selected, 0 );
+	GetRegKey( "", "markro", dlg.di[id_markro].Selected, 1 );
+	GetRegKey( "", "marksys", dlg.di[id_marksys].Selected, 1 );
 	strcpy( dlg.di[id_prefix].Data, cmdprefix );
 
 	int ec = process_fdlg( &dlg );
@@ -101,6 +105,8 @@ int WINAPI _export Configure( int ItemNumber )
 	strcpy( cmdprefix, dlg.di[id_prefix].Data );
 	SetRegKey( "", "cmdline_prefix", cmdprefix );
 	SetRegKey( "", "showdates", dlg.di[id_showdates].Selected );
+	SetRegKey( "", "markro", dlg.di[id_markro].Selected );
+	SetRegKey( "", "marksys", dlg.di[id_marksys].Selected );
 	destroy_fdlg( &dlg );
 
 	return TRUE;

@@ -3,7 +3,7 @@
 #ifndef SS_H_INCLUDED
 #define SS_H_INCLUDED
 
-#define VERSION   "1.05"
+#define VERSION   "1.06"
 
 #include <windows.h>
 #include <string.h>
@@ -119,6 +119,15 @@ private:
 	void split_cdir( );
 	int try_to_change( int first_enter );
 	int get_date( IVSSItem *item, DATE *change );
+
+public:
+	struct DLGList {
+		int version;
+		IVSSItem *item;
+	} *dlg_list;
+
+private:
+	void ShowHistory( IVSSItem *item );
 
 public:
 	SS( int of, int item );
@@ -238,7 +247,10 @@ enum {
 	msg_kb_c8,
 	msg_kb_a5,
 	msg_kb_a6,
+	msg_kb_ca5on,
+	msg_kb_ca5off,
 	msg_kb_ca6,
+	msg_kb_ca7,
 
 	msg_config_alloc,
 	msg_config_ok,
@@ -246,6 +258,8 @@ enum {
 	msg_config_prefix,
 	msg_config_version,
 	msg_config_showdates,
+	msg_config_markro,
+	msg_config_marksys,
 
 	msg_defdir_title,
 	msg_defdir_msg,
@@ -254,6 +268,17 @@ enum {
 	msg_ren_title,
 	msg_ren_msg,
 	msg_ren_ok,
+
+	msg_hist_title,
+	msg_hist_ok,
+	msg_hist_view,
+	msg_hist_details,
+	msg_hist_get,
+	msg_hist_co,
+	msg_hist_diff,
+	msg_hist_pin,
+	msg_hist_rollback,
+	msg_hist_help,
 };
 
 
