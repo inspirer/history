@@ -1,0 +1,71 @@
+ // Task sample
+#code 32
+#output startup.bin
+
+  db "CE",26       // sign       [3]
+  db "STARTUP",[2] // task name  [9]
+  dw 1             // stack size [w]
+  dw 2             // task size  [w]
+
+#org 0
+
+  // Allocate console
+  ah=3;int 0x24;push eax
+
+  // Show copyright
+  push cs;pop ds;ah=0xC;esi=str;int 0x23
+
+  esi=fname;ax=0x100;int 0x25;edx=eax
+  if (~c){ edx=|0xABAB0000 }
+
+  // Show number
+  ecx=8
+  { rol edx,4;al=dl&0F+'0';if(al>'9'){al=+7} ah=5;int 0x23;loop ?^0 }
+
+  // Endl
+  ax=0x50A;int 0x23
+
+  // Allocate console
+  ah=3;int 0x24;push eax
+
+  // Show copyright
+  ah=0xC;esi=str2;int 0x23
+
+  // Show
+  ax=0;ebx=5;int 0x20;es=ax;ds=ax;clc;xor ebx,ebx
+  while(ebx<100){
+    push ebx;push ebx
+    ah=0x46;xor edi,edi;int 0x20;pop ebx
+    if(~nc){ push ebx
+      xor esi,esi;ah=0xC;int 0x23;ax=0x53D;int 0x23
+      ah=0x43;xor edi,edi;b:[edi]=0;pop ebx;int 0x20
+      if(~nc){ xor esi,esi;ah=0xC;int 0x23 }
+      ax=0x520;int 0x23
+    }
+    pop ebx;inc ebx
+  }
+
+  // consoles ID
+  pop edi;pop esi
+
+  // Wait for ESC
+  {
+    bx=di;ah=5;int 0x24
+    ax=0x52E;int 0x23
+    ecx=1000 0000;loop $
+    bx=si;ah=5;int 0x24
+    ax=0x52A;int 0x23
+
+    ah=0;int 0x24
+    if(~nc&&al!=1){ ah=5;int 0x23 }
+    if (~c||al!=1){ jmp ?^1 }
+  }
+
+  // Kill console
+  bx=si;ah=4;int 0x24
+  bx=di;ah=4;int 0x24
+  iret
+
+str: db "ChaOS SHELL v0.99/alpha. Console number: ",0
+str2: db "LOG ver0.99",10,"alpha",10,":",0
+fname: db "/main/SOURCE/CHAOS/chaos.ini",0

@@ -144,7 +144,7 @@
    movzx ebx,w:[ebp.vm_cs]
    edx=ebx<<4+eax
    ebp=d:fs:[edx]
-   ebp = 0xFABEA1
+   //ebp = 0xFABEA1
    jmp debug
 
 

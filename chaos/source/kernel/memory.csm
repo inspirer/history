@@ -673,8 +673,7 @@ exc20_n5:
       mov al,b:[~esi+5];and al,0x9E
       if (al!=0x92){
          pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
-         ax=err_wrong_info
-         jmp set_cf
+         ax=err_wrong_info;jmp set_cf
       }
 
       // Save location & limit

@@ -1,10 +1,10 @@
  // ChaOS kernel Loader
 #shortdef debug 1
-#output bin\chaos.com
+#output chaos.com
 #org 0x100
 #code 16
   jmp start
-    #include crt.ch
+    #include source\kernel\crt.ch
   start:
 
   printf("\nStarting ChaOS/alpha ...\n")
@@ -77,7 +77,7 @@ oldseg:
   out   0x60,al
 
   if (ecx==1){
-    printf("Exeption \H at \H : \H\n",esi,edi,ebp)
+    printf("Exception \H at \H : \H\n",esi,edi,ebp)
   }
 
   printf("ChaOS/alpha finished\n")
@@ -159,7 +159,7 @@ ret_addr:
 
 gdtstart:
 
-#include gdt.csm
+#include source\kernel\gdt.csm
 
 #shortdef gdt_size $-gdtstart
 

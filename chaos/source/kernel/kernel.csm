@@ -1,6 +1,6 @@
  // ChaOS kernel v0.99
-#output bin\kernel.bin
-#include kern_def.csm
+#output kernel.bin
+#include source\kernel\kern_def.csm
 #code 32
 #org 0
 
@@ -89,21 +89,17 @@
    esi=process_list
    { d:[esi]=0;esi=+4;loop ?^0 }
 
-   // registry
-   reg_init()
-
    // VM00 task
    init_VM_task()
 
    // Enable ints
    enable_int_system()
 
+   // registry
+   reg_init()
+
    // drivers
    init_drivers()
-
-   // Load main task
-   esi=xtask_name;loadtask()
-   w:[xtask_PID]=ax
 
    // Switch first task
    cli
@@ -111,12 +107,8 @@
    callf d:[xtask]
    w:m_task_en=2
 
-   // Show debug
-   #ifdef show_debug_info
-     #include debug.csm
-   #endif
-
    // Exit to DOS (no errors)
+_dos_exit:
    xor ecx,ecx
    jmp exit
 
@@ -127,27 +119,27 @@ xtask_PID   : dw 0
 #shortdef kernel_switch $-4
 kernel_PID  : dw 0
 
-   // ------------------------[ built-in Drivers ]---------------------------
-
-  // Int 20
-  #include memory.csm
-  #include process.csm
-  #include regman.csm
-
-  // Int 21
-  #include filesyst.csm
-  #include scr_io.csm
-
-  #include ints.csm
-  #include driver.csm
-  #include vmm.csm
-
    // ------------------------------ [ Data ] ------------------------------
 
     // Interrupt descriptor table
    idt_place:
-     #include idt.csm
+     #include source\kernel\idt.csm
    #shortdef idt_size $-idt_place
+
+   // ------------------------[ built-in Drivers ]---------------------------
+
+  // Int 20
+  #include source\kernel\memory.csm
+  #include source\kernel\process.csm
+  #include source\kernel\regman.csm
+
+  // Int 21
+  #include source\kernel\filesyst.csm
+  #include source\kernel\scr_io.csm
+
+  #include source\kernel\ints.csm
+  #include source\kernel\driver.csm
+  #include source\kernel\vmm.csm
 
    // ------------------------ [ Return to loader ] ------------------------
 exit:

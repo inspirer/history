@@ -96,8 +96,8 @@ exc20_r0:
      d:[~esi.x_sub]=eax
 
      // Save rights
-     push ebp;mov ebp,esp;ax=w:[~ebp.32];and ax,3;pop ebp;pop ebx;and bx,3
-     if (bl>al){ al=bl }
+     push ebp;mov ebp,esp;ax=w:[~ebp.32];and ax,3;pop ebp;pop ecx;and cx,3
+     if (cl>al){ al=cl }
      w:[~esi.x_attr]=ax
 
      // Save name
@@ -233,8 +233,7 @@ exc20_r2:
        // ID not found
        if (ebx==0xFFFFFFFF){
           pop ds;pop esi;pop edi;pop ecx;pop ebx;pop eax
-          ax=err_sys_integrity
-          jmp set_cf
+          ax=err_sys_integrity;jmp set_cf
        }
 
        // Found => check name
@@ -515,7 +514,7 @@ reg_sel: dw 0
 reg_init:
 
    push es
-   ah=6;ebx=1;int 0x20
+   ah=6;ebx=mem_for_regs;int 0x20
    es=ax;w:[reg_sel]=ax;xor edi,edi
 
    // Create ROOT (FLAG=1 ; ID=0 ; NEXT=-1 ; SUB =-1; UP=-1)
@@ -529,11 +528,84 @@ reg_init:
    xor ebx,ebx;ax=0x4001;esi=breg1;int 0x20
    xor ebx,ebx;ax=0x4000;esi=breg2;int 0x20
    xor ebx,ebx;ax=0x4001;esi=breg3;int 0x20
-   xor ebx,ebx;ax=0x4003;esi=breg4;int 0x20
+   xor ebx,ebx;ax=0x4001;esi=breg4;int 0x20
 
+   // Open REGS.INI
+   ax=0x100;esi=regs_ini;int 0x21
+   if (~c){
+     ah=0x31;int 0x21;esi=driver_err_02;ah=0x31;int 0x21
+     jmp _write_ln_exit
+   }
+   bx=ax
+
+   // Process INI (default is root)
+   push es;pop es;push es;ax=mem_kernel_data;es=ax;edi=_ini_str_;d:kid=0
+   {
+      push edi;ah=3;cx=120;edi=_ini_data_;int 0x21;pop edi
+      _if(ax>0){
+        xor ecx,ecx;cx=ax;esi=_ini_data_
+        {
+          lodsb
+          ifelse (al==10||al==13){
+            xor eax,eax;stosd
+            edi=_ini_str_
+            _if (b:[edi]!=0){
+               push esi;esi=edi
+
+               ifelse (b:[esi]=='#'){
+
+                  // Save base string
+                  inc esi;push edi;push ebx
+                  edi=_ini_end_;
+                  { lodsb;stosb;if (al!=0){ jmp ?^1} }
+                  edi=_ini_end_;
+                  ah=0x42;int 0x20
+                  if (~c){
+                    _invalide_reg_key_:
+                    esi=edi;ah=0x31;int 0x21;esi=err_invalid_key;ah=0x31;int 0x21
+                    jmp _write_ln_exit
+                  }
+                  d:kid=ebx
+                  pop ebx;pop edi
+
+               } else {
+
+                  // ESI - str ; d:KID - id
+                  push ebx;push edi;push esi
+                  al=1;while(al!=0&&al!='='){lodsb}
+                  edi=esi;dec esi;b:[esi]=0;
+                  pop esi
+
+                  // ESI - str ; EDI - val ; d:KID - id
+                  ax=0x4001;ebx=d:KID;int 0x20
+                  if (~c){ edi=esi;jmp _invalide_reg_key_ }
+                  ebx=eax;push ecx;ax=0x4401;esi=edi
+                  xor ecx,ecx;while(b:[edi]!=0){ inc ecx;inc edi }
+                  inc ecx;int 0x20
+                  pop ecx;pop edi;pop ebx
+
+               }
+               pop esi
+            }
+
+          } else {
+            stosb
+          }
+          loop _loop_read_ini_;jmps ?v0;_loop_read_ini_:jmp ?^0
+        }
+        jmp ?^1
+      }
+   }
+   pop es
+
+   // close & return
+   ah=2;int 0x21
    ret
 
 breg1: db "Device",0  // Driver info
 breg2: db "System",0  // Kernel info
 breg3: db "Process",0 // Process info
-breg4: db "Software",0 // Software
+breg4: db "Root",0    // Root directory
+regs_ini: db "regs.ini",0
+err_invalid_key: db " : invalid key",0
+kid: dd 0

@@ -1,0 +1,149 @@
+ // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+ // FileSystem driver
+#code 32
+#output fsys.bin
+
+   db "CHAOS",26    // sign [6]
+   db "FSYSTEM",0   // Driver name [8]
+   dw 0x2           // Size in pages [2]
+
+#shortdef _h_name 0
+#shortdef _h_hand _h_name+262
+#shortdef _h_attr _h_hand+4
+#shortdef _h_task _h_attr+4
+#shortdef _h_structure _h_task+4
+
+#shortdef max_handle_num 100
+#shortdef _driver_mem_end_ max_handle_num*_h_structure+10
+#shortdef driver_mem _driver_mem_end_/4096+2
+
+#shortdef err_no_support     3
+#shortdef err_wrong_info     5
+#shortdef err_access_denied  6
+#shortdef err_file_not_found 0x80
+#shortdef err_no_free_desc 0x81
+
+#org 0
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+       // Show cpr
+       push cs;pop ds;esi=cpr;ah=0x31;int 0x21
+
+       // Allocate handle buffer
+       ah=6;ebx=driver_mem;int 0x20;ds=ax
+       bx=ax;edi=mem;ah=3;int 0x22
+
+       // Allocate int25
+       ax=0x125;edx=int25;int 0x22
+
+       // Set all handles = free
+       ecx=max_handle_num;esi=_h_task
+       { w:[esi]=0;esi=+_h_structure;loop ?^0 }
+
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  int25:
+       // Clear CF
+       clc;cld;push ebp
+       mov ebp,esp
+       and b:[~ebp+12],0xFE
+       pop ebp
+       cmp ah,0x1 ; jz open_file
+       jmp int25_f0
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 1. Create file
+
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 2. Open file
+  //  In:  ah=1; al=access mode (0-read,1-write,2-r/w)
+  //       ds:esi - name
+  //  Out: CF or ax=handle
+  open_file:
+       if (b:[esi]!='/'){ ax=err_wrong_info;jmp set_cf }
+       push es;push ds;push esi;push edi;push ecx;push ebx;push eax
+
+       // Copy file name to buffer
+       #shortdef _file_name_full_ _driver_mem_end_+4096
+       eax=d:cs:mem;es=ax;edi=_file_name_full_;push edi
+       mov eax,'/Roo';stosd;al='t';stosb
+       { lodsb;stosb;cmp al,0;jnz ?^0 } push es;pop ds
+
+       // set esi to end
+       pop esi;edi=esi { lodsb;cmp al,0;jnz ?^0 } dec esi;dec esi
+
+       // ES:EDI - ptr to start ; DS:ESI to end ; search for last "/"
+       _while(edi<esi){
+         _if (b:[esi]=='/'){
+           push esi;b:[esi]=0;
+           ah=0x42;int 0x20
+           _if (~nc){
+
+              // Copy to >MEM:_driver_mem_end_< full path + name
+              edi=_driver_mem_end_
+              ah=0x43;int 0x20;while(b:[edi]!=0){ inc edi } inc esi
+              { lodsb;stosb;cmp al,0;jnz ?^0 } pop esi
+
+              // Check driver ID
+              esi=_driver_mem_end_
+              _ifelse(d:[esi]=='dos,'){
+                 lodsd;edi=esi
+
+                 // Redirect to DOS (int 0x21)
+                 xor esi,esi;ecx=max_handle_num;xor eax,eax
+                 { if(w:[_h_task]==0){ dec eax;jmp ?v1 } esi=+_h_structure;loop ?^0 }
+
+                 // No free handle
+                 if(ax==0){
+                    pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+                    ax=err_no_free_desc;jmp set_cf
+                 }
+
+                 // DS:ESI - block ; ES:EDI - fname ; save fname
+                 push ecx;push esi;push edi;xchg esi,edi;esi=_file_name_full_
+                 { lodsb;stosb;cmp al,0;jnz ?^0 }
+
+                 // Save task ID
+                 pop edi;pop esi;str ax;and al,0xF8;w:[esi._h_task]=ax
+
+                 // Open file & save handle
+                 pop ecx;pop eax;push ecx;push esi;esi=edi;int 0x21
+                 if (~c){
+                   pop esi;w:[esi._h_task]=0;
+                   pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+                   ax=err_file_not_found;jmp set_cf
+                 }
+                 pop esi;w:[esi._h_hand]=ax
+
+              } else {
+
+
+              }
+
+              pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+              iret
+
+           }
+           pop esi;b:[esi]=0x2F
+         }
+         dec esi
+       }
+       pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds;pop es
+       ax=err_file_not_found;jmp set_cf
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+
+  int25_f0:
+       ax=err_no_support
+  set_cf:
+       push ebp
+       mov ebp,esp
+       or d:[~ebp+12],1
+       pop ebp
+       iret
+
+cpr: db "ChaOS File System device driver",13,10,0
+mem: dd 0

@@ -1,0 +1,329 @@
+ // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+ // VGA Display driver
+#code 32
+#output display.bin
+
+   db "CHAOS",26    // sign [6]
+   db "DISPLAY",0   // Driver name [8]
+   dw 0x2           // Size in pages [2]
+
+#shortdef max_screen_num 10
+#shortdef driver_mem max_screen_num
+
+#shortdef _screen 0      // w:screen [4000]
+#shortdef _task   4000   // w:3..15 - task ID ; 0bit - set if curr for task
+#shortdef _cursor 4002   // w:cursor pos (0..80*25)
+#shortdef _color  4004   // w:low byte : 0..3 - color ; 4..7 - background
+#shortdef _size   4006
+
+#shortdef err_no_support     3
+#shortdef err_wrong_info     5
+#shortdef err_access_denied  6
+#shortdef err_screen_abs     0x80
+#shortdef err_no_free_screen 0x81
+#shortdef err_xy_out_of_range 0x82
+
+#org 0
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+       // Show cpr
+       push cs;pop ds;esi=cpr;ah=0x31;int 0x21
+
+       // Allocate screen (for 0xB8000)
+       ah=6;ebx=1;int 0x20
+       bx=ax;edi=scr;ah=3;int 0x22
+
+       // Allocate buffer for screens
+       ah=6;ebx=driver_mem;int 0x20;ds=ax
+       bx=ax;edi=mem;ah=3;int 0x22
+
+       // Allocate int23
+       ax=0x123;edx=int23;int 0x22
+
+       // Set all screens = free
+       ecx=max_screen_num;esi=_task
+       { w:[esi]=0;esi=+4096;loop ?^0 }
+
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // First call => init driver
+  init_driver:
+       push ds;push es;push esi;push edi;push edx;push ecx;push ebx;push eax
+
+       // Map memory to 0xB8000
+       edx=d:cs:scr;ebx=0xB8000;ah=0xB;int 0x20;ds=dx
+
+       // Copy base screen from 0xB8000 to mem & setup
+       eax=d:cs:mem;es=ax;xor esi,esi;xor edi,edi;ecx=1000;rep movsd
+       ax=1;stosw;ax=3840;stosw;al=7;stosw
+
+       // Save at int23 4 "nop"
+       ah=0x3;ebx=0x90909090;edi=int23;int 0x22
+
+       pop eax;pop ebx;pop ecx;pop edx;pop edi;pop esi;pop es;pop ds
+       jmps _end_init_driver
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  int23:
+
+       // 4 byte construction ; 1st call => init
+       jmps init_driver;nop;nop
+
+  _end_init_driver:
+
+       // Clear CF
+       clc;cld;push ebp
+       mov ebp,esp
+       and b:[~ebp+12],0xFE
+       pop ebp
+       cmp ah,0x0 ; jz allocate_screen
+       jmp exc20_d0
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 1. Allocate screen
+  //  In:  ah = 0
+  //  Out: CF or ax=ID
+  allocate_screen:
+       check_first_ring();if (~c){ ax=err_access_denied;jmp set_cf }
+
+       push ds;push esi;push eax;push ecx
+
+       // Search for free screen
+       esi=cs:d:mem;ds=si;xor esi,esi
+       ecx=max_screen_num;ax=0xFFFF
+       { if (w:[esi._task]==0){ ax=0;jmp ?v1} esi=+4096;loop ?^0}
+
+       // Not found free screen
+       if (ax!=0){
+         pop ecx;pop eax;pop esi;pop ds
+         ax=err_no_free_screen;jmp set_cf
+       }
+
+       // other active screens for this task will be inactive
+       push esi;ecx=max_screen_num;xor esi,esi;str ax;al=&0xF8;inc ax
+       { if (ax==w:[esi._task]){ and b:[esi._task],0xF8} esi=+4096;loop ?^0 }
+       pop esi
+
+       // Prepeare it
+       eax=esi>>12;push eax
+       ecx=2000 { w:[esi]=0x700;inc esi;inc esi;loop ?^0 }
+       w:[~esi.2]=0;w:[~esi.4]=7;str ax;al=&0xF8;inc ax;w:[esi]=ax
+
+       // and return ID
+       pop eax;pop ecx;pop esi;pop esi;pop ds
+
+       iret
+
+  exc20_d0:
+       cmp ah,0x1 ; jz kill_screen
+       jmp exc20_d1
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 2. Kill screen
+  //  In:  ah = 1
+  //       bx = ID
+  //  Out: <none>
+  kill_screen:
+       check_first_ring();if (~c){ ax=err_access_denied;jmp set_cf }
+       if (bx=>max_screen_num||bx==0){ ax=err_wrong_info;jmp set_cf }
+
+       push ds;push esi;push eax;push ebx
+       esi=cs:d:mem;ds=si;xor esi,esi;si=bx;esi=<<12
+       ax=w:[esi._task];al=&0xF8;str bx;and bl,0xF8
+       if (ax!=bx){
+          pop ebx;pop eax;pop esi;pop ds
+          ax=err_wrong_info;jmp set_cf
+       }
+       w:[esi._task]=0;
+       pop ebx;pop eax;pop esi;pop ds
+
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 3. Make screen visible
+  //  In:  ah = 2
+  //       bx = ID
+  //  Out: CF
+  make_screen_visible:
+       check_first_ring();if (~c){ ax=err_access_denied;jmp set_cf }
+
+       push edi;push eax
+       ah=3;edi=curr;int 0x22
+       ah=3;int 0x23
+       pop eax;pop edi
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 4. Refresh console
+  //  In:  ah = 3
+  //  Out: <none>
+  refresh_console:
+       push ds;push es;push eax;push esi;push edi;push ecx
+
+       // Refresh screen
+       eax=d:cs:scr;ebx=d:cs:mem;es=ax;ds=bx;esi=d:cs:curr<<12
+       xor edi,edi;ecx=1000;rep movsd;lodsw
+
+       // Refresh cursor
+       push edx;lodsw;cx=ax;cx=>>1;mov dx,0x3D4;mov al,0xE;out dx,al;inc dx;mov al,ch;out dx,al
+       mov dx,0x3D4;mov al,0xF;out dx,al;inc dx;mov al,cl;out dx,al;pop edx
+
+       pop ecx;pop edi;pop esi;pop eax;pop es;pop ds
+       iret
+
+  exc20_d1:
+       cmp ah,0x2 ; jz make_screen_visible
+       cmp ah,0x3 ; jz refresh_console
+       cmp ah,0x4 ; jz set_screen_to_write
+       cmp ah,0x5 ; jz write_char
+       jmp exc20_d2
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 5. Set screen to write
+  //  In:  ah = 4
+  //       bx = ID
+  //  Out: CF()
+  set_screen_to_write:
+       check_first_ring();if (~c){ ax=err_access_denied;jmp set_cf }
+
+       push ds;push esi;push ecx;push eax
+
+       // Search for current console
+       esi=cs:d:mem;ds=si;xor esi,esi;si=bx;str ax;and al,0xF8
+       esi=<<12;cx=w:[esi._task];and cl,0xF8
+
+       // this screen belongs to other task
+       if (cl!=al){
+         pop eax;pop ecx;pop esi;pop ds
+         ax=err_access_denied;jmp set_cf
+       }
+
+       // Make other screens of current task inactive
+       push esi;xor esi,esi;ecx=max_screen_num;str ax;and al,0xF8;ax=++
+       { if(w:[esi._task]==ax){and b:[esi._task],0xF8}esi=+4096;loop ?^0 }
+
+       // Set new screen active
+       pop esi;or b:[esi._task],1
+
+       pop eax;pop ecx;pop esi;pop ds
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 6. Write character
+  //  In:  ah = 5
+  //       al = char
+  //  Out: <none>
+  write_char:
+       push ds;push eax;push esi;push ecx;push eax
+
+       // Search for current console
+       esi=cs:d:mem;ds=si;xor esi,esi
+       str ax;and al,0xF8;inc ax
+       mov ecx,max_screen_num-1
+       { if (ax!=w:[esi._task]){ esi=+4096;loop ?^1 } }
+       if (ax!=w:[esi._task]){
+          pop eax;pop ecx;pop esi;pop eax;pop ds
+          ax=err_screen_abs;jmp set_cf
+       }
+
+       // Save character at cursor with needed attr
+       xor eax,eax;ax=w:[esi._cursor];pop ecx;push edi
+       ifelse (cl==10){
+         edi=esi;xor esi,esi;while(si<=ax){ si=+160 }
+         w:[edi._cursor]=si
+       } else {
+         edi=esi;esi=+eax;b:[esi]=cl
+         inc esi;al=b:[edi._color];b:[esi]=al
+         w:[edi._cursor]=+2
+       }
+
+       // cursor < 4000 => eat line
+       while (w:[edi._cursor]=>4000){
+         push es;push edi;push ds;pop es
+         esi=edi+160;ecx=960;push edi;rep movsd;pop esi
+         ah=b:[esi._color];al=0;ecx=80;rep stosw
+         pop edi;pop es
+         w:[edi._cursor]=-160
+       }
+
+       // Update screen
+       ah=3;int 0x23
+
+       pop edi;pop ecx;pop esi;pop eax;pop ds
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 7. GotoXY
+  //  In:  ah=6
+  //       bh:bl = X:Y
+  //  Out: CF(err_screen_abs,err_xy_out_of_range)
+  gotoxy:
+       and bx,0x7F7F;if (bh=>80||bl=>26){ ax=err_xy_out_of_range;jmp set_cf }
+       push ds;push eax;push esi;push ecx
+
+       // Search for current console
+       esi=cs:d:mem;ds=si;xor esi,esi
+       str ax;and al,0xF8;inc ax
+       mov ecx,max_screen_num-1
+       { if (ax!=w:[esi._task]){ esi=+4096;loop ?^1 } }
+       if (ax!=w:[esi._task]){
+          pop ecx;pop esi;pop eax;pop ds
+          ax=err_screen_abs;jmp set_cf
+       }
+
+       // Set cursor at BH:BL
+       al=160;mul bl;shl bh;bx=>>8;ax=+bx
+       w:[esi._cursor]=ax
+
+       pop ecx;pop esi;pop eax;pop ds
+       iret
+
+  exc20_d2:
+       cmp ah,0x6 ; jz gotoxy
+       cmp ah,0xC ; jz write_asciiz
+       ax=err_no_support
+  set_cf:
+       push ebp
+       mov ebp,esp
+       or d:[~ebp+12],1
+       pop ebp
+       iret
+
+  // 8.
+  // 9.
+  // 10.
+  // 11.
+  // 12.
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 13. Write string
+  //  In:  ah = C
+  //       ds:esi <- asciiz
+  write_asciiz:
+       push eax;push esi
+       {
+         lodsb
+         cmp al,0
+         jz ?v0
+         ah=5;int 0x23
+         jmps ?^0
+       }
+       pop esi;pop eax
+       iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  check_first_ring:
+      push ebp;mov ebp,esp;push eax
+      eax=d:[~ebp.12];and ax,3
+      ifelse (al<=1){ clc } else { stc }
+      pop eax;pop ebp
+      ret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+cpr: db "Character mode screen driver (with console support)",13,10,0
+scr: dd 0
+mem: dd 0
+curr: dd 0
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --

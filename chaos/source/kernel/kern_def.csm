@@ -1,0 +1,17 @@
+// MultiTasking
+#shortdef timer 0x4A8           // ~1KHz
+#shortdef multitasking 1        // 1 - multitasking enabled ; 0 - disabled
+
+// Processes
+#shortdef max_process 1000      // Number of process
+#shortdef default_prior 3       // Default task priority
+#shortdef ring0stacksize  2     // Kernel's stack
+#shortdef ring1stacksize  4     // Driver's stack
+
+// Kernel stack
+#shortdef dosfstck 1024         // in bytes
+#shortdef stacksize 1024
+
+// Drivers
+#shortdef max_driver_size 256   // Max size of driver (in pages) ~1Mb
+#shortdef mem_for_regs 24       // ~100kb

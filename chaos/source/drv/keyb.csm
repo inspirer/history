@@ -1,0 +1,335 @@
+ // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+ // System device driver
+#code 32
+#output keyb.bin
+
+  db "CHAOS",26    // sign [6]
+  db "KEYB",[4]    // Driver name [8]
+  dw 0x1           // Size in pages [2]
+
+#shortdef buf_max_num 10
+#shortdef buf_mem_size buf_max_num
+
+// Structure
+#shortdef _tail  0
+#shortdef _head  4
+#shortdef _task  8
+#shortdef _scrn  10
+#shortdef _state 12   // 0-ALT ; 1-CTRL
+#shortdef _start 14
+
+// faults
+#shortdef err_no_support       3
+#shortdef err_wrong_info       5
+#shortdef err_access_denied    6
+#shortdef no_char_in_buffer    0x80
+#shortdef err_no_console_found 0x81
+#shortdef err_no_free_console  0x82
+
+// keys
+#shortdef ALT_KEY 0x38
+#shortdef CTRLKEY 0x1D
+#shortdef TAB_KEY 0x0F
+#shortdef ALT_KEY_UP 0x80+ALT_KEY
+#shortdef CTRLKEY_UP 0x80+CTRLKEY
+
+#org 0
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+      // Show device name
+      push cs;pop ds;esi=cpr;ah=0x31;int 0x21
+
+      // Allocate buffer
+      ah=6;ebx=buf_mem_size;int 0x20;push eax
+      bx=ax;edi=sel;ah=3;int 0x22
+      pop eax;ds=ax
+
+      // first tail&head=_start, other=0
+      ecx=buf_max_num;esi=0;xor eax,eax
+      { d:[~esi._head]=eax;d:[~esi._tail]=eax;d:[~esi._task]=eax;esi=+4096;loop ?^0 }
+      eax=_start;d:_head=eax;d:_tail=eax;d:_task=1
+
+      // Allocate interrupts
+      ax=0x124;edx=int24;int 0x22
+      ax=0x201;edx=irq1;int 0x22
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  int24:
+      clc;push ebp
+      mov ebp,esp
+      and b:[~ebp+12],0xFE
+      pop ebp
+      cmp ah,0x0 ; jz read_next_key
+      jmp int24_d0
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 1. Read scancode
+  //  In:  ah = 0
+  //  Out: CF(no_char_in_buffer,err_no_console_found) or al=scancode
+  read_next_key:
+      push ds;push esi;push edi;push ecx;push ebx;push eax
+
+      // Search current console for this task
+      ax=w:cs:sel;ds=ax;xor esi,esi;ecx=buf_max_num;str ax;al=&0xF8;inc ax
+      { if(w:[~esi._task]==ax){ ax=0;jmps ?v1} esi=+4096;loop ?^0 }
+
+      // Not found => return error
+      if (ax!=0){
+        pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds
+        ax=err_no_console_found;jmp set_cf
+      }
+
+      // Prepeare EDI(head) & ESI(tail)
+      ebx=esi;edi=ebx+d:[~edi._head];esi=ebx+d:[~esi._tail];xor eax,eax
+
+      // Return scancode
+      ifelse (edi!=esi){
+        al=b:[edi];inc d:[~ebx._head];esi=d:[~ebx._head]&0xFFF
+        if (esi==0){ d:[~ebx._head]=_start }
+        ah=al&0x7F
+        if (ah==ALT_KEY){
+          ifelse(ah==al){
+            or w:[~ebx._state],1
+          } else {
+            and b:[~ebx._state],0xFE
+          }
+        }
+        if (ah==CTRLKEY){
+          ifelse(ah==al){
+            or w:[~ebx._state],2
+          } else {
+            and b:[~ebx._state],0xFD
+          }
+        }
+        ah=0
+      } else {
+        pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds
+        ax=no_char_in_buffer;jmp set_cf
+      }
+      pop ebx;pop ebx;pop ecx;pop edi;pop esi;pop ds
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 2. Read char/code
+  read_char_code:
+
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 3. Get keyboard shift status
+  get_keyboard_shift:
+      push ds;push esi;push eax;push ecx
+
+      // Search current console for this task
+      ax=w:cs:sel;ds=ax;xor esi,esi;ecx=buf_max_num;str ax;al=&0xF8;inc ax
+      { if(w:[~esi._task]==ax){ ax=0;jmps ?v1} esi=+4096;loop ?^0 }
+
+      // Not found => return error
+      if (ax!=0){
+        pop ecx;pop eax;pop esi;pop ds
+        ax=err_no_console_found;jmp set_cf
+      }
+
+      // Return keyboard shift status
+      ax=w:[~esi._state]
+      pop ecx;pop esi;pop esi;pop ds
+      iret
+
+int24_d0:
+      cmp ah,0x2 ; jz get_keyboard_shift
+      cmp ah,0x3 ; jz allocate_console
+      jmp int24_d1
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 4. Allocate console
+  //  In:  ah=3
+  //  Out: CF(err_no_free_console) or AX=ID
+  allocate_console:
+      push ds;push esi;push edi;push ecx;push ebx;push eax
+
+      // Search free input
+      ax=w:cs:sel;ds=ax;xor esi,esi;ecx=buf_max_num;xor eax,eax
+      { if(ax==w:[~esi._task]){ dec eax;jmp ?v1 } esi=+4096;loop ?^0 }
+
+      // No free input
+      if (ax==0){
+        _exit_no_free_console:
+        pop eax;pop ebx;pop ecx;pop edi;pop esi;pop ds
+        ax=err_no_free_console;jmp set_cf
+      }
+
+      // allocate screen for console
+      ah=0;int 0x23
+      jc _exit_no_free_console
+
+      // set other screens of this task = inactive
+      push esi;push eax;push ecx
+      ecx=buf_max_num;xor esi,esi;str ax;and al,0xF8;ax=++
+      { if(w:[~esi._task]==ax){and b:[~esi._task],0xF8} esi=+4096;loop ?^0 }
+      pop ecx;pop eax;pop esi
+
+      // found input at esi
+      w:[~esi._scrn]=ax;cx=ax
+      eax=esi>>12;push eax
+      str ax;al=&0xF8;inc ax;w:[~esi._task]=ax
+      eax=_start;d:[~esi._head]=eax;d:[~esi._tail]=eax
+
+      // Set as visible console
+      ah=2;bx=cx;int 0x23
+      pop ebx;push ebx;edi=curr;ah=3;int 0x22
+
+      pop eax;pop ecx;pop ebx;pop ecx;pop edi;pop esi;pop ds
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 5. Free console
+  //  In:  ah=4
+  //       bx=ID
+  //  Out: CF (err_access_denied)
+  free_console:
+      push ds;push esi;push eax;push ebx
+
+      // task must have access to console
+      ax=w:cs:sel;ds=ax;xor esi,esi;si=bx;push esi;esi=<<12
+      str ax;al=&0xF8;bx=w:[~esi._task];bl=&0xF8;
+      if (bx!=ax){
+        pop eax;pop ebx;pop eax;pop esi;pop ds
+        ax=err_access_denied;jmp set_cf
+      }
+
+      // Kill old console
+      w:[~esi._task]=0;ah=1;bx=w:[~esi._scrn];int 0x23
+
+      // Switch next console
+      pop eax;push edi
+      {
+        inc eax;if (ax==buf_max_num){ ax=0 }
+        esi=eax<<12;if (w:[~esi._task]==0){ jmps ?^1 }
+      }
+      ebx=eax;ah=3;edi=curr;int 0x22
+      bx=w:[~esi._scrn];ah=2;int 0x23
+
+      pop edi;pop ebx;pop eax;pop esi;pop ds
+      iret
+
+int24_d1:
+      cmp ah,0x4 ; jz free_console
+      cmp ah,0x5 ; jz change_active_console
+
+      ax=err_no_support
+  set_cf:
+      push ebp
+      mov ebp,esp
+      or d:[~ebp+12],1
+      pop ebp
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // 6. Change active console
+  //  In:  ah=5
+  //       bx=ID
+  //  Out: CF (err_no_console_found)
+  change_active_console:
+      push ds;push esi;push eax;push ebx;push ecx
+
+      // task must have access to this console
+      ax=w:cs:sel;ds=ax;xor esi,esi;si=bx;esi=<<12
+      str ax;al=&0xF8;bx=w:[~esi._task];bl=&0xF8
+      if (bx!=ax){
+        pop ecx;pop ebx;pop eax;pop esi;pop ds
+        ax=err_access_denied;jmp set_cf
+      }
+
+      // set other screens of this task = inactive
+      push esi;ecx=buf_max_num;xor esi,esi;str ax;and al,0xF8;ax=++
+      { if(w:[~esi._task]==ax){and b:[~esi._task],0xF8} esi=+4096;loop ?^0 }
+      pop esi
+
+      // Set screen active
+      or b:[~esi._task],1
+      ah=4;bx=w:[~esi._scrn];int 0x23
+
+      pop ecx;pop ebx;pop eax;pop esi;pop ds
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  // Keyboard IRQ handler
+  irq1:
+      cli
+      push eax;push ds;push esi
+      ax=w:cs:sel;ds=ax
+      eax=cs:d:curr<<12;esi=eax+d:[~eax._tail]
+      push eax
+
+      // Save & increment tail
+      in al,0x60;ah=al;and ah,0x7F
+      ifelse (ah==ALT_KEY||ah==TAB_KEY||ah==CTRLKEY){
+
+        if (ah==ALT_KEY){
+            push eax;push ebx;push edi
+            ebx=d:cs:altshift
+            ifelse(ah==al){
+              bl=|1;
+            } else {
+              bl=&0xFE
+            }
+            edi=altshift;ah=3;int 0x22
+            pop edi;pop ebx;pop eax
+            jmps _save_key_in_buffer
+        }
+
+        if (ah==CTRLKEY){
+            push eax;push ebx;push edi
+            ebx=d:cs:altshift
+            ifelse(ah==al){
+              bl=|2;
+            } else {
+              bl=&0xFD
+            }
+            edi=altshift;ah=3;int 0x22
+            pop edi;pop ebx;pop eax
+            jmps _save_key_in_buffer
+        }
+
+        // TAB key pressed but no ALT => save
+        if (b:cs:altshift!=1){ jmps _save_key_in_buffer }
+
+        // TAB UP
+        if(ah!=al){
+
+           // Switch next console
+           pop eax;push eax;push ebx;push edi;eax=>>12
+           {
+             inc eax;if (ax==buf_max_num){ ax=0 }
+             esi=eax<<12;if (w:[~esi._task]==0){ jmps ?^1 }
+           }
+           ebx=eax;ah=3;edi=curr;int 0x22
+           bx=w:[~esi._scrn];ah=2;int 0x23
+           pop edi;pop ebx
+        }
+        pop eax
+
+      } else {
+
+        _save_key_in_buffer:
+        b:[esi]=al;pop eax
+        inc d:[~eax._tail];esi=d:[~eax._tail]
+        and esi,0xFFF;if (esi==0){ esi=_start;d:[~eax._tail]=esi }
+
+      }
+
+      pop esi;pop ds
+      mov al,0x20
+      out 0x20,al
+      pop eax
+      sti
+      iret
+
+  // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+cpr: db "Keyboard standard 101/102-key + console device driver",13,10,0
+sel: dd 0
+curr: dd 0
+altshift: dd 0   // 0bit - ALT ; 1bit - CTRL

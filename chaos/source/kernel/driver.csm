@@ -116,18 +116,19 @@ int_22:
    pop ecx;pop ds;pop esi;pop eax;pop ebp
    iret
 
-
+  // Some data
 xtable:
    db 0x78,0x79,0x7A,0x7B,0x7C,0x7D,0x7E,0x7F // master
    db 0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77 // slave
+drv_signal: db 0
+drv_head: db [16]
 
- // LOAD driver function
+  // Driver defines
 #shortdef driver_sign 0x0
 #shortdef driver_name 0x6
 #shortdef driver_size 0xE
-drv_head: db [16]
-drv_signal: db 0
 
+  // LOAD driver function
 load_driver:
    push ebx;push ecx;push edx;push esi;push edi;push ds;push es
 
@@ -155,8 +156,10 @@ load_driver:
          pop eax
 
          // set data to code
+         push esi
          bx=mem_idt_gdt_data;ds=bx;esi=eax+0x805
          b:[esi]=0xBA
+         pop esi
 
        } else { stc;ax=0xFE }
 
@@ -168,7 +171,7 @@ load_driver:
    _ifelse (~nc){
 
       // set driver as handler for int80
-      push eax
+      push esi;push eax
       cx=mem_idt_gdt_data;ds=cx
       xor ebx,ebx;bx=ax;ebx=<<16
       d:[0x400]=ebx;xor ebx,ebx
@@ -192,7 +195,17 @@ load_driver:
 
       // Free int80
       xor eax,eax;d:[0x400]=eax;d:[0x404]=eax
-      pop eax
+      pop eax;pop esi
+
+      // Error => exit
+      ax=mem_kernel_data;ds=ax
+      if (b:drv_signal!=0){
+        ah=0x31;int 0x21
+
+        esi=driver_FATALe;ah=0x31;int 0x21;
+        ah=0x30;al=b:drv_signal+'0';int 0x21
+        jmp _write_ln_exit
+      }
 
    } else {
 
@@ -209,19 +222,129 @@ load_driver:
    pop es;pop ds;pop edi;pop esi;pop edx;pop ecx;pop ebx
    ret
 
-driver_err_FF: db ": driver has errors in header",0
+  // Tasks defines
+#shortdef task_sign 0x0
+#shortdef task_name 0x3
+#shortdef task_stck 0xC
+#shortdef task_size 0xE
+#shortdef task_head drv_head
+
+  // Loads task into memory & return PID
+  // In  : esi = ptr to file_name
+  // Out : ax  = PID
+loadtask:
+   push ebx;push ecx;push edx;push edi;push esi
+
+   // Open file
+   ax=0x100;int 0x21;bx=ax
+   if (~c){ ax=1;if (bx==2){ax=4} jmp _load_task_err }
+
+   // Get task header
+   ax=mem_kernel_data;es=ax
+   edi=task_head;cx=16;ah=3;int 0x21
+
+   // Check task
+   if (ax!=16||w:task_head.task_sign!='CE'){ ax=2;jmps _load_task_err }
+
+   // Allocate memory for main task
+   push ebx;ah=3;int 0x20
+   if (~c){ pop ebx;ax=3;jmps _load_task_err }
+   lldt ax;xor ebx,ebx;bx=w:task_head.task_size
+   ax=0;int 0x20;pop ebx;if (~c){ ax=3;jmps _load_task_err }
+
+   // Read task
+   push eax;es=ax;xor edi,edi;xor ecx,ecx
+   ah=3;mov cx,w:task_head.task_size;shl ecx,12;int 0x21
+   ah=2;int 0x21;ax=mem_kernel_data;es=ax
+   pop eax
+
+   // set data to code, create main task & clear LDTR
+   dx=ax;ah=0x27;int 0x20;xor ecx,ecx;ah=0x20
+   xor edi,edi;cx=w:cs:task_head.task_stck;int 0x20
+   xor bx,bx;lldt bx
+
+   pop esi;pop edi;pop edx;pop ecx;pop ebx
+   ret
+
+ // 1 - file not found ; 2 - header ; 3 - memory
+_load_task_err:
+    pop esi;push eax;ah=0x31;int 0x21;pop eax
+    if (ax==1){ esi=driver_err_un } if (ax==2){ esi=task_head_err }
+    if (ax==3){ esi=memory_error_ } if (ax==4){ esi=driver_err_02 }
+    ah=0x31;int 0x21
+_write_ln_exit:
+    ax=0x300D;int 0x21;ax=0x300A;int 0x21
+    jmp _dos_exit
+
+driver_err_FF: db ": ChaOS driver error",0
+task_head_err: db ": ChaOS executable error",0
 driver_err_FE: db ": driver is too big",0
 driver_err_02: db ": file not found",0
 driver_err_un: db ": unknown file error",0
+memory_error_: db ": not enough memory to load",0
+no_tasks_err_: db "no tasks found in chaos.ini",0
+driver_FATALe: db ": FATAL error ",0
+chaos_ini    : db "chaos.ini",0
 
-  // Initialize drivers
+
+  // Initialize drivers & tasks from "chaos.ini"
 init_drivers:
 
-   // Load drivers
-   esi=drv1_name;load_driver()
-   esi=drv2_name;load_driver()
+   // Open chaos.ini
+   ax=0x100;esi=chaos_ini;int 0x21
+   if (~c){
+     ah=0x31;int 0x21;esi=driver_err_02;ah=0x31;int 0x21
+     jmp _write_ln_exit
+   }
+   bx=ax
 
+   push es;ax=mem_kernel_data;es=ax;edi=_ini_str_
+   {
+      push edi;ah=3;cx=120;edi=_ini_data_;int 0x21;pop edi
+      if(ax>0){
+        xor ecx,ecx;cx=ax;esi=_ini_data_
+        {
+          lodsb
+          ifelse (al==10||al==13){
+            xor eax,eax;stosd
+            edi=_ini_str_
+            if (b:[edi]!=0){
+               push esi;esi=edi
+
+               // Prepeare to load ( "," => 0 )
+               push esi;al=1;while(al!=0&&al!=','){lodsb}
+               dec esi;b:[esi]=0;pop esi
+
+               ifelse (b:[esi]=='*'){
+
+                  // Load driver
+                  inc esi;load_driver()
+
+               } else {
+
+                  // Load task DS:ESI
+                  loadtask();w:[xtask_PID]=ax
+
+               }
+               pop esi
+            }
+
+          } else {
+            stosb
+          }
+          loop ?^0
+        }
+        jmp ?^1
+      }
+   }
+   pop es
+
+   ah=2;int 0x21
+
+   // If no task loaded => exit
+   if (w:cs:[tasks]==0){
+      ax=mem_kernel_data;ds=ax;esi=no_tasks_err_
+      ah=0x31;int 0x21;ax=0x300D;int 0x21;ax=0x300A;int 0x21
+      jmp _dos_exit
+   }
    ret
-
-drv1_name : db "display.bin",0
-drv2_name : db "keyb.bin",0

@@ -245,7 +245,7 @@
    //       dx  = DataSeg in LDT
    //  Out: CF set on error
    set_data_to_code:
-   
+
       // check
       check_first_ring()
       if (~c){ ax=err_access_denied;jmp set_cf }
@@ -281,46 +281,4 @@
       pop ebx;pop edx;pop edi;pop ecx;pop esi;pop ds
       iret
 
-  // Loads task into memory & return PID
-  // In  : esi = ptr to file_name
-  // Out : ax  = PID
-
 tasks:  dw  0
-
-  // ????
-loadtask:
-   push ebx;push ecx;push edx;push esi;push edi
-
-   // Get task header
-   ax=0x100;int 0x21;bx=ax
-   ax=mem_kernel_data;es=ax
-   edi=task_head;cx=16;ah=3;int 0x21
-
-   // Check task
-   if (ax!=16){ ax=1;ret }
-   if (w:task_head.task_sign!='CE'){ ax=2;ret }
-
-   // Allocate memory for main task
-   push ebx;ah=3;int 0x20;lldt ax
-   xor ebx,ebx;bx=w:task_head.task_size
-   ax=0;int 0x20;pop ebx
-
-   // Read task
-   push eax;es=ax;xor edi,edi;xor ecx,ecx
-   ah=3;mov cx,w:task_head.task_size;shl ecx,12;int 0x21
-   ah=2;int 0x21;ax=mem_kernel_data;es=ax
-   pop eax
-
-   // set data to code, create main task & clear LDTR
-   dx=ax;ah=0x27;int 0x20;xor ecx,ecx;ah=0x20
-   xor edi,edi;cx=w:cs:task_head.task_stck;int 0x20
-   xor bx,bx;lldt bx
-
-   pop edi;pop esi;pop edx;pop ecx;pop ebx
-   ret
-
-#shortdef task_sign 0x0
-#shortdef task_name 0x3
-#shortdef task_stck 0xC
-#shortdef task_size 0xE
-task_head: db [16]

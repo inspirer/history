@@ -1,0 +1,53 @@
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+ INT 0x20: (registers)
+
+   1. Create reg_key          ah=0x40;al=rights;            CF
+                              ebx=base_ID;ds:esi<-keyname
+   2. Remove reg_key          ah=0x41;ebx=key_id            CF
+   3. Get reg_key             ah=0x42;es:edi <- keyname     ebx=ID
+   4. Get reg_key data        ah=0x43;ebx = ID              0:EAx=dword;
+                                                            1:ES:EDI<-buffer,eax=size
+   5. Set reg_key data        ah=0x44;al=0(dw)or1(dat)      CF
+                              ebx = ID;0:EDI <- dword
+                              1:DS:ESI<-buffer,cx=size
+   6. Get nxt/sub/up key      ah=0x45;ebx = ID              eax=Next
+                              al=+1(next),+2(sub),+4(up)    edx=sub, edi=up
+   7. Get register key name   ah=0x46;ebx=ID                ES:EDI<-buffer
+                                                            eax = size
+                                                           
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+ INT 0x23: (screen)
+
+   1. Allocate screen           ah=0               CF or AX = ID
+   2. Kill screen               ah=1;bx=ID         CF
+   3. Make screen visible       ah=2;bx=ID         CF
+   4. Refresh screen            ah=3               <none>
+   5. Set screen to write       ah=4;bx=ID         CF
+   6. Write char                ah=5;al=char       CF
+   7. GotoXY                    ah=6;bh:bl = xy    CF
+   13.Write string              ah=0xC;ds:esi<-str <none>
+
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+ INT 0x24: (keyb+console)
+
+   1. Read input                ah=0               CF or al=CODE
+   2. Read char/code
+   3. Get keyboard shift status ah=2               AX=bitreg (0-ALT, 1-SHIFT)
+   4. Allocate console          ah=3               CF or AX=ID
+   5. Free console              ah=4;bx=ID         CF
+   6. Change active console     ah=5;bx=ID         CF
+
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+ INT 0x25: (file system)
+
+   1. Create file
+   2. Open file
+   3. Close file
+   4. Read file
+   5. Write file
+
+   -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
