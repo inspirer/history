@@ -161,10 +161,12 @@ Type *Expr::usual_conversions( Expr **x1, Expr **x2, int action, Compiler *cc )
 		case e_div:
 			TODO();
 		case e_tripl: case e_plus: case e_minus:
+		case e_gt: case e_lt: case e_le: case e_ge:
 			if( dom1 == dom2 )
 				domain = dom1;
 			else 
 				dom1 = dom2 = domain;
+			break;
 		default:
 			TODO();
 		}
@@ -180,6 +182,13 @@ Type *Expr::usual_conversions( Expr **x1, Expr **x2, int action, Compiler *cc )
 	// integer types
 	p1 = e1->restype->integer_promotion(cc);
 	p2 = e2->restype->integer_promotion(cc);
+
+	// 6.5.7.3 (Bitwise shift operators)  The integer promotions are performed 
+	// on each of the operands. The type of the result is that of the promoted left operand.
+	if( action == e_shl || action == e_shr ) {
+		res = p1;
+		goto exit;
+	}
 
 	// 6.3.8.1 If both operands have the same type, then no further conversion is needed.
 	if( T(p1) == T(p2) ) {

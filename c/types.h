@@ -21,8 +21,9 @@
 #ifndef types_h_included
 #define types_h_included
 
-#define DEBUG_TREE
+//#define DEBUG_TREE
 
+#define POINTER_SIZE 4
 
 // storage class specifiers
 enum {
@@ -47,6 +48,8 @@ enum {
     tq_volatile = 2,
     tq_restrict = 4,
 };
+
+#define SUBSET(a,b) (((a)|(b))==(b))
 
 // function specifiers
 enum {
@@ -130,6 +133,9 @@ enum {
 #define INCOMPLETE(tt) ( (tt)->specifier == t_array && (tt)->ar_size == NULL || \
 	((tt)->specifier == t_union || (tt)->specifier == t_struct) && (tt)->params == NULL )
 
+#define VARSIZE(tt) ( (unsigned)(tt)->ar_size > 1 )
+#define CONSTSIZE (Expr *)1
+
 #define T(tt) (tt)->specifier
 #define Q(tt) (tt)->qualifier
 
@@ -210,14 +216,17 @@ struct Type {
 	};
 
     union {  // depends on specifier
-		struct {		// t_func, t_struct, t_union
-        	Sym *params;	// for t_struct, t_union NULL means incompleted
+		struct {				// t_func, t_struct, t_union
+        	Sym *params;		// for t_struct, t_union NULL means incompleted
         	union {
 				Node *body;		// for t_func NULL means incompleted
                 Namespace *members; // members structure is fast access to params
         	};			
 		};
-		Expr  *ar_size;			 // t_array (NULL means incompleted)
+		struct {				// t_array (NULL means incompleted)
+			Expr  *ar_size;
+			int ar_size_val;
+		};
 		Namespace *enum_members; // t_enum
 		struct {				 // INTTYPE
 			int bitsize, bitstart;

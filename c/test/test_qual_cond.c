@@ -5,7 +5,7 @@ void main() {
 	const void *c_vp;
 	void *vp;
 	const int *c_ip;
-	volatile int *v_ip;
+	volatile int * v_ip;
 	int *ip;
 	const char *c_cp;
 

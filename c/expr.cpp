@@ -350,10 +350,14 @@ Expr *Expr::get_type_size( Type *t, Place loc, Compiler *cc )
 		return NULL;  
 	}
 
+	// TODO bit-field
+
 	Expr *e = create( e_direct, Type::get_basic_type( t_int, cc ), cc );
 	e->value = t->size;	
 
-	printf( "yo%i\n", t->size );
+	#if 1
+	printf( "sizeof(%s): %i\n", t->toString(), t->size );
+	#endif
 
 	return e;
 }
@@ -361,13 +365,16 @@ Expr *Expr::get_type_size( Type *t, Place loc, Compiler *cc )
 //
 //  Cast operator
 //
-Expr *Expr::cast_to( Type *t, Place loc, Compiler *cc )
+Expr *Expr::cast_to( Expr *e, Type *t, Place loc, Compiler *cc )
 {
+	if( !e )
+		return NULL;
+
 	// 6.5.4.2 Unless the type name specifies a void type, the type name shall
 	// specify qualified or unqualified scalar type and the operand shall have scalar type.
 
-	if( !SCALAR( this->restype ) ) {
-		cc->error( LOC "cast operator can be applied only to scalar types\n", loc ); // TODO
+	if( !SCALAR( e->restype ) ) {
+		cc->error( LOC "cast operator can be applied only to scalar types\n", loc );
 		return NULL;
 	}
 
@@ -376,18 +383,18 @@ Expr *Expr::cast_to( Type *t, Place loc, Compiler *cc )
 		return NULL;
 	}
 
-	if( !restype->can_convert_to( t, cc ) )
+	if( !e->restype->can_convert_to( t, cc ) )
 		return NULL;
 
-	Expr *e = create( e_cast, t, cc );
-	e->op[0] = this;
+	Expr *x = create( e_cast, t, cc );
+	x->op[0] = e;
 
-	return e; // TODO
+	return x;
 }
 
 
 //
-//	Binary operator
+//	Binary operators: * / % + - << >> & | ^ < > <= >= == != && ||
 //
 Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 {
@@ -395,79 +402,182 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 	if( !e1 || !e2 )
 		return NULL;
 
+	Type *result;
+
 	// error checking switch, return NULL on error
 	switch( op ) {
 
 		// 6.5.5.2 Each of the operands shall have arithmetic type. The operands of
 		// the % operator shall have integer type.
 		case e_mult: case e_div: 
-			if( !ARITHMETIC(e1->restype) || !ARITHMETIC(e2->restype) ) {
-				cc->error( LOC "each of the operands shall have arithmetic type\n", loc );
-				return NULL;
-			}
-			break;
+			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) )
+				goto usual_conv;
+
+			cc->error( LOC "each of the operands shall have arithmetic type\n", loc );
+			return NULL;
 
 		case e_perc:
-			if( !INTTYPE(e1->restype) || !INTTYPE(e2->restype) ) {
-				cc->error( LOC "each of the operands shall have integer type\n", loc );
-				return NULL;
-			}
-			break;
+			if( INTTYPE(e1->restype) && INTTYPE(e2->restype) )
+				goto usual_conv;
+
+			cc->error( LOC "%: each of the operands shall have integer type\n", loc );
+			return NULL;
 
 		// 6.5.6.2 For addition, either both operands shall have arithmetic type, 
 		// or one operand shall be a pointer to an object type and the other shall
 		// have integer type. (Incrementing is equivalent to adding 1.)
 		case e_plus:
-			if(!( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) || 
-				  PTRTYPE(e1->restype) && INTTYPE(e2->restype) || 
-				  INTTYPE(e1->restype) && PTRTYPE(e2->restype) )) {
+			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) )
+				goto usual_conv;
 
-				if( PTRTYPE(e1->restype) && PTRTYPE(e2->restype) )
-					cc->error( LOC "cannot add two pointers\n", loc );
-				else if( PTRTYPE(e1->restype) || PTRTYPE(e2->restype) )
-					cc->error( LOC "pointer addition requires integral operand\n", loc );
-				else 
-					cc->error( LOC "addition can be applied only to arithmetic and pointer types\n", loc );
-				return NULL;
-			}
-			break;
+			if( PTRTYPE(e1->restype) && INTTYPE(e2->restype) )
+				TODO();
+
+			if( INTTYPE(e1->restype) && PTRTYPE(e2->restype) )
+				TODO();
+
+			if( PTRTYPE(e1->restype) && PTRTYPE(e2->restype) )
+				cc->error( LOC "cannot add two pointers\n", loc );
+			else if( PTRTYPE(e1->restype) || PTRTYPE(e2->restype) )
+				cc->error( LOC "pointer addition requires integral operand\n", loc );
+			else 
+				cc->error( LOC "addition can be applied only to arithmetic and pointer types\n", loc );
+
+			return NULL;
 
 		// 6.5.6.3 For subtraction, one of the following shall hold:
 		// - both operands have arithmetic type;
 		// - both operands are pointers to qualified or unqualified versions of compatible object types;
 		// - the left operand is a pointer to an object type and the right operand has integer type.
 		case e_minus:
-			if(!( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) || 
-					// TODO ? compatible types
-				  PTRTYPE(e1->restype) && PTRTYPE(e2->restype) /* && compatible(e1->..,e2>..) */ ||
-				  PTRTYPE(e1->restype) && INTTYPE(e2->restype) )) {
+			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) )
+				goto usual_conv;
 
-				if( PTRTYPE(e1->restype) )
-					cc->error( LOC "pointer subtraction requires integral or pointer operand\n", loc );
-				else if( PTRTYPE(e2->restype) )
-					cc->error( LOC "pointer can only be subtracted from another pointer\n", loc );
-				else
-					cc->error( LOC "subtraction can be applied only to arithmetic and pointer types\n", loc );
-
-				return NULL;
+			if( PTRTYPE(e1->restype) && PTRTYPE(e2->restype) && 
+				(result = Type::compatible( e1->restype, e2->restype, 1, cc )) ) {
+					TODO();
 			}
-			break;
 
-		// 6.5.7.2, 6.5.10.2, 6.5.11.2, 6.5.12.2
-		// Each of the operands shall have integer type.
+			if( PTRTYPE(e1->restype) && INTTYPE(e2->restype) )
+				TODO();
+
+			if( PTRTYPE(e1->restype) )
+				cc->error( LOC "pointer subtraction requires integral or pointer operand\n", loc );
+			else if( PTRTYPE(e2->restype) )
+				cc->error( LOC "pointer can only be subtracted from another pointer\n", loc );
+			else
+				cc->error( LOC "subtraction can be applied only to arithmetic and pointer types\n", loc );
+
+			return NULL;
+
+		// 6.5.7.2 Each of the operands shall have integer type.
 		case e_shl: case e_shr:
-		case e_and: case e_or: case e_xor:
-			if(!( INTTYPE(e1->restype) && INTTYPE(e2->restype) )) {
-				cc->error( LOC "%s: illegal, each of the operands shall have integer type\n", loc,
-					op == e_shl ? "<<" : op == e_shr ? ">>" : op == e_and ? "&" : op == e_or ? "|" : "^" );
-				return NULL;
-			}
-			break;
+			if( INTTYPE(e1->restype) && INTTYPE(e2->restype) )
+				// we have extended usual conversions to support << and >>
+				goto usual_conv;
 
-		default:
-			ASSERT(0);
+			cc->error( LOC "%s: illegal, each of the operands shall have integer type\n", loc,
+				op == e_shl ? "<<" : ">>" );
+			return NULL;
+
+		// 6.5.{10,11,12}.2 Each of the operands shall have integer type.
+		case e_and: case e_or: case e_xor:
+			if( INTTYPE(e1->restype) && INTTYPE(e2->restype) ) 
+				// 6.5.{10,11,12}.3 The usual arithmetic conversions are performed on the operands.
+				goto usual_conv;
+
+			cc->error( LOC "%s: illegal, each of the operands shall have integer type\n", loc,
+				op == e_and ? "&" : op == e_or ? "|" : "^" );
+			return NULL;
+
+		// 6.5.8 Relational operators
+		case e_gt: case e_lt: case e_le: case e_ge:
+
+			// - both operands have arithmetic type;
+			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) ) {
+				Expr::usual_conversions( &e1, &e2, op, cc );
+				result = Type::get_basic_type( t_int ,cc );
+				goto create;
+			}
+
+			// - both operands are pointers to qualified or unqualified versions of
+			//   compatible object types; or
+			if( PTRTYPE(e1->restype) && PTRTYPE(e2->restype) && 
+				(result = Type::compatible( e1->restype, e2->restype, 1, cc )) ) {
+					TODO();
+			}
+
+			// - both operands are pointers to qualified or unqualified versions of
+			// compatible incomplete types.
+			TODO();
+
+			return NULL;
+
+		// 6.5.9 Equality operators
+		case e_eq: case e_noteq:
+
+			// - both operands have arithmetic type;
+			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) ) {
+				Expr::usual_conversions( &e1, &e2, op, cc );
+				result = Type::get_basic_type( t_int ,cc );
+				goto create;
+			}
+
+			// - both operands are pointers to qualified or unqualified versions of compatible types;
+			TODO();
+
+			// - one operand is a pointer to an object or incomplete type and the other is a
+			//   pointer to a qualified or unqualified version of void;
+			TODO();
+
+			// - one operand is a pointer and the other is a null pointer constant.
+			TODO();
+
+			return NULL;
+
+		// 6.5.{13,14} Logical AND/OR operator
+		case e_AND: case e_OR:
+	
+			// .2 Each of the operands shall have scalar type.
+			if( SCALAR(e1->restype) && SCALAR(e2->restype) ) {
+				result = Type::get_basic_type( t_int ,cc );
+				goto create;
+			}
+
+			cc->error( LOC "%s: illegal, each of the operands shall have scalar type\n", loc,
+				op == e_AND ? "&&" : "||" );
+			return NULL;
 	}
-	return NULL;
+
+	ASSERT(0);
+
+usual_conv:
+	result = Expr::usual_conversions( &e1, &e2, op, cc );
+
+create:
+	Expr *e = create( op, result, cc );
+	e->op[0] = e1;
+	e->op[1] = e2;
+	#if 1
+	printf( "binary: %i: %s", op, result->toString() );
+	printf( " (%s,%s)\n", e1->restype->toString(), e2->restype->toString() );
+	#endif
+	return e;
+}
+
+
+// 6.5.17 Comma operator
+
+Expr *Expr::create_comma( Expr *e1, Expr *e2, Place loc, Compiler *cc )
+{
+	// we return BAD expression if we have BAD subexpressions
+	if( !e1 || !e2 )
+		return NULL;
+
+	Expr *e = create( e_comma, e2->restype, cc );
+	e->op[0] = e1;
+	e->op[1] = e2;
+	return e;
 }
 
 
@@ -524,12 +634,20 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 
 		// one operand is a pointer to void or a qualified version of void, in which case the
 		// result type is a pointer to an appropriately qualified version of void.
-		if( Q(e2->restype) != Q(e3->restype) ) {
-			result = result->clone(cc);
-			Q(result) |= Q(e2->restype) | Q(e3->restype);
-		}
+		int q1 = Q(e2->restype) | Q(e3->restype), q2 = Q(e2->restype->parent) | Q(e3->restype->parent);
 
-		// TODO process inner level qualification
+		if( !SUBSET(q2,Q(result->parent)) ) {
+			// process inner level qualification
+			result = result->clone(cc);
+			result->parent = result->parent->clone(cc);
+			Q(result) |= q1;
+			Q(result->parent) |= q2;
+
+		} else if( !SUBSET(q1,Q(result)) ) {
+			// process outer level qualification
+			result = result->clone(cc);
+			Q(result) |= q1;
+		}
 
 		goto exit;
 	}
@@ -551,7 +669,7 @@ exit:
 	e->op[0] = e1;
 	e->op[1] = e2;
 	e->op[2] = e3;
-	#if 1
+	#if 0
 	printf( "tripl: common: %s\n", result->toString() );
 	#endif
 	return e;

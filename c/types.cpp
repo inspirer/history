@@ -28,7 +28,7 @@ Type *Type::create( int ts, Compiler *cc )
 	t->storage = scs_none;
 	t->qualifier = tq_none;
 	t->parent = NULL;
-	t->size = 0;
+	t->size = ts == t_pointer ? POINTER_SIZE : 0;
 	return t;
 }
 
@@ -236,7 +236,6 @@ const struct basic_type_descr tdescr[t_basiccnt] = {
  {	8,	0,		 	FD(1,1), },	//1 double _Imaginary
  {	8,	0,		 	FD(1,2), },	//2 long double _Imaginary
 };
-
 
                     
 static void print_type( int ts, Compiler *cc )

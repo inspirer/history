@@ -62,3 +62,8 @@ void main() {
 	e ? q2 : q3;
 }
   */
+
+void main() {
+
+   1, 2, 3;
+}

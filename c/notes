@@ -29,6 +29,16 @@
 
    Expressions
 
+= 26 === (07 mar 2004)
+
+    + Expr::create_binary(*/%^|&<<>>&&||) finished
+    + Expr::create_binary(relationals) started
+	+ VARSIZE, CONSTSIZE
+	+ Expr::create_comma
+
+	+ test/test_binary.c
+	+ test/test_qual_cond.c
+
 = 25 === (06 mar 2004)
 
 	+ finished Expr::create_conditional

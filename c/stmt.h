@@ -44,6 +44,9 @@ enum {
 	e_plus, e_minus,
 	e_shl, e_shr,
 	e_xor, e_or, e_and,
+	e_gt, e_lt, e_le, e_ge,
+	e_eq, e_noteq,
+	e_AND, e_OR,
 
 	e_leaf,						// base = symbol, restype = type of symbol
 	e_direct,					// restype = integral or float type, (d)value = imm value
@@ -53,6 +56,7 @@ enum {
 	e_deref,					// op0 = pointer_to_deref (op0->restype->specifier == t_pointer)
 	e_tripl,					// restype = newtype, op0 - expr, op1,2 - variants
 	e_cast,						// restype = cast_type
+	e_comma,					// op0 = left, op1 = right, restype = op1->restype
 };
 
 
@@ -93,9 +97,10 @@ struct Expr {
 	static Expr *create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc );
 	static Expr *create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc );
 	static Expr *create_constant_expr( Expr *e, Place loc, Compiler *cc );
+	static Expr *create_comma( Expr *e1, Expr *e2, Place loc, Compiler *cc );
 
 	// casting
-	Expr *cast_to( Type *t, Place loc, Compiler *cc );
+	static Expr *cast_to( Expr *e, Type *t, Place loc, Compiler *cc );
 	static Type *usual_conversions( Expr **e1, Expr **t2, int action, Compiler *cc );
 
 	// destructors

@@ -244,7 +244,7 @@ unary_operator (int) ::= '&' | '*' | '+' | '-' | '~' | '!' ;
 cast_expression (Expr *) ::
   = unary_expression
   = '(' type_name ')' cast_expression
-		$$ = $cast_expression#1->cast_to( $type_name, PLACE(@0), this );
+		$$ = Expr::cast_to( $cast_expression#1, $type_name, PLACE(@0), this );
 ;
 
 %left  '||' ;
@@ -282,22 +282,22 @@ oneexpr (Expr *) ::
 		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_shr, PLACE(@1), this );
 
   = oneexpr '<'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_lt, PLACE(@1), this );
 
   = oneexpr '>'  oneexpr
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_gt, PLACE(@1), this );
 
   = oneexpr '<=' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_le, PLACE(@1), this );
 
   = oneexpr '>=' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_ge, PLACE(@1), this );
 
   = oneexpr '==' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_eq, PLACE(@1), this );
 
   = oneexpr '!=' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_noteq, PLACE(@1), this );
 
   = oneexpr '&'  oneexpr 
 		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_and, PLACE(@1), this );
@@ -309,10 +309,10 @@ oneexpr (Expr *) ::
 		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_or, PLACE(@1), this );
 
   = oneexpr '&&' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_AND, PLACE(@1), this );
 
   = oneexpr '||' oneexpr 
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_OR, PLACE(@1), this );
 ;
 
 conditional_expression (Expr *) ::
@@ -332,7 +332,7 @@ assignment_operator (int) ::= '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '
 expression (Expr *) ::
   = assignment_expression
   = expression ',' assignment_expression
-		error("not implemented yet at %i\n", __LINE__ );
+		$$ = Expr::create_comma( $expression#1, $assignment_expression, PLACE(@1), this );
 ;
 
 constant_expression (Expr *) ::
