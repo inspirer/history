@@ -18,7 +18,7 @@
  *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  *   
- *   This file describes three global structures: Expr, Node and Init
+ *   This file describes three global structures: expr, Node and Init
  */
 
 #ifndef stmt_h_included
@@ -27,8 +27,8 @@
 #include "types.h"
 
 /*   
- *	Expr structure describes an expression. It can be a leaf or a node.
- *	While parsing an input, first, we build Expr tree, then if the tree
+ *	expr structure describes an expression. It can be a leaf or a node.
+ *	While parsing an input, first, we build expr tree, then if the tree
  *	needs code generation we generate a code for it (Node list).
  *
  *  !! We handle bad subexpressions as NULLs, i.e. if there was some syntax
@@ -62,7 +62,7 @@ enum {
 
 /*	(about next_free)
  * 
- *	Sometimes, during optimizations, Expr and Node structures can be freed, therefore 
+ *	Sometimes, during optimizations, expr and Node structures can be freed, therefore 
  *	we cache such structures in Compiler::free_expr/free_node lists and can use them 
  *	again later. next_free points to the next structure in the list.
  *
@@ -70,38 +70,38 @@ enum {
  *	will be freed. 
  */
 
-struct Expr {
+struct expr {
 
 	int type;
-	PType restype;			// !! be carefull, it must not be NULL
+	Type restype;			// !! be carefull, it must not be NULL
 	union {
-		Expr  *op[3];		// e_*
-		vlong value;		// e_direct
+		Expr  op[3];		// e_*
+		Value val;			// e_direct
 		double dvalue;		// e_direct
-		PSym base;		// e_leaf, e_member
-		Expr  *next_free;	// (see comment above about next_free)
+		Sym base;			// e_leaf, e_member
+		Expr  next_free;	// (see comment above about next_free)
 	};
 
 	// methods
-	vlong calculate( int dest_type, Compiler *cc );
+	ullong calculate( int dest_type, Compiler *cc );
 
 	// constructors
-	static Expr *create( int type, PType restype, Compiler *cc );
-	static Expr *create_icon_from_string( const char *s, Place loc, Compiler *cc );
-	static Expr *create_ccon_from_string( const char *s, Place loc, Compiler *cc );
-	static Expr *create_from_id( const char *id, Place loc, Compiler *cc );
-	static Expr *create_array_subscripting( Expr *arr, Expr *index, Place loc, Compiler *cc );
-	static Expr *create_struct_member( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
-	static Expr *create_struct_member_ptr( Expr *str_or_un, char *membername, Place loc, Compiler *cc );
-	static Expr *get_type_size( PType t, Place loc, Compiler *cc );
-	static Expr *create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc );
-	static Expr *create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc );
-	static Expr *create_constant_expr( Expr *e, Place loc, Compiler *cc );
-	static Expr *create_comma( Expr *e1, Expr *e2, Place loc, Compiler *cc );
+	static Expr create( int type, Type restype, Compiler *cc );
+	static Expr create_icon_from_string( const char *s, Place loc, Compiler *cc );
+	static Expr create_ccon_from_string( const char *s, Place loc, Compiler *cc );
+	static Expr create_from_id( const char *id, Place loc, Compiler *cc );
+	static Expr create_array_subscripting( Expr arr, Expr index, Place loc, Compiler *cc );
+	static Expr create_struct_member( Expr str_or_un, char *membername, Place loc, Compiler *cc );
+	static Expr create_struct_member_ptr( Expr str_or_un, char *membername, Place loc, Compiler *cc );
+	static Expr get_type_size( Type t, Place loc, Compiler *cc );
+	static Expr create_binary( Expr e1, Expr e2, int op, Place loc, Compiler *cc );
+	static Expr create_conditional( Expr e1, Expr e2, Expr e3, Place loc, Compiler *cc );
+	static Expr create_constant_expr( Expr e, Place loc, Compiler *cc );
+	static Expr create_comma( Expr e1, Expr e2, Place loc, Compiler *cc );
 
 	// casting
-	static Expr *cast_to( Expr *e, PType t, Place loc, Compiler *cc );
-	static PType usual_conversions( Expr **e1, Expr **t2, int action, Compiler *cc );
+	static Expr cast_to( Expr e, Type t, Place loc, Compiler *cc );
+	static Type usual_conversions( Expr *e1, Expr *t2, int action, Compiler *cc );
 
 	// destructors
 	void free( Compiler *cc );
@@ -111,8 +111,8 @@ struct Expr {
 // 6.3.2.3.3 An integer constant expression with the value 0, or such an expression cast to type
 // void *, is called a null pointer constant.
 
-#define NULLCONST(ex) ( (ex)->type == e_direct && (ex)->value == 0 || \
-					(ex)->type == e_cast && (ex)->op[0]->type == e_direct && (ex)->op[0]->value == 0 \
+#define NULLCONST(ex) ( (ex)->type == e_direct && (ex)->val.u == 0 || \
+					(ex)->type == e_cast && (ex)->op[0]->type == e_direct && (ex)->op[0]->val.u == 0 \
 						&& T((ex)->restype) == t_pointer && T((ex)->restype->parent) == t_void )
 
 /*
@@ -122,60 +122,13 @@ struct Expr {
  *	res is always reg
  */
 
-enum {
-	argt_reg = 0,
-	argt_imm = 1,
-	argt_mem = 2,
-	argt_codeaddr = 3
-};
-
-enum {
-	cl_binop  = 1,			// res = arg1(reg,imm) op arg2(reg,imm)
-	cl_unop   = 2,			// res = op arg1(reg,imm)
-	cl_assign = 3,			// arg1(mem,reg) = arg2(mem,reg,imm,addr)
-	cl_if_x_rel_y = 4,		// if( arg1(reg,imm) rel arg2(reg,imm) ) goto res(addr)
-	cl_param  = 5,			// param arg1(reg,imm)
-	cl_call   = 6,			// call arg1(addr,reg,imm)
-	cl_deref  = 7,			// res = * arg1(reg,imm)
-};
-
-enum {
-	op_add = 1,
-	op_sub = 2,
-	op_mul = 3,
-	op_div = 4,
-	op_shl = 5,
-
-	un_min = 100,
-};
-
-#define OP(class,op,arg1,arg2) ( ((class)<<22) + ((arg1)<<19) + ((arg2)<<16) + (op) )
-#define OPARG1(op) ( ((op)>>19) & 7 )
-#define OPARG2(op) ( ((op)>>16) & 7 )
-#define OPCLASS(op) ( (op) >> 22 )
-#define OPSUB(op) ( (op) & ((1<<16)-1) )
-
-
-struct Node {
-
-	// quadruple (op, res, arg1, arg2) (16 bytes)
-	unsigned long op, res, arg1, arg2;
-
-	// Node list organistation (8 bytes)
-	Node *next;
-	union {
-		Node *next_tail;	// during syntax analysis
-		Node *next_free;	// (see comment above about next_free)
-	};
-
-	// methods
-	static Node *combine( Node *left, Node *right );
-
-	// constructor
-	static Node *create( int type, Compiler *cc );
-
-	// destructor (moves it to free list)
-	void free( Compiler *cc );
+struct node {
+	short op;
+	short count;
+ 	Sym syms[3];
+	Node kids[2];
+	Node link;
+	//XNode2 x;
 };
 
 
@@ -194,7 +147,7 @@ struct Init {
 	union {
 		long l;
 		double d;
-		Sym *s;
+		sym *s;
 	} val;
 };
 

@@ -23,9 +23,9 @@
 /*
 	Main constructor for expressions
 */
-Expr *Expr::create( int type, PType restype, Compiler *cc )
+Expr expr::create( int type, Type restype, Compiler *cc )
 {
-	Expr *e;
+	Expr e;
 	
 	// get from pool
 	if( cc->free_expr ) {
@@ -33,7 +33,7 @@ Expr *Expr::create( int type, PType restype, Compiler *cc )
 		cc->free_expr = e->next_free;
 
 	} else 
-		e = (Expr *)cc->expr_sl.allocate();
+		e = (Expr)cc->expr_sl.allocate();
 
 	e->type = type;
 	e->restype = restype;
@@ -44,16 +44,16 @@ Expr *Expr::create( int type, PType restype, Compiler *cc )
 
 /*
 	parses string in the following regular expression and returns the 
-	corresponding Expr structure: 
+	corresponding expr structure: 
 
 	([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?
 
 	TODO: fix overflow
 */
-Expr *Expr::create_icon_from_string( const char *s, Place loc, Compiler *cc )
+Expr expr::create_icon_from_string( const char *s, Place loc, Compiler *cc )
 {
-	Expr *e = create( e_direct, NULL, cc );
-	vlong value = 0;
+	Expr e = create( e_direct, NULL, cc );
+	ullong value = 0;
 	int type = t_int;
 
 	// hexadecimal
@@ -105,8 +105,8 @@ Expr *Expr::create_icon_from_string( const char *s, Place loc, Compiler *cc )
 		}
 	}
 
-	e->value = value;
-	e->restype = Type::get_basic_type( type, cc );
+	e->val.u = value;
+	e->restype = type::get_basic_type( type, cc );
 
 	return e;
 }
@@ -153,14 +153,14 @@ static int escape_seq( const char * &s, Place loc, Compiler *cc ) {
 
 /*
 	parses string in the following regular expression and returns the 
-	corresponding Expr structure: 
+	corresponding expr structure: 
 
 	L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'
 */
-Expr *Expr::create_ccon_from_string( const char *s, Place loc, Compiler *cc )
+Expr expr::create_ccon_from_string( const char *s, Place loc, Compiler *cc )
 {
-	Expr *e = create( e_direct, Type::get_basic_type( t_int, cc), cc );
-	vlong value = 0;
+	Expr e = create( e_direct, type::get_basic_type( t_int, cc), cc );
+	ullong value = 0;
 
 	// wide character constant TODO
 	if( *s == 'L' ) {
@@ -187,30 +187,30 @@ Expr *Expr::create_ccon_from_string( const char *s, Place loc, Compiler *cc )
 		}
 	}
 
-	e->value = value;
+	e->val.u = value;
 
 	return e;
 }
 
 
-Expr *Expr::create_from_id( const char *id, Place loc, Compiler *cc )
+Expr expr::create_from_id( const char *id, Place loc, Compiler *cc )
 {
 	// 6.5.1.2. An identifier is a primary expression, provided it has been declared
 	// as designating an object (in which case it is an lvalue) or a function 
 	// (in which case it is a function designator).
 
-	PSym s = cc->current->search_id( id, 0, 1 /* search outer namespaces */ );
+	Sym s = cc->current->search_id( id, 0, 1 /* search outer namespaces */ );
 
 	if( !s ) {
 		cc->error( LOC "unknown identifier: `%s`\n", loc, id );
 		return NULL;
 	}
 	
-	Expr *e = NULL;
+	Expr e = NULL;
 
 	if( s->type && s->storage == scs_imm ) {
 		e = create( e_direct, s->type, cc );
-		e->value = s->loc.value;
+		e->val = s->loc.val;
 
 	} else {
 		e = create( e_leaf, s->type, cc );
@@ -221,7 +221,7 @@ Expr *Expr::create_from_id( const char *id, Place loc, Compiler *cc )
 }
 
 
-Expr *Expr::create_array_subscripting( Expr *arr, Expr *index, Place loc, Compiler *cc )
+Expr expr::create_array_subscripting( Expr arr, Expr index, Place loc, Compiler *cc )
 {
 	// 6.5.2.1.1. One of the expressions shall have type "pointer to object type", the
 	// other expression shall have integer type, and the result has type "type".
@@ -240,7 +240,7 @@ Expr *Expr::create_array_subscripting( Expr *arr, Expr *index, Place loc, Compil
 	if( !arr || !index )
 		return NULL;
 
-	Expr *e = create( e_array_subscripting, arr->restype->parent, cc );
+	Expr e = create( e_array_subscripting, arr->restype->parent, cc );
 	e->op[0] = arr;
 	e->op[1] = index;
 
@@ -248,7 +248,7 @@ Expr *Expr::create_array_subscripting( Expr *arr, Expr *index, Place loc, Compil
 }
 
 
-Expr *Expr::create_struct_member( Expr *str_or_un, char *membername, Place loc, Compiler *cc )
+Expr expr::create_struct_member( Expr str_or_un, char *membername, Place loc, Compiler *cc )
 {
 	// 6.5.2.3.1 The first operand of the . operator shall have a qualified or unqualified
 	// structure or union type, and the second operand shall name a member of that type.
@@ -267,14 +267,14 @@ Expr *Expr::create_struct_member( Expr *str_or_un, char *membername, Place loc, 
 	if( !str_or_un )
 		return NULL;
 
-	PSym s = str_or_un->restype->members->search_id( membername, 0, 0 );
+	Sym s = str_or_un->restype->members->search_id( membername, 0, 0 );
 	
 	if( !s ) {
 		cc->error( LOC "'%s' is not a member of struct/union\n", loc, membername );
 		return NULL;
 	}
 
-	Expr *e = create( e_member, s->type, cc );
+	Expr e = create( e_member, s->type, cc );
 	e->op[1] = str_or_un;
 	e->base = s;
 
@@ -284,7 +284,7 @@ Expr *Expr::create_struct_member( Expr *str_or_un, char *membername, Place loc, 
 }
 
 
-Expr *Expr::create_struct_member_ptr( Expr *str_or_un, char *membername, Place loc, Compiler *cc )
+Expr expr::create_struct_member_ptr( Expr str_or_un, char *membername, Place loc, Compiler *cc )
 {
 
 	// 6.5.2.3.2 The first operand of the -> operator shall have type "pointer to qualified
@@ -311,17 +311,17 @@ Expr *Expr::create_struct_member_ptr( Expr *str_or_un, char *membername, Place l
 	if( !str_or_un )
 		return NULL;
 
-	PSym s = str_or_un->restype->parent->members->search_id( membername, 0, 0 );
+	Sym s = str_or_un->restype->parent->members->search_id( membername, 0, 0 );
 	
 	if( !s ) {
 		cc->error( LOC "'%s' is not a member of struct/union\n", loc, membername );
 		return NULL;
 	}
 
-	Expr *derefed = create( e_deref, str_or_un->restype->parent, cc );
+	Expr derefed = create( e_deref, str_or_un->restype->parent, cc );
 	derefed->op[0] = str_or_un;
 
-	Expr *e = create( e_member, s->type, cc );
+	Expr e = create( e_member, s->type, cc );
 	e->op[1] = derefed;
 	e->base = s;
 
@@ -333,7 +333,7 @@ Expr *Expr::create_struct_member_ptr( Expr *str_or_un, char *membername, Place l
 //
 //  The sizeof operator
 //
-Expr *Expr::get_type_size( PType t, Place loc, Compiler *cc )
+Expr expr::get_type_size( Type t, Place loc, Compiler *cc )
 {
 	// 6.5.3.4.1 The sizeof operator shall not be applied to an expression that has
 	//  function type or an incomplete type, to the parenthesized name of such a type,
@@ -351,8 +351,8 @@ Expr *Expr::get_type_size( PType t, Place loc, Compiler *cc )
 
 	// TODO bit-field
 
-	Expr *e = create( e_direct, Type::get_basic_type( t_int, cc ), cc );
-	e->value = t->size;	
+	Expr e = create( e_direct, type::get_basic_type( t_int, cc ), cc );
+	e->val.u = t->size;
 
 	#if 1
 	printf( "sizeof(%s): %i\n", t->toString(), t->size );
@@ -364,7 +364,7 @@ Expr *Expr::get_type_size( PType t, Place loc, Compiler *cc )
 //
 //  Cast operator
 //
-Expr *Expr::cast_to( Expr *e, PType t, Place loc, Compiler *cc )
+Expr expr::cast_to( Expr e, Type t, Place loc, Compiler *cc )
 {
 	if( !e )
 		return NULL;
@@ -385,7 +385,7 @@ Expr *Expr::cast_to( Expr *e, PType t, Place loc, Compiler *cc )
 	if( !e->restype->can_convert_to( t, cc ) )
 		return NULL;
 
-	Expr *x = create( e_cast, t, cc );
+	Expr x = create( e_cast, t, cc );
 	x->op[0] = e;
 
 	return x;
@@ -395,13 +395,13 @@ Expr *Expr::cast_to( Expr *e, PType t, Place loc, Compiler *cc )
 //
 //	Binary operators: * / % + - << >> & | ^ < > <= >= == != && ||
 //
-Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
+Expr expr::create_binary( Expr e1, Expr e2, int op, Place loc, Compiler *cc )
 {
 	// we return BAD expression if we have BAD subexpressions
 	if( !e1 || !e2 )
 		return NULL;
 
-	PType result;
+	Type result;
 
 	// error checking switch, return NULL on error
 	switch( op ) {
@@ -453,7 +453,7 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 				goto usual_conv;
 
 			if( PTRTYPE(e1->restype) && PTRTYPE(e2->restype) && 
-				(result = Type::compatible( e1->restype, e2->restype, 1, cc )) ) {
+				(result = type::compatible( e1->restype, e2->restype, 1, cc )) ) {
 					TODO();
 			}
 
@@ -494,15 +494,15 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 
 			// - both operands have arithmetic type;
 			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) ) {
-				Expr::usual_conversions( &e1, &e2, op, cc );
-				result = Type::get_basic_type( t_int ,cc );
+				expr::usual_conversions( &e1, &e2, op, cc );
+				result = type::get_basic_type( t_int ,cc );
 				goto create;
 			}
 
 			// - both operands are pointers to qualified or unqualified versions of
 			//   compatible object types; or
 			if( PTRTYPE(e1->restype) && PTRTYPE(e2->restype) && 
-				(result = Type::compatible( e1->restype, e2->restype, 1, cc )) ) {
+				(result = type::compatible( e1->restype, e2->restype, 1, cc )) ) {
 					TODO();
 			}
 
@@ -517,8 +517,8 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 
 			// - both operands have arithmetic type;
 			if( ARITHMETIC(e1->restype) && ARITHMETIC(e2->restype) ) {
-				Expr::usual_conversions( &e1, &e2, op, cc );
-				result = Type::get_basic_type( t_int ,cc );
+				expr::usual_conversions( &e1, &e2, op, cc );
+				result = type::get_basic_type( t_int ,cc );
 				goto create;
 			}
 
@@ -539,7 +539,7 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 	
 			// .2 Each of the operands shall have scalar type.
 			if( SCALAR(e1->restype) && SCALAR(e2->restype) ) {
-				result = Type::get_basic_type( t_int ,cc );
+				result = type::get_basic_type( t_int ,cc );
 				goto create;
 			}
 
@@ -551,10 +551,10 @@ Expr *Expr::create_binary( Expr *e1, Expr *e2, int op, Place loc, Compiler *cc )
 	ASSERT(0);
 
 usual_conv:
-	result = Expr::usual_conversions( &e1, &e2, op, cc );
+	result = expr::usual_conversions( &e1, &e2, op, cc );
 
 create:
-	Expr *e = create( op, result, cc );
+	Expr e = create( op, result, cc );
 	e->op[0] = e1;
 	e->op[1] = e2;
 	#if 1
@@ -567,13 +567,13 @@ create:
 
 // 6.5.17 Comma operator
 
-Expr *Expr::create_comma( Expr *e1, Expr *e2, Place loc, Compiler *cc )
+Expr expr::create_comma( Expr e1, Expr e2, Place loc, Compiler *cc )
 {
 	// we return BAD expression if we have BAD subexpressions
 	if( !e1 || !e2 )
 		return NULL;
 
-	Expr *e = create( e_comma, e2->restype, cc );
+	Expr e = create( e_comma, e2->restype, cc );
 	e->op[0] = e1;
 	e->op[1] = e2;
 	return e;
@@ -583,7 +583,7 @@ Expr *Expr::create_comma( Expr *e1, Expr *e2, Place loc, Compiler *cc )
 //
 //	6.5.15 Conditional operator
 //
-Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compiler *cc )
+Expr expr::create_conditional( Expr e1, Expr e2, Expr e3, Place loc, Compiler *cc )
 {
 	// we return BAD expression if we have BAD subexpressions
 	if( !e1 || !e2 || !e3 )
@@ -597,18 +597,18 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 		return NULL;
 	}
 
-	PType result;
+	Type result;
 
 	// 3. One of the following shall hold for the second and third operands:
 	// - both operands have arithmetic type;
-	if( ARITHMETIC(e2->restype) && ARITHMETIC(e3->restype) && (result = Expr::usual_conversions( &e2, &e3, e_tripl, cc )) )
+	if( ARITHMETIC(e2->restype) && ARITHMETIC(e3->restype) && (result = expr::usual_conversions( &e2, &e3, e_tripl, cc )) )
 		// If both the second and third operands have arithmetic type, the result type that would be
 		// determined by the usual arithmetic conversions, were they applied to those two operands,
 		// is the type of the result. 
 	   	goto exit;
 
 	// - both operands have compatible structure or union types;
-	if( STRUCTTYPE(e2->restype) && STRUCTTYPE(e3->restype) && (result = Type::compatible( e2->restype, e3->restype, 0, cc )) )
+	if( STRUCTTYPE(e2->restype) && STRUCTTYPE(e3->restype) && (result = type::compatible( e2->restype, e3->restype, 0, cc )) )
 		// If both the operands have structure or union type, the result has that type.
 		goto exit;
 
@@ -652,7 +652,7 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 	}
 
 	// - both operands are pointers to qualified or unqualified versions of compatible types;
-	if( PTRTYPE(e2->restype) && PTRTYPE(e3->restype) && (result = Type::compatible( e2->restype, e3->restype, 1, cc)) )
+	if( PTRTYPE(e2->restype) && PTRTYPE(e3->restype) && (result = type::compatible( e2->restype, e3->restype, 1, cc)) )
 		// If both the second and third operands are pointers or one is a null pointer constant and the
 		// other is a pointer, the result type is a pointer to a type qualified with all the type qualifiers
 		// of the types pointed-to by both operands. Furthermore, if both operands are pointers to
@@ -664,7 +664,7 @@ Expr *Expr::create_conditional( Expr *e1, Expr *e2, Expr *e3, Place loc, Compile
 	return NULL;
 
 exit:
-	Expr *e = create( e_tripl, result, cc );
+	Expr e = create( e_tripl, result, cc );
 	e->op[0] = e1;
 	e->op[1] = e2;
 	e->op[2] = e3;
@@ -678,7 +678,7 @@ exit:
 //
 //	DESC: moves the expression to free_expr list
 //
-void Expr::free( Compiler *cc )
+void expr::free( Compiler *cc )
 {
 	next_free = cc->free_expr;
 	cc->free_expr = this;
@@ -687,7 +687,7 @@ void Expr::free( Compiler *cc )
 
 // 6.6 Constant expressions
 
-Expr *Expr::create_constant_expr( Expr *e, Place loc, Compiler *cc ) 
+Expr expr::create_constant_expr( Expr e, Place loc, Compiler *cc ) 
 {
 	if( !e )
 		return NULL;
@@ -703,10 +703,10 @@ Expr *Expr::create_constant_expr( Expr *e, Place loc, Compiler *cc )
 	return e;
 }
 
-vlong Expr::calculate( int dest_type, Compiler *cc )
+ullong expr::calculate( int dest_type, Compiler *cc )
 {
 	if( type == e_direct )
-		return value;
+		return val.u;
 
 	cc->error( "expression is not constant\n" ); // TODO
 	return 0;

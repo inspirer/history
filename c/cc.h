@@ -21,6 +21,8 @@
 #ifndef cc_h_included
 #define cc_h_included
 
+#define SUPPORT64
+
 /*
  *	Common headers and types.
  */
@@ -42,12 +44,39 @@ struct Place {
 #define LOC "%i: "
 
 // compiler-specific types
-typedef unsigned __int64 vlong;
+
+#ifdef SUPPORT64
+typedef signed __int64 llong;
+typedef unsigned __int64 ullong;
+#else
+typedef signed long llong;
+typedef unsigned long ullong;
+#endif
+
+// target addressing mode
+
 typedef unsigned long word;
+
+// general types declaration
+
+struct type;
+struct sym;
+struct node;
+struct expr;
+struct Init;
+struct Namespace;
+class Compiler;
+
+typedef const struct type *Type;
+typedef const struct sym  *Sym;
+typedef const struct node *Node;
+typedef struct expr *Expr;
+
 
 #include "types.h"
 #include "slab.h"
 #include "stmt.h"
+#include "il.h"
 
 #define ASSERT(x) assert(x)
 #define TODO() ASSERT(0);
@@ -57,13 +86,15 @@ private:
     char b[1025], *l, *end;
 
 	char *identifier( char *token, int *n, int tnID );
+	void set_backend( Backend *be );
 
 public:
     slab sym_sl, type_sl, ns_sl, expr_sl, node_sl;
-    Type *basic[t_basiccnt];
-    Expr *free_expr; 						// see comment in stmt.h
-    Node *free_node; 						// -----""-----
+    type *basic[t_basiccnt];
+    Expr free_expr; 						// see comment in stmt.h
+    //Node *free_node; 						// -----""-----
     Namespace *current, global, *func;
+    Backend *be;
 
 public:
     Compiler();

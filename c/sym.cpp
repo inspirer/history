@@ -21,9 +21,9 @@
 #include "cc.h"
 
 
-Sym *Sym::create( char *s, Compiler *cc )
+sym *sym::create( char *s, Compiler *cc )
 {
-	Sym *m = (Sym *)cc->sym_sl.allocate();
+	sym *m = (sym *)cc->sym_sl.allocate();
 	m->name = s;
 
 	m->storage = scs_none;
@@ -35,18 +35,18 @@ Sym *Sym::create( char *s, Compiler *cc )
 }
 
 
-Sym *Sym::create_imm( char *s, PType t, vlong value, Compiler *cc )
+sym *sym::create_imm( char *s, Type t, ullong i, Compiler *cc )
 {
-	Sym *m = create( s, cc );
+	sym *m = create( s, cc );
 	m->storage = scs_imm;
 	m->type = t;
-    m->loc.value = value;
+    m->loc.val.i = i;
     return m;
 }
 
 // symbol_created must prepeare 'storage' and 'loc' variables
 
-void Sym::symbol_created( PType t, int fix, Place loc, Compiler *cc )
+void sym::symbol_created( Type t, int fix, Place loc, Compiler *cc )
 {
 	if( type )
 		TYPE(st1.type_tail)->parent = t;
@@ -133,7 +133,7 @@ void Sym::symbol_created( PType t, int fix, Place loc, Compiler *cc )
 }
 
 
-void Sym::addtype( PType t )
+void sym::addtype( Type t )
 {
 	if( !st1.type_tail ) {
 		type = st1.type_tail = t;
@@ -149,7 +149,7 @@ void Sym::addtype( PType t )
 }
 
 
-void Sym::addnext( Sym *s )
+void sym::addnext( sym *s )
 {
 	if( s ) {
 		SYM(st1.next_tail)->next = s;
@@ -162,7 +162,7 @@ void Sym::addnext( Sym *s )
 	registers variable declaration (global, in structure or in function)
 	!: if variable is function declaration, redirect to declare_function
 */
-Node *Sym::register_self( Place loc, Compiler *cc )
+Node sym::register_self( Place loc, Compiler *cc )
 {
 	ASSERT( type );
 
@@ -183,7 +183,7 @@ Node *Sym::register_self( Place loc, Compiler *cc )
 	}
 
 	// TODO check for redefinition
-	PSym s = cc->current->search_id( name, ns_modifier, 0 );
+	Sym s = cc->current->search_id( name, ns_modifier, 0 );
 
 	cc->current->add_item( this );
 
@@ -196,7 +196,7 @@ Node *Sym::register_self( Place loc, Compiler *cc )
 	This function is called for each function declarator. On function with
 	body it is called twice, the second one is for statement.
 */
-void Sym::declare_function( Node *statement, Namespace *outer, Place loc, Compiler *cc )
+void sym::declare_function( Node statement, Namespace *outer, Place loc, Compiler *cc )
 {
 	ASSERT( type );
 
@@ -241,7 +241,7 @@ void Sym::declare_function( Node *statement, Namespace *outer, Place loc, Compil
 		// TODO
 
 		// check for redefinition
-		PSym s = cc->current->search_id( name, ns_modifier, 0 );
+		Sym s = cc->current->search_id( name, ns_modifier, 0 );
 		outer->add_item( this );
 
 	// add a body

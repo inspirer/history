@@ -23,7 +23,7 @@
 //
 // returns 1 if type if convertible to the target type
 // 
-int Type::can_convert_to( PType t, Compiler *cc ) const
+int type::can_convert_to( Type t, Compiler *cc ) const
 {
 	ASSERT( SCALAR(this) && ( SCALAR(t) || VOIDTYPE(t) ) );
 
@@ -38,7 +38,7 @@ int Type::can_convert_to( PType t, Compiler *cc ) const
 	qualif - 1 means to process qualification
 */
 
-PType Type::compatible( PType t1, PType t2, int qualif, Compiler *cc )
+Type type::compatible( Type t1, Type t2, int qualif, Compiler *cc )
 {
 	// 6.7.3.9 For two qualified types to be compatible, both shall have the
 	// identically qualified version of a compatible type; the order of type 
@@ -47,14 +47,14 @@ PType Type::compatible( PType t1, PType t2, int qualif, Compiler *cc )
 	if( T(t1) != T(t2) || qualif == 0 && Q(t1) != Q(t2) )
 		return NULL;
 
-	PType t, result = t1;
+	Type t, result = t1;
 
 	switch( T(t1) ) {
 
 	// 6.7.5.1.2 For two pointer types to be compatible, both shall be identically
 	//  qualified and both shall be pointers to compatible types.
 	case t_pointer:
-		t = Type::compatible( t1->parent, t2->parent, qualif, cc );
+		t = type::compatible( t1->parent, t2->parent, qualif, cc );
 		result = t == t1->parent ? t1 : t == t2->parent ? t2 : NULL;
 		if( t && (!result || Q(t1) != Q(t2) ) ) {
 			result = t1->clone(cc);
@@ -119,12 +119,12 @@ PType Type::compatible( PType t1, PType t2, int qualif, Compiler *cc )
 }
 
 
-PType Type::integer_promotion( Compiler *cc ) const
+Type type::integer_promotion( Compiler *cc ) const
 {
 	// TODO bittype
 
 	if( INTTYPE(this) && RANK(this) < INTRANK )
-		return Type::get_basic_type( t_int, cc );
+		return type::get_basic_type( t_int, cc );
 
 	return this;
 }
@@ -141,10 +141,10 @@ const static int dom_x_dom_mul[3][3] = {
 	{ 0, 1, 2 }, { 1, 0, 2 }, { 2, 2, 2 } };
 
 
-PType Expr::usual_conversions( Expr **x1, Expr **x2, int action, Compiler *cc )
+Type expr::usual_conversions( Expr *x1, Expr *x2, int action, Compiler *cc )
 {
-	PType p1, p2, res;
-	Expr *e1 = *x1, *e2 = *x2;
+	Type p1, p2, res;
+	Expr e1 = *x1, e2 = *x2;
 
 	ASSERT( ARITHMETIC(e1->restype) && ARITHMETIC(e1->restype) );
 
@@ -173,9 +173,9 @@ PType Expr::usual_conversions( Expr **x1, Expr **x2, int action, Compiler *cc )
 
 		ASSERT( type < 3 && domain < 3 );
 
-		res = Type::get_basic_type( dom_to_type[domain][type], cc );
-        p1 = Type::get_basic_type( dom_to_type[dom1][type], cc );
-        p2 = Type::get_basic_type( dom_to_type[dom2][type], cc );
+		res = type::get_basic_type( dom_to_type[domain][type], cc );
+        p1 = type::get_basic_type( dom_to_type[dom1][type], cc );
+        p2 = type::get_basic_type( dom_to_type[dom2][type], cc );
 		goto exit;
 	}	
 
@@ -226,13 +226,13 @@ PType Expr::usual_conversions( Expr **x1, Expr **x2, int action, Compiler *cc )
 
 exit:
 	if( T(e1->restype) != T(p1) ) {
-		Expr *e = create( e_cast, p1, cc );
+		Expr e = create( e_cast, p1, cc );
 		e->op[0] = e1;
         *x1 = e;
 	}
 
 	if( T(e2->restype) != T(p2) ) {
-		Expr *e = create( e_cast, p2, cc );
+		Expr e = create( e_cast, p2, cc );
 		e->op[0] = e2;
         *x2 = e;
 	}

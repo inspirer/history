@@ -38,8 +38,8 @@ static inline unsigned get_hash( const char *name )
 Namespace::Namespace()
 {
 	parent = NULL;
-	associated = NULL;
-	hash = new Sym *[HASH_SIZE];
+	//associated = NULL;
+	hash = new sym *[HASH_SIZE];
 
 	for( int i = 0; i < HASH_SIZE; i++ )
 		hash[i] = NULL;
@@ -52,7 +52,7 @@ Namespace::~Namespace()
 }
 
     
-void Namespace::add_item( PSym i )
+void Namespace::add_item( Sym i )
 {
 	unsigned hs;
 
@@ -63,10 +63,10 @@ void Namespace::add_item( PSym i )
 }
 
 
-PSym Namespace::search_id( const char *name, int modifier, int go_deep )
+Sym Namespace::search_id( const char *name, int modifier, int go_deep )
 {
     int hs;
-	PSym res;
+	Sym res;
 	Namespace *n;
 
 	ASSERT( name );
@@ -94,7 +94,7 @@ void Namespace::close_ns( Compiler *cc )
 
 void Namespace::export_outer()
 {
-	PSym s, next;
+	Sym s, next;
 
 	ASSERT( parent );
 	for( int i = 0; i < HASH_SIZE; i++ ) {
@@ -112,7 +112,7 @@ void Namespace::export_outer()
 
 void debug_show_namespace( Namespace *ns, int deep )
 {
-	PSym s;
+	Sym s;
 	int hash_id;
 
 	printf( "%*snamespace [\n", deep, "" );

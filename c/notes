@@ -31,6 +31,17 @@
 	arrays-declaration
 	other Expressions
 
+= 30 === (24 mar 2004)
+
+	+ il.h (TypeMetrics, BackendOptions, Backend), il_ops.h
+	+ bytecode.cpp (get_bytecode_be, class bytecode_backend)
+    - stmt.cpp
+    + Sym instead of PSym, sym instead of Sym, etc (node,expr,type)
+    + Value union
+    + sizeof(basictype) from Backend, +align
+    + il.cpp, il_ops.h
+    + il_conv.pl, generates il
+
 = 29 === (20 mar 2004)
 
     ! struct a *yo; struct a { ... };

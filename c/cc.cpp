@@ -20,17 +20,32 @@
 
 #include "cc.h"
 
+extern Backend *get_bytecode_be();
+
 Compiler::Compiler() : 
-    sym_sl( sizeof( Sym ) ), type_sl( sizeof( Type ) ), ns_sl( sizeof( Namespace ) ),
-    expr_sl( sizeof( Expr ) ), node_sl( sizeof( Node ) )
+    sym_sl( sizeof( sym ) ), type_sl( sizeof( type ) ), ns_sl( sizeof( Namespace ) ),
+    expr_sl( sizeof( expr ) ), node_sl( sizeof( node ) )
 {
 	current = &global;
 	func = NULL;
 	free_expr = NULL;
-	free_node = NULL;
+	//free_node = NULL;
+	set_backend( get_bytecode_be() );
 
 	for( int i = 0; i < t_basiccnt; i++ )
 		basic[i] = NULL;
+}
+
+
+void Compiler::set_backend( Backend *be )
+{
+	union { char c; int i; } u;
+	this->be = be;
+
+	u.i = 0;
+	u.c = 1;
+	be->need_swap = ((int)(u.i == 1)) != be->o.little_endian;
+	be->cc = this;
 }
 
 
@@ -40,17 +55,17 @@ Compiler::Compiler() :
  */
 char *Compiler::identifier( char *token, int *n, int tnID )
 {
-	char *id = new char[ 1 + sizeof(PType) + strlen(token)];
+	char *id = new char[ 1 + sizeof(Type) + strlen(token)];
 
-	*(PType *)id = NULL;
-	strcpy( id + sizeof(PType), token );
+	*(Type *)id = NULL;
+	strcpy( id + sizeof(Type), token );
 
-	if( PSym s = current->search_id( token, t_typename, 1 ) ) {
-		*(PType *)id = s->type;
+	if( Sym s = current->search_id( token, t_typename, 1 ) ) {
+		*(Type *)id = s->type;
 		*n = tnID;
 	}
 
-	return id + sizeof(PType);
+	return id + sizeof(Type);
 }
 
 

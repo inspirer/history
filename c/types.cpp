@@ -21,14 +21,15 @@
 #include "cc.h"
 
 
-Type *Type::create( int ts, Compiler *cc )
+type *type::create( int ts, Compiler *cc )
 {
-	Type *t = (Type *)cc->type_sl.allocate();
+	type *t = (type *)cc->type_sl.allocate();
 	t->specifier = ts;
 	t->st1.storage = scs_none;
 	t->qualifier = tq_none;
 	t->parent = NULL;
-	t->size = ts == t_pointer ? POINTER_SIZE : 0;
+	t->size = ts == t_pointer ? cc->be->o._ptr.size : 0;
+	t->align = 1;
 	t->cloned = NULL;
 	return t;
 }
@@ -37,14 +38,32 @@ Type *Type::create( int ts, Compiler *cc )
 //
 //  clones type structure, used to modify qualifiers
 // 
-Type *Type::clone( Compiler *cc ) const
+type *type::clone( Compiler *cc ) const
 {
-	Type *t = (Type *)cc->type_sl.allocate();
+	type *t = (type *)cc->type_sl.allocate();
 	*t = *this;
 	TYPE(this)->cloned = t;
 	return t;
 }
 
+
+int type::asOP() const
+{
+	if( BASICTYPE(this) )
+		return tdescr[specifier].suffix + sizeop(size);
+	else switch( specifier ) {
+		case t_pointer:
+			return P + sizeop(size);
+		case t_array: case t_struct: case t_union:
+			return B;
+		case t_enum: 
+			return I + sizeop(size);
+		case t_func: default:
+			TODO();
+	}
+	assert(0); 
+	return I;
+}
 
 //
 //  pushes string to buffer with defined size at pos (helper routine)
@@ -73,10 +92,10 @@ static inline int _insert( char **buffer, int *left, char *str, int pos )
 //
 //  processes one sequence of types, calls itself on function types
 //
-static int toString_helper( const PType root, char **b, int *left, int pos ) {
+static int toString_helper( const Type root, char **b, int *left, int pos ) {
 
 	int size = 0;
-	PType t = root;
+	Type t = root;
 
 	for( ; t; t = t->parent ) {
 
@@ -106,7 +125,7 @@ static int toString_helper( const PType root, char **b, int *left, int pos ) {
 				AFTER( ")()" );
 			}
 			if( t->params )
-				for( PSym s = t->params; s; s = s->next ) {
+				for( Sym s = t->params; s; s = s->next ) {
 					size += toString_helper( s->type, b, left, pos + size - 1 );
 					if( s->next )
 						size += _insert( b, left, ", ", pos+size-1 );
@@ -191,7 +210,7 @@ static int toString_helper( const PType root, char **b, int *left, int pos ) {
 //
 //   This function uses two buffers, and is not re-entrant.
 //
-const char *Type::toString() const
+const char *type::toString() const
 {
 	enum { SIZE = 2048 };
 	static int calltimes = 0;
@@ -214,29 +233,29 @@ const char *Type::toString() const
 #define FD(i,e) ((i<<4) + e)
 
 const struct basic_type_descr tdescr[t_basiccnt] = {
- {	0,	0,      	0,       },	
- {	0,	0,			0,		 },	//1 void
- {	1,	2,			0,		 },	//2 char
- {	1,	2 | SBIT,	0,       },	//3 signed char
- {	1,	2,		 	0,		 },	//4 unsigned char 
- {	2,	3 | SBIT,	0,       },	//5 short, signed short, short int, or signed short int
- {	2,	3,		 	0,		 },	//6 unsigned short, or unsigned short int
- {	4,	4 | SBIT,	0,       },	//7 int, signed, or signed int
- {	4,	4,		 	0,		 },	//8 unsigned, or unsigned int
- {	4,	5 | SBIT,	0,       },	//9 long, signed long, long int, or signed long int
- {	4,	5,		 	0,		 },	//0 unsigned long, or unsigned long int
- {	8,	6 | SBIT,	0,       },	//1 long long, signed long long, long long int, or signed long long int
- {	8,	6,		 	0,		 },	//2 unsigned long long, or unsigned long long int
- {	4,	0,		 	FD(0,0), },	//3 float
- {	8,	0,		 	FD(0,1), },	//4 double
- {	8,	0,		 	FD(0,2), },	//5 long double
- {	1,	1,		 	0,		 },	//6 _Bool
- {	8,	0,		 	FD(2,0), },	//7 float _Complex
- {	16,	0,		 	FD(2,1), },	//8 double _Complex
- {	16,	0,		 	FD(2,2), },	//9 long double _Complex
- {	4,	0,		 	FD(1,0), },	//0 float _Imaginary
- {	8,	0,		 	FD(1,1), },	//1 double _Imaginary
- {	8,	0,		 	FD(1,2), },	//2 long double _Imaginary
+ {	0, 0, 0,      		0,       },	
+ {	0, V, 0,			0,		 },	//1 void
+ { _c, I, 2,			0,		 },	//2 char
+ { _c, I, 2 | SBIT,		0,       },	//3 signed char
+ { _c, U, 2,		 	0,		 },	//4 unsigned char 
+ { _s, I, 3 | SBIT,		0,       },	//5 short, signed short, short int, or signed short int
+ { _s, U, 3,		 	0,		 },	//6 unsigned short, or unsigned short int
+ { _i, I, 4 | SBIT,		0,       },	//7 int, signed, or signed int
+ { _i, U, 4,		 	0,		 },	//8 unsigned, or unsigned int
+ { _l, I, 5 | SBIT,		0,       },	//9 long, signed long, long int, or signed long int
+ { _l, U, 5,		 	0,		 },	//0 unsigned long, or unsigned long int
+ { _h, I, 6 | SBIT,		0,       },	//1 long long, signed long long, long long int, or signed long long int
+ { _h, U, 6,		 	0,		 },	//2 unsigned long long, or unsigned long long int
+ { _f, F, 0,		 	FD(0,0), },	//3 float
+ { _d, F, 0,		 	FD(0,1), },	//4 double
+ { _x, F, 0,		 	FD(0,2), },	//5 long double
+ { _c, I, 1,		 	0,		 },	//6 _Bool
+ {	0, B, 0,		 	FD(2,0), },	//7 float _Complex
+ {	0, B, 0,		 	FD(2,1), },	//8 double _Complex
+ {	0, B, 0,		 	FD(2,2), },	//9 long double _Complex
+ {	0, B, 0,		 	FD(1,0), },	//0 float _Imaginary
+ {	0, B, 0,		 	FD(1,1), },	//1 double _Imaginary
+ {	0, B, 0,		 	FD(1,2), },	//2 long double _Imaginary
 };
 
 
@@ -245,7 +264,7 @@ const struct basic_type_descr tdescr[t_basiccnt] = {
 	
 	EG: the type is cached in the Compiler::basic[1..t_basiccnt] variable
 */
-PType Type::get_basic_type( int spec, Compiler *cc )
+Type type::get_basic_type( int spec, Compiler *cc )
 {
 	ASSERT( spec > 0 && spec < t_basiccnt );
 
@@ -347,7 +366,7 @@ static int validate_type( int ts )
 }
 
 
-void Type::add( int ts, Place loc, Compiler *cc )
+void type::add( int ts, Place loc, Compiler *cc )
 {
 	if( ts == ts_long && (specifier & ts_long ) )
 		ts = ts_llong;
@@ -372,7 +391,7 @@ void Type::add( int ts, Place loc, Compiler *cc )
 }
 
 
-void Type::add_modifier( int modifier, Place loc, Compiler *cc )
+void type::add_modifier( int modifier, Place loc, Compiler *cc )
 {
 	switch( modifier & ~0xff ) {
 		case mod_storage:
@@ -390,17 +409,18 @@ void Type::add_modifier( int modifier, Place loc, Compiler *cc )
 }
 
 
-void Type::fixup( Compiler *cc )
+void type::fixup( Compiler *cc )
 {
 	if( (t_mask & specifier) == 0 ) {
 		specifier = validate_type( specifier );
 		ASSERT( BASICTYPE(this) );
-		size = tdescr[specifier].size;
+		size = cc->be->o._met[specifier].size;
+		align = cc->be->o._met[specifier].align;
 	}
 }
 
 
-int Type::addqualifier( int list, int one, Place loc, Compiler *cc )
+int type::addqualifier( int list, int one, Place loc, Compiler *cc )
 {
 	if( list & one )
 		cc->error( LOC "warn: same type qualifier used more than once\n", loc );
@@ -414,16 +434,16 @@ int Type::addqualifier( int list, int one, Place loc, Compiler *cc )
 
 // creates function type
 
-PType Type::create_function( PSym paramlist, Compiler *cc )
+Type type::create_function( Sym paramlist, Compiler *cc )
 {
-	Type *t = create( t_func, cc );
+	type *t = create( t_func, cc );
 	t->params = paramlist;
 	return t;
 }
 
 
 /*  
-   DESC: creates Sym and Type. Registers structure in the outer namespace.
+   DESC: creates sym and type. Registers structure in the outer namespace.
    type can be t_union or t_struct. Either name, or members parameter
    must not be NULL.
 
@@ -434,10 +454,10 @@ PType Type::create_function( PSym paramlist, Compiler *cc )
    EG: members == NULL means that structure has no definition
 
 */
-PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm, Place loc, Compiler *cc )
+Type type::create_struct( char *name, int agg_type, sym *members, Namespace *mm, Place loc, Compiler *cc )
 {
-	Type *t = NULL;
-	Sym  *s = NULL;
+	type *t = NULL;
+	sym  *s = NULL;
 
 	ASSERT( name || members && mm );
 
@@ -451,7 +471,7 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 
 	// create if not exist
 	if( !t ) {
-		t = Type::create( agg_type, cc );
+		t = type::create( agg_type, cc );
 		t->params = NULL;
 		t->members = NULL;
 		t->tagname = name;
@@ -459,7 +479,7 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 
 	// add structure to the outer namespace
 	if( !s && name ) {
-		s = Sym::create( name, cc );
+		s = sym::create( name, cc );
 		s->type = t;
 		s->ns_modifier = agg_type;
 		cc->current->add_item( s );
@@ -474,7 +494,7 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 
 		word size = 0;
 
-		for( PSym q = members; q; q = q->next ) {
+		for( Sym q = members; q; q = q->next ) {
 			if( GOOD(q) ) {
 				if( agg_type == t_struct ) {
 					SYM(q)->loc.member.offset = size;
@@ -507,7 +527,7 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 
 		// do not register bad types
 		if( T(t) != t_bad )
-			for( Type *cl = t; cl ; cl = TYPE(cl->cloned) ) {
+			for( type *cl = t; cl ; cl = TYPE(cl->cloned) ) {
 				cl->params = members;
 				cl->members = mm;
 				cl->size = size;
@@ -519,15 +539,15 @@ PType Type::create_struct( char *name, int agg_type, Sym *members, Namespace *mm
 }
 
 /*  
-   DESC: creates Sym and Type. Registers enumeration in the outer namespace.
+   DESC: creates sym and type. Registers enumeration in the outer namespace.
    'name' must not be NULL.
 
    EG: ns == NULL means that enumeration has no definition
 */
-PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
+Type type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 {
-	Type *t = NULL;
-	Sym  *s = NULL;
+	type *t = NULL;
+	sym  *s = NULL;
 
 	ASSERT( name || ns );
 
@@ -540,7 +560,7 @@ PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 
 	// create if not exist
 	if( !t && ns && name ) {
-		t = Type::create( t_enum, cc );
+		t = type::create( t_enum, cc );
 		t->enum_members = ns;
 		t->tagname = name;
 
@@ -551,12 +571,12 @@ PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 		// 6.7.2.3.2 A type specifier of the form 'enum identifier' without an enumerator
 		// list shall only appear after the type it specifies is completed.
 		cc->error( LOC "'enum %s': unknown type\n", loc, name );
-		t = Type::create( t_bad, cc );
+		t = type::create( t_bad, cc );
 	}
 
 	// add structure to the outer namespace
 	if( !s && name ) {
-		s = Sym::create( name, cc );
+		s = sym::create( name, cc );
 		s->type = t;
 		M(s) = (T(t) == t_bad) ? t_bad : t_enum;
 		cc->current->add_item( s );
@@ -570,9 +590,9 @@ PType Type::create_enum( char *name, Namespace *ns, Place loc, Compiler *cc )
 }
 
 
-PType Type::create_array( int tqualifier, Expr *expr, Compiler *cc ) 
+Type type::create_array( int tqualifier, Expr expr, Compiler *cc ) 
 {
-	Type *t = create( t_array, cc );
+	type *t = create( t_array, cc );
 
 	if( expr ) {
 		t->ar_size_val = -1;

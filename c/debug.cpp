@@ -22,7 +22,7 @@
 
 #ifdef DEBUG_TREE
 
-void debug_show_sym( PSym s, int deep )
+void debug_show_sym( Sym s, int deep )
 {
 	char *head, *stor;
 
@@ -61,10 +61,10 @@ void debug_show_sym( PSym s, int deep )
 }
 
 
-void debug_show_type( PType t, int deep )
+void debug_show_type( Type t, int deep )
 {
 	char *spec, qual[128] = "";
-	PType s = t;
+	Type s = t;
 
 	while( s ) {
 		switch( s->specifier ) {

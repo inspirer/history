@@ -23,19 +23,25 @@
 
 //#define DEBUG_TREE
 
-#define TYPE(tt) ((Type *)(tt))
-typedef const struct Type *PType;
-
-#define SYM(tt) ((Sym *)(tt))
-typedef const struct Sym *PSym;
-
-#define POINTER_SIZE 4
+#define TYPE(tt) ((struct type *)(tt))
+#define SYM(tt) ((struct sym *)(tt))
 
 #define SUBSET(a,b) (((a)|(b))==(b))
 
 #define T(tt) (tt)->specifier
 #define Q(tt) (tt)->qualifier
 #define M(ss) (ss)->ns_modifier
+
+
+// this union represents any value
+
+union Value {
+	llong i;
+	ullong u;
+	long double d;
+	void *p;
+	void (*g)(void);
+};
 
 
 // type qualifiers
@@ -54,7 +60,7 @@ enum {
 /*
 	EG: modifiers mark is used to store in one integer the type of modifier and
 	the modifier itself. We have three types of modifiers 'storage class specifiers', 
-	'type qualifiers' and 'function specifiers'. See Type::add_modifier.
+	'type qualifiers' and 'function specifiers'. See type::add_modifier.
 */
 
 // modifiers mark
@@ -156,9 +162,9 @@ enum {
 
     /*
 		EG: During syntax analysis it's easier to use word representation of type, but
-		as soon as the type is collected, the Type::fixup function transforms word-
+		as soon as the type is collected, the type::fixup function transforms word-
 		representation to normal-representation. t_mask constant allows to detect the
-        model of representation. To work with word-representation there are Type::add
+        model of representation. To work with word-representation there are type::add
         and validate_type functions.
     */
 
@@ -179,16 +185,9 @@ enum {
 };
 
 
-struct Sym;
-struct Node;
-struct Expr;
-struct Init;
-struct Namespace;
-class Compiler;
-
 /* EG:
 	size member declares the number of bytes needed to hold the variable
-	of such Type in memory. size = 0 for function and void types.
+	of such type in memory. size = 0 for function and void types.
 
 	ar_size_val = -1 for variable sizes: see ar_size, VARSIZE
 
@@ -201,14 +200,14 @@ class Compiler;
 */
 
 
-struct Type {
+struct type {
     int    specifier, qualifier;	// see T(), Q()
-	word   size;
+	word   size, align;
 	char   *tagname;				// t_struct, t_union, t_enum
 	union {
-		PType parent, return_value;
+		Type parent, return_value;
 	};
-	PType  cloned;
+	Type  cloned;
 
     // compiler's stages dependent vars
 	union {
@@ -220,11 +219,11 @@ struct Type {
 	// specifier dependent vars
     union {
 		struct {				// t_func, t_struct, t_union
-			PSym params;		// for t_struct, t_union NULL means incompleted
+			Sym params;			// for t_struct, t_union NULL means incompleted
 			Namespace *members; // members structure is fast access to params
 		};
 		struct {				// t_array (ar_size_val == 0 means incompleted)
-			Expr  *ar_size;		//						== -1 means variable, see ar_size
+			Expr ar_size;		//						== -1 means variable, see ar_size
 			int ar_size_val;
 		};
 		Namespace *enum_members; // t_enum
@@ -234,33 +233,36 @@ struct Type {
 	const char *toString() const;
 
 	// type conversions
-	int can_convert_to( PType t, Compiler *cc ) const;
-	PType integer_promotion( Compiler *cc ) const;
+	int can_convert_to( Type t, Compiler *cc ) const;
+	Type integer_promotion( Compiler *cc ) const;
 
 	// utilities
-	static PType compatible( PType t1, PType t2, int qualif, Compiler *cc );
+	static Type compatible( Type t1, Type t2, int qualif, Compiler *cc );
 
 	// constructors
-    static Type *create( int ts, Compiler *cc );
-	Type *clone( Compiler *cc ) const;
+    static type *create( int ts, Compiler *cc );
+	type *clone( Compiler *cc ) const;
 
-    static PType create_function( PSym paramlist, Compiler *cc );
-    static PType create_struct( char *name, int agg_type, Sym *members, Namespace *mm, Place loc, Compiler *cc );
-    static PType create_enum( char *name, Namespace *ns, Place loc, Compiler *cc );
-    static PType create_array( int tqualifiers, Expr *expr, Compiler *cc );
-	static PType get_basic_type( int spec, Compiler *cc );
+    static Type create_function( Sym paramlist, Compiler *cc );
+    static Type create_struct( char *name, int agg_type, sym *members, Namespace *mm, Place loc, Compiler *cc );
+    static Type create_enum( char *name, Namespace *ns, Place loc, Compiler *cc );
+    static Type create_array( int tqualifiers, expr *expr, Compiler *cc );
+	static Type get_basic_type( int spec, Compiler *cc );
 
     // grammar-based operations
     void add( int ts, Place loc, Compiler *cc );
     void add_modifier( int modifier, Place loc, Compiler *cc );
     void fixup( Compiler *cc );
     static int addqualifier( int list, int one, Place loc, Compiler *cc );
+
+    int asOP() const;
 };
 
 //  Basic type information array declaration.
 
 struct basic_type_descr {
-    int size;				// in bytes
+	int size_name;
+	int suffix;				// F I U P V B
     int rank;				// type rank
     int domain;				// only for floating types
 };
@@ -278,22 +280,22 @@ struct basic_type_descr {
 extern const struct basic_type_descr tdescr[t_basiccnt];
 
 /* EG:
-	Sym structure is used to store all symbolic names found in the source file.
+	sym structure is used to store all symbolic names found in the source file.
 	Be careful, we also store typenames/struct/enums here. ns_modifier represents the
 	type of symbol.
 
 	st1.type_tail member is used only during syntax analysis, the type of symbol
 	is constructed step by step, adding the new information to the end of 
-	'Type list'. see Sym::symbol_created and Sym::addtype functions
+	'type list'. see sym::symbol_created and sym::addtype functions
 
 	name member can be NULL, it means abstract declarator
 
-	the structure is initialized in Sym::create function
+	the structure is initialized in sym::create function
 
 	type_tail is NULL by default, while next_tail point out the current Symbol (by default)
  */
 
-/* EG: To combine several namespaces in one, we use ns_modifier member of Sym structure.
+/* EG: To combine several namespaces in one, we use ns_modifier member of sym structure.
 
 	0 - usual, t_struct, t_union, t_enum, t_typename, t_label, t_bad
 
@@ -342,54 +344,59 @@ enum {
 	fix_func   = 5
 };
 
-struct Sym {
+struct sym {
     char *name;
     int storage, ns_modifier;
-    PType type;
-    PSym next, hashed;
+    Type type;
+    Sym next, hashed;
 
 	// storage dependent vars
     union {
 		char *exportname;	// scs_extern
     	Init *init;			// scs_static, scs_global
 
-    	vlong value;		// scs_imm
-    	Node *label_node;	// scs_label
+    	Value val;			// scs_imm
+    	Node label_node;	// scs_label
     	
     	struct {			// scs_arg, scs_arg_reg
 			int offset;
-			vlong def;
+			Value def;
     	} arg;
 
     	struct {			// scs_member, scs_bitfield
-			PSym container;		
+			Sym container;		
 			int bitsize, bitstart;  // bitsize = -1 for usual types
 			int offset;
 		} member;
 
-		Node *body;			// scs_code
+		Node body;			// scs_code
     } loc;
 
     // compiler's stages dependent vars
     union {
-		struct {
-			PType type_tail;
-			PSym  next_tail;
+		struct {			// syntax analysis
+			Type type_tail;
+			Sym  next_tail;
 		} st1;
+
+		struct {			// code generation
+			char *name;
+
+		} x;
     };
 
 	// constructors
-    static Sym *create( char *s, Compiler *cc );
-    static Sym *create_imm( char *s, PType t, vlong value, Compiler *cc );
+    static sym *create( char *s, Compiler *cc );
+    static sym *create_imm( char *s, Type t, ullong i, Compiler *cc );
 
-	// registers Sym in the outer namespace, returns INIT Nodes
-    Node *register_self( Place loc, Compiler *cc );
-	void declare_function( Node *statement, Namespace *outer, Place loc, Compiler *cc );
+	// registers sym in the outer namespace, returns INIT Nodes
+    Node register_self( Place loc, Compiler *cc );
+	void declare_function( Node statement, Namespace *outer, Place loc, Compiler *cc );
 
     // grammar-based operations
-    void symbol_created( PType t, int fix, Place loc, Compiler *cc );
-    void addtype( PType t );
-    void addnext( Sym *s );
+    void symbol_created( Type t, int fix, Place loc, Compiler *cc );
+    void addtype( Type t );
+    void addnext( sym *s );
 };
 
 
@@ -406,13 +413,13 @@ struct Sym {
 
 struct Namespace {
     Namespace *parent;
-	Node *associated;
-    Sym **hash;
+	//Node associated;
+    sym **hash;
 
     Namespace();
     ~Namespace();
-    void add_item( PSym i );
-    PSym search_id( const char *name, int modifier, int go_deep );
+    void add_item( Sym i );
+    Sym search_id( const char *name, int modifier, int go_deep );
 
     /*
 		EG: entering to and exiting from namespaces (in slab)
@@ -432,8 +439,8 @@ struct Namespace {
 #ifdef DEBUG_TREE
 
 void debug_show_namespace( Namespace *ns, int deep );
-void debug_show_sym( PSym s, int deep );
-void debug_show_type( PType s, int deep );
+void debug_show_sym( Sym s, int deep );
+void debug_show_type( Type s, int deep );
 
 #endif
 

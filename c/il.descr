@@ -1,6 +1,9 @@
 #   intermediate language description
 #   based on lcc
 
+SUFFIXES: FIUPVB
+SIZES: csilhfdxp
+
 # address of a parameter
 ADDRF(0,V)
 	P(p)

@@ -29,8 +29,8 @@
 # identificators and numbers
 typename(char*):
 Lid(char*): /[a-zA-Z_][a-zA-Z_0-9]*/ -1  \ @ = identifier( token, &$$, $typename );
-Licon(Expr*):  /([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?/ 
-	\ @ = Expr::create_icon_from_string(token,PLACE($@),this);
+Licon(Expr):  /([1-9][0-9]*|0[0-7]*|0[xX][0-9a-fA-F]+)([uU](l|L|ll|LL)?|(l|L|ll|LL)[uU]?)?/ 
+	\ @ = expr::create_icon_from_string(token,PLACE($@),this);
 
 # Floating point constant
 Lfcon:		/([0-9]*\.[0-9]+|[0-9]+\.)([eE][+-]?[0-9]+)?[flFL]?/
@@ -39,8 +39,8 @@ Lfcon:		/0[xX]([0-9a-fA-F]*\.[0-9a-fA-F]+|[0-9a-fA-F]+\.?)[pP][+-]?[0-9]+[flFL]?
 
 # Strings and Chars
 Lscon:      /L?"([^"\\]|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))*"/
-Lccon(Expr*):/L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'/
-	\ @ = Expr::create_ccon_from_string(token,PLACE($@),this);
+Lccon(Expr):/L?'([^\n\\']|\\(['"?\\abfnrtv]|x[0-9a-fA-F]+|[0-7]([0-7][0-7]?)?))+'/
+	\ @ = expr::create_ccon_from_string(token,PLACE($@),this);
 
 # Non-terminal, skip
 _skip:      /\/\/.*/
@@ -158,22 +158,22 @@ new_func -> declaration_list
 # A.2.1  Expressions
 
 # Here Lid and typename are combined. To distinguish them later you
-# can analyze the pointer which is placed just before the string: *(PType*)(s-4)
+# can analyze the pointer which is placed just before the string: *(Type*)(s-4)
 # if it is zero => Lid, else => typename
 
 ID (char *) ::= Lid | typename ;
 
 
-constant (Expr *) ::
+constant (Expr) ::
   = Licon
   = Lccon
   = Lfcon
 		TODO();
 ;
 
-primary_expression (Expr *) ::
+primary_expression (Expr) ::
   = Lid
-		$$ = Expr::create_from_id( $Lid, PLACE(@0), this );
+		$$ = expr::create_from_id( $Lid, PLACE(@0), this );
 
   = constant
   = Lscon
@@ -183,10 +183,10 @@ primary_expression (Expr *) ::
 		$primary_expression = $expression;
 ;
 
-postfix_expression (Expr *) ::
+postfix_expression (Expr) ::
   = primary_expression
   = postfix_expression '[' expression ']'
-		$$ = Expr::create_array_subscripting( $postfix_expression#1, $expression, PLACE(@1), this );
+		$$ = expr::create_array_subscripting( $postfix_expression#1, $expression, PLACE(@1), this );
 
   = postfix_expression '(' ')'
 		TODO();
@@ -195,10 +195,10 @@ postfix_expression (Expr *) ::
 		TODO();
 
   = postfix_expression '.' ID
-		$$ = Expr::create_struct_member( $postfix_expression#1, $ID, PLACE(@1), this );
+		$$ = expr::create_struct_member( $postfix_expression#1, $ID, PLACE(@1), this );
 
   = postfix_expression '->' ID
-		$$ = Expr::create_struct_member_ptr( $postfix_expression#1, $ID, PLACE(@1), this );
+		$$ = expr::create_struct_member_ptr( $postfix_expression#1, $ID, PLACE(@1), this );
   
   = postfix_expression '++'
 		TODO();
@@ -221,7 +221,7 @@ argument_expression_list ::
 		TODO();
 ;
 
-unary_expression (Expr *) ::
+unary_expression (Expr) ::
   = postfix_expression
   = '++' unary_expression
 		TODO();
@@ -236,15 +236,15 @@ unary_expression (Expr *) ::
 		TODO();
 
   = Lsizeof '(' type_name ')'
-		$$ = Expr::get_type_size( $type_name, PLACE(@0), this );
+		$$ = expr::get_type_size( $type_name, PLACE(@0), this );
 ;
 
 unary_operator (int) ::= '&' | '*' | '+' | '-' | '~' | '!' ;
 
-cast_expression (Expr *) ::
+cast_expression (Expr) ::
   = unary_expression
   = '(' type_name ')' cast_expression
-		$$ = Expr::cast_to( $cast_expression#1, $type_name, PLACE(@0), this );
+		$$ = expr::cast_to( $cast_expression#1, $type_name, PLACE(@0), this );
 ;
 
 %left  '||' ;
@@ -258,70 +258,70 @@ cast_expression (Expr *) ::
 %left  '+' '-';
 %left  '*' '/' '%';
 
-oneexpr (Expr *) ::
+oneexpr (Expr) ::
   = cast_expression
   = oneexpr '*'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_mult, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_mult, PLACE(@1), this );
 
   = oneexpr '/'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_div, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_div, PLACE(@1), this );
 
   = oneexpr '%'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_perc, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_perc, PLACE(@1), this );
 
   = oneexpr '+'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_plus, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_plus, PLACE(@1), this );
 
   = oneexpr '-'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_minus, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_minus, PLACE(@1), this );
 
   = oneexpr '<<' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_shl, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_shl, PLACE(@1), this );
 
   = oneexpr '>>' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_shr, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_shr, PLACE(@1), this );
 
   = oneexpr '<'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_lt, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_lt, PLACE(@1), this );
 
   = oneexpr '>'  oneexpr
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_gt, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_gt, PLACE(@1), this );
 
   = oneexpr '<=' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_le, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_le, PLACE(@1), this );
 
   = oneexpr '>=' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_ge, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_ge, PLACE(@1), this );
 
   = oneexpr '==' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_eq, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_eq, PLACE(@1), this );
 
   = oneexpr '!=' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_noteq, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_noteq, PLACE(@1), this );
 
   = oneexpr '&'  oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_and, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_and, PLACE(@1), this );
 
   = oneexpr '^'  oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_xor, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_xor, PLACE(@1), this );
 
   = oneexpr '|'  oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_or, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_or, PLACE(@1), this );
 
   = oneexpr '&&' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_AND, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_AND, PLACE(@1), this );
 
   = oneexpr '||' oneexpr 
-		$$ = Expr::create_binary( $oneexpr#1, $oneexpr#2, e_OR, PLACE(@1), this );
+		$$ = expr::create_binary( $oneexpr#1, $oneexpr#2, e_OR, PLACE(@1), this );
 ;
 
-conditional_expression (Expr *) ::
+conditional_expression (Expr) ::
   = oneexpr
   = oneexpr '?' expression ':' conditional_expression
-		$$ = Expr::create_conditional( $oneexpr, $expression, $conditional_expression#1, PLACE(@1), this );
+		$$ = expr::create_conditional( $oneexpr, $expression, $conditional_expression#1, PLACE(@1), this );
 ;
 
-assignment_expression (Expr *) ::
+assignment_expression (Expr) ::
   = conditional_expression
   = unary_expression assignment_operator assignment_expression
 		TODO();
@@ -329,15 +329,15 @@ assignment_expression (Expr *) ::
 
 assignment_operator (int) ::= '=' | '*=' | '/=' | '%=' | '+=' | '-=' | '<<=' | '>>=' | '&=' | '^=' | '|=' ;
 
-expression (Expr *) ::
+expression (Expr) ::
   = assignment_expression
   = expression ',' assignment_expression
-		$$ = Expr::create_comma( $expression#1, $assignment_expression, PLACE(@1), this );
+		$$ = expr::create_comma( $expression#1, $assignment_expression, PLACE(@1), this );
 ;
 
-constant_expression (Expr *) ::
+constant_expression (Expr) ::
   = conditional_expression
-		$$ = Expr::create_constant_expr( $conditional_expression, PLACE(@0), this );
+		$$ = expr::create_constant_expr( $conditional_expression, PLACE(@0), this );
 ;
 
 # A.2.2  Declarations
@@ -345,7 +345,7 @@ constant_expression (Expr *) ::
 #  EG: declaration symbol contains the pointer to the first Node of
 #      variables initializers
 
-declaration (Node *) ::
+declaration (Node) ::
   = declaration_specifiers ';'
 		$declaration = NULL;
 
@@ -356,7 +356,7 @@ declaration (Node *) ::
 #  EG: declaration_specifiers1 contains type and notype_specifiers from the right of it,
 #      declaration_specifiers adds notype_specifiers to the left
 
-declaration_specifiers (Type *) ::
+declaration_specifiers (type *) ::
   = declaration_specifier_notype declaration_specifiers
 		$declaration_specifiers#1->add_modifier( $declaration_specifier_notype, PLACE(@0), this );
 		$declaration_specifiers#0 = $declaration_specifiers#1;
@@ -365,9 +365,9 @@ declaration_specifiers (Type *) ::
 		$declaration_specifiers1->fixup( this );
 ;
 
-declaration_specifiers1 (Type *) ::
+declaration_specifiers1 (type *) ::
   = type_specifier
-		$declaration_specifiers1 = Type::create( $type_specifier, this );
+		$declaration_specifiers1 = type::create( $type_specifier, this );
 
   = type_specifier2
   = declaration_specifiers1 type_specifier
@@ -391,20 +391,20 @@ declaration_specifier_notype (int) ::
 #              something change.
 #   /*DANGEROUS*/
 
-init_declarator_list (Node *) ::
-  = declarator { $declarator->symbol_created( (PType)/*DANGEROUS*/lapg_m[lapg_head-1].sym, func ? fix_infunc : fix_global, PLACE(@0), this ); } initopt
+init_declarator_list (Node) ::
+  = declarator { $declarator->symbol_created( (Type)/*DANGEROUS*/lapg_m[lapg_head-1].sym, func ? fix_infunc : fix_global, PLACE(@0), this ); } initopt
 		$$ = NULL;
 
-  = init_declarator_list ',' declarator { $declarator->symbol_created( (PType)/*DANGEROUS*/lapg_m[lapg_head-3].sym, func ? fix_infunc : fix_global, PLACE(@2), this ); } initopt
+  = init_declarator_list ',' declarator { $declarator->symbol_created( (Type)/*DANGEROUS*/lapg_m[lapg_head-3].sym, func ? fix_infunc : fix_global, PLACE(@2), this ); } initopt
 		$$ = NULL; // $$ = Node::combine( $init_declarator_list, ?? );
 ;
 
 #	Some HACK: 
-#		Our Sym is '(PType)lapg_m[lapg_head-2].sym'
+#		Our sym is '(Type)lapg_m[lapg_head-2].sym'
 #	/*DANGEROUS*/
 
 init ::
-  = '=' { TODO();$$ = (Sym *)/*DANGEROUS*/lapg_m[lapg_head-2].sym; } initializer
+  = '=' { TODO();$$ = (sym *)/*DANGEROUS*/lapg_m[lapg_head-2].sym; } initializer
 ;
 
 storage_class_specifier (int) ::
@@ -430,19 +430,19 @@ type_specifier (int) ::
   = L_Imaginary	\ $type_specifier = ts__Imaginary;
 ;
 
-type_specifier2 (Type *) ::  
+type_specifier2 (type *) ::  
   = struct_or_union_specifier
   = enum_specifier
   = typename
-		$type_specifier2 = (*(PType*)($typename-sizeof(PType)))->clone( this );
+		$type_specifier2 = (*(Type*)($typename-sizeof(Type)))->clone( this );
 ;
 
-struct_or_union_specifier (Type *) ::
+struct_or_union_specifier (type *) ::
   = struct_or_union IDopt '{' new_ns struct_declaration_list close_ns '}'
-		$struct_or_union_specifier = (Type *)Type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, PLACE(@1), this );
+		$struct_or_union_specifier = (type *)type::create_struct( $IDopt, $struct_or_union, $struct_declaration_list, $new_ns, PLACE(@1), this );
 
   = struct_or_union ID
-		$struct_or_union_specifier = (Type *)Type::create_struct( $ID, $struct_or_union, NULL, NULL, PLACE(@1), this );
+		$struct_or_union_specifier = (type *)type::create_struct( $ID, $struct_or_union, NULL, NULL, PLACE(@1), this );
 ;
 
 struct_or_union (int) ::
@@ -450,18 +450,18 @@ struct_or_union (int) ::
   = Lunion		\ $struct_or_union = t_union;
 ;
 
-struct_declaration_list (Sym *) ::
+struct_declaration_list (sym *) ::
   = struct_declaration
   = struct_declaration_list struct_declaration
 		$struct_declaration_list#1->addnext( $struct_declaration );
 ;
 
-struct_declaration (Sym *) ::
+struct_declaration (sym *) ::
   = specifier_qualifier_list struct_declarator_list ';'
 		$struct_declaration = $struct_declarator_list;
 ;
 
-specifier_qualifier_list (Type *) ::
+specifier_qualifier_list (type *) ::
   = type_qualifier specifier_qualifier_list
 		$specifier_qualifier_list#1->add_modifier( mod_qual | $type_qualifier, PLACE(@0), this );
 		$specifier_qualifier_list#0 = $specifier_qualifier_list#1;
@@ -470,9 +470,9 @@ specifier_qualifier_list (Type *) ::
 		$specifier_qualifier_list1->fixup( this );
 ;
 
-specifier_qualifier_list1 (Type *) ::
+specifier_qualifier_list1 (type *) ::
   = type_specifier
-		$specifier_qualifier_list1 = Type::create( $type_specifier, this );
+		$specifier_qualifier_list1 = type::create( $type_specifier, this );
 
   = type_specifier2
   = specifier_qualifier_list1 type_qualifier
@@ -482,7 +482,7 @@ specifier_qualifier_list1 (Type *) ::
 		$specifier_qualifier_list1#1->add( $type_specifier, PLACE(@1), this );
 ;
 
-struct_declarator_list (Sym *) ::
+struct_declarator_list (sym *) ::
   = struct_declarator
 		$struct_declarator->symbol_created( $#, fix_member, PLACE(@0), this );
 
@@ -491,54 +491,54 @@ struct_declarator_list (Sym *) ::
 		$struct_declarator_list#1->addnext( $struct_declarator );
 ;
 
-struct_declarator (Sym *) ::
+struct_declarator (sym *) ::
   = declarator
 		$declarator->loc.member.bitsize = -1;
 
   = ':' constant_expression
-		$struct_declarator = Sym::create( NULL, this );
+		$struct_declarator = sym::create( NULL, this );
 		($struct_declarator)->loc.member.bitsize = $constant_expression->calculate(t_int, this);
 
   = declarator ':' constant_expression
 		$declarator->loc.member.bitsize = $constant_expression->calculate(t_int, this);
 ;
 
-enum_specifier (PType) ::
+enum_specifier (Type) ::
   = Lenum '{' new_ns enumerator_list ',' close_ns '}'
-		$enum_specifier = Type::create_enum( NULL, $new_ns, PLACE(@0), this );
+		$enum_specifier = type::create_enum( NULL, $new_ns, PLACE(@0), this );
 
   = Lenum '{' new_ns enumerator_list close_ns '}'
-		$enum_specifier = Type::create_enum( NULL, $new_ns, PLACE(@0), this );
+		$enum_specifier = type::create_enum( NULL, $new_ns, PLACE(@0), this );
 
   = Lenum ID '{' new_ns enumerator_list ','  close_ns '}'
-		$enum_specifier = Type::create_enum( $ID, $new_ns, PLACE(@1), this );
+		$enum_specifier = type::create_enum( $ID, $new_ns, PLACE(@1), this );
 
   = Lenum ID '{' new_ns enumerator_list close_ns '}'
-		$enum_specifier = Type::create_enum( $ID, $new_ns, PLACE(@1), this );
+		$enum_specifier = type::create_enum( $ID, $new_ns, PLACE(@1), this );
 
   = Lenum ID
-		$enum_specifier = Type::create_enum( $ID, NULL, PLACE(@1), this );
+		$enum_specifier = type::create_enum( $ID, NULL, PLACE(@1), this );
 ;
 
 # EG: current enumeration value is stored as $enumerator_list
 
 enumerator_list (unsigned int) ::
   = { *(int *)&$$ = 0; } enumerator
-		$enumerator_list = $enumerator->loc.value;
+		$enumerator_list = $enumerator->loc.val.i;
 
   = enumerator_list ',' { *(int *)&$$ = $enumerator_list + 1; } enumerator
-		$enumerator_list = $enumerator->loc.value;
+		$enumerator_list = $enumerator->loc.val.i;
 ;
 
 # EG: next enumeration value is stored in L-attrib
 
-enumerator (Sym *) ::
+enumerator (sym *) ::
   = ID
-		$enumerator = Sym::create_imm( $ID, Type::get_basic_type(t_int,this), (int)$#, this );
+		$enumerator = sym::create_imm( $ID, type::get_basic_type(t_int,this), (int)$#, this );
 		current->add_item( $enumerator );
 
   = ID '=' constant_expression
-		$enumerator = Sym::create_imm( $ID, Type::get_basic_type(t_int,this), $constant_expression->calculate(t_int, this), this );
+		$enumerator = sym::create_imm( $ID, type::get_basic_type(t_int,this), $constant_expression->calculate(t_int, this), this );
 		current->add_item( $enumerator );
 ;
 
@@ -552,7 +552,7 @@ function_specifier (int) ::
   = Linline		\ $function_specifier = fs_inline;
 ;
 
-declarator (Sym *) ::
+declarator (sym *) ::
   = pointer direct_declarator
 		$declarator = $direct_declarator;
 		($direct_declarator)->addtype( $pointer );
@@ -560,15 +560,15 @@ declarator (Sym *) ::
   = direct_declarator
 ;
 
-direct_declarator (Sym *) ::
+direct_declarator (sym *) ::
   = ID
-		$direct_declarator = Sym::create( $ID, this );
+		$direct_declarator = sym::create( $ID, this );
 
   = '(' declarator ')'
 		$direct_declarator = $declarator;
 
   = direct_declarator '[' type_qualifier_listopt assignment_expressionopt ']'
-		($direct_declarator)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
+		($direct_declarator)->addtype( type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
 
   = direct_declarator '[' Lstatic type_qualifier_listopt assignment_expression ']'
 		TODO();
@@ -580,16 +580,16 @@ direct_declarator (Sym *) ::
 		TODO();
 
   = direct_declarator '(' parameter_type_list ')'
-		($direct_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+		($direct_declarator)->addtype( type::create_function( $parameter_type_list, this ) );
 
   = direct_declarator '(' Lid_ID_list ')'
-		($direct_declarator)->addtype( Type::create_function( $Lid_ID_list, this ) );
+		($direct_declarator)->addtype( type::create_function( $Lid_ID_list, this ) );
 
   = direct_declarator '(' ')'
-		($direct_declarator)->addtype( Type::create_function( NULL, this ) );
+		($direct_declarator)->addtype( type::create_function( NULL, this ) );
 ;
 
-parm_declarator (Sym *) ::
+parm_declarator (sym *) ::
   = pointer parm_direct_declarator
 		$parm_declarator = $parm_direct_declarator;
 		($parm_direct_declarator)->addtype( $pointer );
@@ -597,12 +597,12 @@ parm_declarator (Sym *) ::
   = parm_direct_declarator
 ;
 
-parm_direct_declarator (Sym *) ::
+parm_direct_declarator (sym *) ::
   = typename
-		$parm_direct_declarator = Sym::create( $typename, this );
+		$parm_direct_declarator = sym::create( $typename, this );
 
   = parm_direct_declarator '[' type_qualifier_listopt assignment_expressionopt ']'
-		($parm_direct_declarator)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
+		($parm_direct_declarator)->addtype( type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
 
   = parm_direct_declarator '[' Lstatic type_qualifier_listopt assignment_expression ']'
 		TODO();
@@ -614,16 +614,16 @@ parm_direct_declarator (Sym *) ::
 		TODO();
 
   = parm_direct_declarator '(' parameter_type_list ')'
-		($parm_direct_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+		($parm_direct_declarator)->addtype( type::create_function( $parameter_type_list, this ) );
 
   = parm_direct_declarator '(' Lid_ID_list ')'
-		($parm_direct_declarator)->addtype( Type::create_function( $Lid_ID_list, this ) );
+		($parm_direct_declarator)->addtype( type::create_function( $Lid_ID_list, this ) );
 
   = parm_direct_declarator '(' ')'
-		($parm_direct_declarator)->addtype( Type::create_function( NULL, this ) );
+		($parm_direct_declarator)->addtype( type::create_function( NULL, this ) );
 ;
 
-parm_declarator_notype (Sym *) ::
+parm_declarator_notype (sym *) ::
   = pointer parm_direct_declarator_notype
 		$parm_declarator_notype = $parm_direct_declarator_notype;
 		($parm_direct_declarator_notype)->addtype( $pointer );
@@ -631,15 +631,15 @@ parm_declarator_notype (Sym *) ::
   = parm_direct_declarator_notype
 ;
 
-parm_direct_declarator_notype (Sym *) ::
+parm_direct_declarator_notype (sym *) ::
   = Lid
-		$parm_direct_declarator_notype = Sym::create( $Lid, this );
+		$parm_direct_declarator_notype = sym::create( $Lid, this );
 
   = '(' parm_declarator_notype ')'
 		$parm_direct_declarator_notype = $parm_declarator_notype;
 
   = parm_direct_declarator_notype '[' type_qualifier_listopt assignment_expressionopt ']'
-		($parm_direct_declarator_notype)->addtype( Type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
+		($parm_direct_declarator_notype)->addtype( type::create_array( $type_qualifier_listopt, $assignment_expressionopt, this ) );
 
   = parm_direct_declarator_notype '[' Lstatic type_qualifier_listopt assignment_expression ']'
 		TODO();
@@ -651,37 +651,37 @@ parm_direct_declarator_notype (Sym *) ::
 		TODO();
 
   = parm_direct_declarator_notype '(' parameter_type_list ')'
-		($parm_direct_declarator_notype)->addtype( Type::create_function( $parameter_type_list, this ) );
+		($parm_direct_declarator_notype)->addtype( type::create_function( $parameter_type_list, this ) );
 
   = parm_direct_declarator_notype '(' Lid_ID_list ')'
-		($parm_direct_declarator_notype)->addtype( Type::create_function( $Lid_ID_list, this ) );
+		($parm_direct_declarator_notype)->addtype( type::create_function( $Lid_ID_list, this ) );
 
   = parm_direct_declarator_notype '(' ')'
-		($parm_direct_declarator_notype)->addtype( Type::create_function( NULL, this ) );
+		($parm_direct_declarator_notype)->addtype( type::create_function( NULL, this ) );
 ;
 
-Lid_ID_list (Sym *) ::
+Lid_ID_list (sym *) ::
   = Lid
-		$Lid_ID_list = Sym::create( $Lid, this );
+		$Lid_ID_list = sym::create( $Lid, this );
 
   = Lid_ID_list ',' ID
-		($Lid_ID_list)->addnext( Sym::create( $ID, this ) );
+		($Lid_ID_list)->addnext( sym::create( $ID, this ) );
 ;
 
-pointer (Type *) ::
+pointer (type *) ::
   = '*'
-		$pointer = Type::create( t_pointer, this );
+		$pointer = type::create( t_pointer, this );
 
   = '*' type_qualifier_list
-		$pointer = Type::create( t_pointer, this );
+		$pointer = type::create( t_pointer, this );
 		($pointer)->qualifier = $type_qualifier_list;
 
   = pointer '*'
-		$pointer = Type::create( t_pointer, this );
+		$pointer = type::create( t_pointer, this );
 		($pointer)->parent = $pointer#1;
 
   = pointer '*' type_qualifier_list
-		$pointer = Type::create( t_pointer, this );
+		$pointer = type::create( t_pointer, this );
 		($pointer)->qualifier = $type_qualifier_list;
 		($pointer)->parent = $pointer#1;
 ;
@@ -689,22 +689,22 @@ pointer (Type *) ::
 type_qualifier_list (int) ::
   = type_qualifier
   = type_qualifier_list type_qualifier
-		$type_qualifier_list = Type::addqualifier( $type_qualifier_list#1, $type_qualifier, PLACE(@1), this );
+		$type_qualifier_list = type::addqualifier( $type_qualifier_list#1, $type_qualifier, PLACE(@1), this );
 ;
 
-parameter_type_list (Sym *) ::
+parameter_type_list (sym *) ::
   = parameter_list
   = parameter_list ',' '...'
-		($parameter_list)->addnext( Sym::create( "...", this ) );  // TODO
+		($parameter_list)->addnext( sym::create( "...", this ) );  // TODO
 ;
 
-parameter_list (Sym *) ::
+parameter_list (sym *) ::
   = parameter_declaration
   = parameter_list ',' parameter_declaration
 		($parameter_list)->addnext( $parameter_declaration );
 ;
 
-parameter_declaration (Sym *) ::
+parameter_declaration (sym *) ::
   = declaration_specifiers parm_declarator
 		$parameter_declaration = $parm_declarator;
 		$parm_declarator->symbol_created( $declaration_specifiers, fix_param, PLACE(@1), this );
@@ -718,20 +718,20 @@ parameter_declaration (Sym *) ::
 		$abstract_declarator->symbol_created( $declaration_specifiers, fix_param, PLACE(@1), this );
 
   = declaration_specifiers
-		$parameter_declaration = Sym::create( NULL, this );
+		$parameter_declaration = sym::create( NULL, this );
 		($parameter_declaration)->symbol_created( $declaration_specifiers, fix_param, PLACE(@0), this );
 ;
 
-type_name (PType) ::
+type_name (Type) ::
   = specifier_qualifier_list
   = specifier_qualifier_list abstract_declarator
 		$abstract_declarator->symbol_created( $specifier_qualifier_list, fix_none, PLACE(@1), this );
 		$type_name = $abstract_declarator->type;  // TODO check
 ;
 
-abstract_declarator (Sym *) ::
+abstract_declarator (sym *) ::
   = pointer
-		$abstract_declarator = Sym::create( NULL, this );
+		$abstract_declarator = sym::create( NULL, this );
 		($abstract_declarator)->addtype( $pointer );
 
   = direct_abstract_declarator
@@ -740,23 +740,23 @@ abstract_declarator (Sym *) ::
 		($abstract_declarator)->addtype( $pointer );
 ;
 
-direct_abstract_declarator (Sym *) ::
+direct_abstract_declarator (sym *) ::
   = '(' abstract_declarator ')'
 		$direct_abstract_declarator = $abstract_declarator;
 
   = '[' ']'
-		$direct_abstract_declarator = Sym::create( NULL, this );
-		($direct_abstract_declarator)->addtype( Type::create_array( 0, NULL, this ) );
+		$direct_abstract_declarator = sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( type::create_array( 0, NULL, this ) );
 
   = '[' assignment_expression ']'
-		$direct_abstract_declarator = Sym::create( NULL, this );
-		($direct_abstract_declarator)->addtype( Type::create_array( 0, $assignment_expression, this ) );
+		$direct_abstract_declarator = sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( type::create_array( 0, $assignment_expression, this ) );
 
   = direct_abstract_declarator '[' ']'
-		($direct_abstract_declarator)->addtype( Type::create_array( 0, NULL, this ) );
+		($direct_abstract_declarator)->addtype( type::create_array( 0, NULL, this ) );
 
   = direct_abstract_declarator '[' assignment_expression ']'
-		($direct_abstract_declarator)->addtype( Type::create_array( 0, $assignment_expression, this ) );
+		($direct_abstract_declarator)->addtype( type::create_array( 0, $assignment_expression, this ) );
 
   = '[' '*' ']'
 		TODO();
@@ -765,18 +765,18 @@ direct_abstract_declarator (Sym *) ::
 		TODO();
 
   = '(' ')'
-		$direct_abstract_declarator = Sym::create( NULL, this );
-		($direct_abstract_declarator)->addtype( Type::create_function( NULL, this ) );
+		$direct_abstract_declarator = sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( type::create_function( NULL, this ) );
 
   = '(' parameter_type_list ')'
-		$direct_abstract_declarator = Sym::create( NULL, this );
-		($direct_abstract_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+		$direct_abstract_declarator = sym::create( NULL, this );
+		($direct_abstract_declarator)->addtype( type::create_function( $parameter_type_list, this ) );
 
   = direct_abstract_declarator '(' ')'
-		($direct_abstract_declarator)->addtype( Type::create_function( NULL, this ) );
+		($direct_abstract_declarator)->addtype( type::create_function( NULL, this ) );
 
   = direct_abstract_declarator '(' parameter_type_list ')'
-		($direct_abstract_declarator)->addtype( Type::create_function( $parameter_type_list, this ) );
+		($direct_abstract_declarator)->addtype( type::create_function( $parameter_type_list, this ) );
 ;
 
 initializer (Init *) ::
@@ -821,7 +821,7 @@ designator (Designator) ::
 
 # A.2.3  Statements (TODO)
 
-statement (Node *) ::
+statement (Node) ::
   = labeled_statement
   = compound_statement
   = expression_statement
@@ -830,7 +830,7 @@ statement (Node *) ::
   = jump_statement
 ;
 
-labeled_statement (Node *) ::
+labeled_statement (Node) ::
   = ID ':' statement
 		TODO();
 
@@ -841,21 +841,21 @@ labeled_statement (Node *) ::
 		TODO();
 ;
 
-compound_statement (Node *) ::
+compound_statement (Node) ::
   = '{' '}'
 		$$ = NULL;
 
   = '{' new_ns block_item_list close_ns '}'
-		$$ = $block_item_list;
+		$compound_statement = $block_item_list;
 ;
 
-block_item_list (Node *) ::
+block_item_list (Node) ::
   = block_item
   = block_item_list block_item
-		$block_item_list#0 = Node::combine( $block_item_list#1, $block_item ); 
+		$$ = NULL; //$block_item_list#0 = Node::combine( $block_item_list#1, $block_item ); 
 ;
 
-block_item (Node *) ::
+block_item (Node) ::
   = declaration
 		$$ = NULL;	// TODO
 
@@ -863,7 +863,7 @@ block_item (Node *) ::
 		$$ = NULL;	// TODO
 ;
 
-expression_statement (Node *) ::
+expression_statement (Node) ::
   = ';'
 		$expression_statement = NULL;
 
@@ -874,7 +874,7 @@ expression_statement (Node *) ::
 		TODO();
 ;
 
-selection_statement (Node *) ::
+selection_statement (Node) ::
   = Lif '(' new_ns expression ')' statement close_ns
 		TODO();
 
@@ -885,7 +885,7 @@ selection_statement (Node *) ::
 		TODO();
 ;
 
-iteration_statement (Node *) ::
+iteration_statement (Node) ::
   = Lwhile '(' new_ns expression ')' statement close_ns
 		TODO();
 
@@ -899,7 +899,7 @@ iteration_statement (Node *) ::
 		TODO();
 ;
 
-jump_statement (Node *)::
+jump_statement (Node)::
   = Lgoto ID ';'
 		TODO();
 
@@ -933,7 +933,7 @@ function_definition ::
 		TODO();
 ;
 
-new_func (Sym *) ::
+new_func (sym *) ::
   = declaration_specifiers declarator new_ns
 		$new_func = $declarator;
 		$declarator->symbol_created( $declaration_specifiers, fix_func, PLACE(@1), this );
