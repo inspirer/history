@@ -20,11 +20,35 @@ BSTR char_2_BSTR( char *src ) {
 
 	if( !len )
 		return NULL;
-	wc = new wchar_t[len+1];
-	MultiByteToWideChar(CP_OEMCP, 0, src, len, wc, len+1 );
+	wc = new wchar_t[len+10];
+	MultiByteToWideChar(CP_OEMCP, 0, src, len, wc, len+10 );
 	ret = SysAllocString(wc);
 	delete[] wc;
 	return ret;
+}
+
+
+void comError( char *title, HRESULT code ){
+	if( code != S_OK ) {
+		char errorDesc[255];
+		char str[255];
+
+		IErrorInfo *info=NULL;
+		GetErrorInfo(0,&info);
+		if(info!=NULL) {
+			BSTR desc;
+			info->GetDescription(&desc);
+			BSTR_2_char( desc, errorDesc, 254 );
+			::SysFreeString(desc);
+			info->Release();
+		}
+		
+		FSF.sprintf( str, "%s\nHRESULT = %08x\nDesc: '%s'", title, code, errorDesc );
+
+		Info.Message(Info.ModuleNumber,
+			FMSG_WARNING|FMSG_ALLINONE|FMSG_MB_OK|FMSG_ERRORTYPE,
+			(const char *)NULL,(const char * const *)str,2,0);
+	};
 }
 
 
@@ -519,6 +543,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 		l = char_2_BSTR( dest );
 
+		SetFileApisToANSI();
 		if( type == GetLatest ) 
 			h = item->raw_Get( &l, flags );
 		else {
@@ -526,6 +551,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			h = item->raw_Checkout( w, l, flags);
 			SysFreeString( w );
 		}
+		SetFileApisToOEM();
 		SysFreeString( l );
 		if( FAILED(h) ) {
 			MsgBox( "IVSSItem error", type == GetLatest ? "Get failed" : "CheckOut failed" );
@@ -535,12 +561,148 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 	} else if( type == ShowComment ) {
 
-		MsgBox( "Item's comment", "not realized due to BUG in SourceSafe TypeLib" );
+		IVSSVersions *vers;
+
+		h = item->get_Versions( 0, &vers );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSItem.get_Versions failed" );
+			item->Release();
+			return FALSE;
+		}
+
+		IUnknown *gv;
+
+		h = vers->raw__NewEnum( &gv );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSItem.NewEnum failed" );
+		  exit_free_versions:
+			vers->Release();
+			item->Release();
+			return FALSE;
+		}
+
+		IEnumVARIANT *ev;
+
+		h = gv->QueryInterface( __uuidof( IEnumVARIANT ), (void **)&ev );
+		gv->Release();
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IUnknown.QueryInterface(IEnumVARIANT) failed" );
+			goto exit_free_versions;
+		}
+
+		VARIANT v;
+		unsigned long fetched;
+		h = ev->Next( 1, &v, &fetched );
+		if( FAILED(h) || !fetched ) {
+			MsgBox( "COM error", "IEnumVARIANT.Next failed" );
+			ev->Release();
+			goto exit_free_versions;
+		}
+
+		IVSSVersion *ver;
+		
+		h = v.punkVal->QueryInterface( __uuidof( IVSSVersion ), (void **)&ver );
+		v.punkVal->Release();
+
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IUnknown.QueryInterface(IVSSVersion) failed" );
+			ev->Release();
+			goto exit_free_versions;
+		}
+
+		long version;
+
+		h = ver->get_VersionNumber( &version );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSVersion.get_VersionNumber failed" );
+		exit_free_all:
+			ver->Release();
+			ev->Release();
+			goto exit_free_versions;
+		}
+
+		/*DATE date;
+
+		h = ver->get_Date( &date );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSVersion.get_Date failed" );
+			goto exit_free_all;
+		}*/
+
+		BSTR comment, action, username, label;
+
+		h = ver->get_Comment( &comment );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSVersion.get_Comment failed" );
+			goto exit_free_all;
+		}
+
+		h = ver->get_Action( &action );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSVersion.get_Action failed" );
+			SysFreeString( comment );
+			goto exit_free_all;
+		}
+
+		h = ver->get_Username( &username );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSVersion.get_Username failed" );
+			SysFreeString( comment );
+			SysFreeString( action );
+			goto exit_free_all;
+		}
+
+		h = ver->get_Label( &label );
+		if( FAILED(h) ) {
+			MsgBox( "COM error", "IVSSVersion.get_Label failed" );
+			SysFreeString( comment );
+			SysFreeString( action );
+			SysFreeString( username );
+			goto exit_free_all;
+		}
+
+		int size = 2048 + SysStringLen(comment) + SysStringLen(action) + SysStringLen(username) + SysStringLen(label);
+		char *mem = (char *)m_malloc( size );
+
+		//SYSTEMTIME st;
+		//VariantTimeToSystemTime( date, &st );
+
+		FSF.sprintf( mem, "File: %s\nVersion: %i\nUsername: ", file, version );
+
+		BSTR_2_char( username, mem + strlen(mem), size - strlen(mem) );
+		SysFreeString( username );
+
+		strcat( mem, "\nComment: " );
+
+		BSTR_2_char( comment, mem + strlen(mem), size - strlen(mem) );
+		SysFreeString( comment );
+
+		strcat( mem, "\nAction: " );
+
+		BSTR_2_char( action, mem + strlen(mem), size - strlen(mem) );
+		SysFreeString( action );
+
+		strcat( mem, "\nLabel: " );
+
+		BSTR_2_char( label, mem + strlen(mem), size - strlen(mem) );
+		SysFreeString( label );
+
+		Info.Message(Info.ModuleNumber,
+			FMSG_ALLINONE|FMSG_MB_OK|FMSG_LEFTALIGN,
+			(const char *)NULL,(const char * const *)mem,0,0);
+
+		m_free( mem );
+
+		ver->Release();
+        ev->Release();
+		vers->Release();
 
 	} else if( type == UndoCO ) {
 
 		l = char_2_BSTR( dest );
+		SetFileApisToANSI();
 		h = item->raw_UndoCheckout( l, flags );
+		SetFileApisToOEM();
 		SysFreeString( l );
 		if( FAILED(h) ) {
 			MsgBox( "UndoCheckOut failed", dest );
@@ -567,7 +729,9 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 
 			l = char_2_BSTR( name );
 			cm = char_2_BSTR( comment );
+			SetFileApisToANSI();
 			h = item->raw_Add( l, cm, VSSFLAG_BINBINARY, &it );
+			SetFileApisToOEM();
 			SysFreeString( cm );
 			SysFreeString( l );
 			if( FAILED(h) ) {
@@ -580,7 +744,9 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			if( !(flags&VSSFLAG_DELYES) ) {
 
 				l = char_2_BSTR( dest );
+				SetFileApisToANSI();
 				h = it->raw_Get( &l, VSSFLAG_REPREPLACE|VSSFLAG_TIMEMOD );
+				SetFileApisToOEM();
 				SysFreeString( l );
 				if( FAILED(h) ) {
 					MsgBox( "IVSSItem.Get of just created file failed", dest );
@@ -641,7 +807,7 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			return FALSE;
 		}
 
-		if( !co ) {
+		if( co == VSSFILE_NOTCHECKEDOUT ) {
 
 			const char *items[4] = { "CheckIn warning", "Not checked out.","Must be checked out before. CheckOut?", NULL };
 
@@ -654,23 +820,27 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 			}
 
 			l = char_2_BSTR( dest );
+			SetFileApisToANSI();
 			h = item->raw_Checkout( NULL, l, VSSFLAG_GETNO );
+			SetFileApisToOEM();
 			SysFreeString( l );
 			if( FAILED(h) ) {
 				MsgBox( "IVSSItem.Checkout failed", dest );
 				item->Release();
 				return FALSE;
 			}
-		}
+		} // TODO else if( co == VSSFILE_CHECKEDOUT )
 
 		l = char_2_BSTR( dest );
 		cm = char_2_BSTR( comment );
+			SetFileApisToANSI();
 		h = item->raw_Checkin( cm, l, flags );
+			SetFileApisToOEM();
 		SysFreeString( cm );
 		SysFreeString( l );
 
 		if( FAILED(h) ) {
-			MsgBox( "IVSSItem.Checkin failed", dest );
+			comError( "IVSSItem.Checkin failed", h );
 			item->Release();
 			return FALSE;
 		}
@@ -679,7 +849,9 @@ int SS::FileOp( int type, char *file, char *dest, char *comment, int flags ) {
 		if( !(flags&VSSFLAG_DELYES) ) {
 
 			l = char_2_BSTR( dest );
+			SetFileApisToANSI();
 			h = item->raw_Get( &l, VSSFLAG_REPREPLACE|VSSFLAG_TIMEMOD );
+			SetFileApisToOEM();
 			SysFreeString( l );
 			if( FAILED(h) ) {
 				MsgBox( "IVSSItem.Get of checked in file failed", dest );
@@ -1158,9 +1330,6 @@ int SS::ProcessKey(int Key,unsigned int ControlState)
 		return TRUE;
 
 	} else if( ControlState == PKF_CONTROL && Key == VK_F7 && strcmp( cdir, "$\\" ) ) {
-
-		if( pi.PanelItems[pi.CurrentItem].FindData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY )
-			return TRUE;
 
 		if( !db_connect() )
 			return TRUE;

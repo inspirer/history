@@ -1,14 +1,18 @@
 
-	MS SourceSafe 6.0 navigator 1.01
+	MS SourceSafe 6.0 navigator 1.02
 
 [!] Important
 [+] New
 [-] Bugs fixed
 [*] Changes
 
+Version 1.02, 09 Apr 2004
+
+[+] Ctrl-F7  Shows file info
+[-] Ctrl-F5  russian names fix (thx to Alexey Yatsenko)
+
 
 Version 1.01, 09 Apr 2004
 
 [-] Russian filenames support (thx to Max Belugin)
 [+] Configure dialog contains plugins version number
-

@@ -13,14 +13,12 @@ long allocated_blocks = 0;				// count of allocated memory blocks
 static void get_SS( SS *ss )
 {
 	EnterCriticalSection( &ss->cs );
-	SetFileApisToANSI();
 }
 
 
 static void inline put_SS( SS *ss  )
 {
 	LeaveCriticalSection( &ss->cs );
-	SetFileApisToOEM();
 }
 
 

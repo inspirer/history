@@ -3,7 +3,7 @@
 #ifndef SS_H_INCLUDED
 #define SS_H_INCLUDED
 
-#define VERSION   "1.01"
+#define VERSION   "1.02"
 
 #include <windows.h>
 #include <string.h>
